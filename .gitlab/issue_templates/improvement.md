@@ -1,3 +1,4 @@
+/label ~improvement
 ## Current behaviour
 _describe how it works now_
 ## Issue

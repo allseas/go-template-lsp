@@ -1,3 +1,4 @@
+/label ~feature
 ## Summary
 _describe the proposed feature_
 ## Use case

@@ -1,3 +1,4 @@
+/label ~bug
 ## Current behaviour:
 _describe what happened_
 ## Expected behaviour:
