@@ -16,5 +16,7 @@ _describe how reviewers can verify this works_
 3. ...
 ## Expected result
 _describe what should happen after applying this MR_
+## Labels
+_list the labels you applied_
 ## Additional context
 _whatever feels useful and does not fit into any section above_
