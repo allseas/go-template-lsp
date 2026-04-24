@@ -7,6 +7,8 @@ _describe the key changes made in this MR_
 - _change one_
 - _change two_
 - ...
+- ## Source and target branches
+_mention what is the source and the target branch_
 ## How to test
 _describe how reviewers can verify this works_
 1. _step one_
@@ -14,5 +16,7 @@ _describe how reviewers can verify this works_
 3. ...
 ## Expected result
 _describe what should happen after applying this MR_
+## Labels
+_list the labels you applied_
 ## Additional context
 _whatever feels useful and does not fit into any section above_
