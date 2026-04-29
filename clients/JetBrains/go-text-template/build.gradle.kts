@@ -2,6 +2,7 @@ plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.1.20"
     id("org.jetbrains.intellij.platform") version "2.10.2"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
 }
 
 group = "com.example"
@@ -13,7 +14,10 @@ repositories {
         defaultRepositories()
     }
 }
-
+ktlint {
+    verbose.set(true)
+    outputToConsole.set(true)
+}
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
     intellijPlatform {
@@ -21,7 +25,6 @@ dependencies {
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
 
         // Add plugin dependencies for compilation here:
-
 
         bundledPlugin("com.intellij.modules.json")
     }
@@ -33,9 +36,10 @@ intellijPlatform {
             sinceBuild = "252.25557"
         }
 
-        changeNotes = """
+        changeNotes =
+            """
             Initial version
-        """.trimIndent()
+            """.trimIndent()
     }
 }
 
@@ -51,4 +55,7 @@ kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
     }
+}
+tasks.build {
+    dependsOn("addKtlintCheckGitPreCommitHook")
 }
