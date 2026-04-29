@@ -5,5 +5,5 @@
 ### Requirements
 
 - Go: 1.26.2+
-- Node: 25.9.0+
+- Node: 24.11.0+
 - Npm: 11.12.0+
