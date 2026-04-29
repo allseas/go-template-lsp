@@ -9,17 +9,42 @@
   "categories": [
     "Programming Languages"
   ],
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/vscode": "^1.116.0",
+    "typescript": "^6.0.3"
+  },
+  "main": "out/extension.js",
+  "activationEvents": [
+    "onLanguage:gotmpl"
+  ],
   "contributes": {
-    "languages": [{
-      "id": "gotmpl",
-      "aliases": ["Go text/template", "gotmpl"],
-      "extensions": [".templ",".tmpl"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "gotmpl",
-      "scopeName": "source.gotmpl",
-      "path": "./syntaxes/gotmpl.tmLanguage.json"
-    }]
+    "languages": [
+      {
+        "id": "gotmpl",
+        "aliases": [
+          "Go text/template",
+          "gotmpl"
+        ],
+        "extensions": [
+          ".tmpl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gotmpl",
+        "scopeName": "source.gotmpl",
+        "path": "./syntaxes/gotmpl.tmLanguage.json"
+      }
+    ]
   }
 }

@@ -1,6 +1,6 @@
 # text-template-support README
 
-This is the README for your extension "text-template-support". After writing up a brief description, we recommend including the following sections.
+VS Code extension providing language support for Go text/template files (`*.<type>.tmpl`), where `<type>` is the file type of the generated output (e.g. `deployment.go.tmpl`, `config.yaml.tmpl`).
 
 ## Features
 
@@ -16,6 +16,15 @@ For example if there is an image subfolder under your extension project workspac
 
 If you have any requirements or dependencies, add a section describing those and how to install and configure them.
 
+## Development Setup
+
+```bash
+cd clients/VSCode
+npm install
+npm run compile
+```
+Then press `F5` in VS Code to launch the Extension Development Host.
+
 ## Extension Settings
 
 Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
@@ -29,7 +38,7 @@ This extension contributes the following settings:
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- Extension will not be activated upon creating a `*.tmpl` without mentioning the type of a generated file. The user will be warned
 
 ## Release Notes
 
