@@ -3,17 +3,53 @@
 	"name": "Go text/template",
 	"patterns": [
 		{
-			"include": "#keywords"
+			"include": "#comment"
 		},
 		{
-			"include": "#strings"
+			"include": "#control"
 		}
 	],
 	"repository": {
+		"comment":{
+			"patterns": [{
+				"name":"comment.block",
+				"match": "{{-?\\s*\\/\\*([^\\*]|\\s|(\\*[^\\/]))*\\*\\/\\s*-?}}"
+			}]
+		},
+		"control": {
+			"name": "meta.tag",
+			"begin": "{{-|{{",
+			"end": "-}}|}}",
+			"patterns": [
+				{"include": "#keywords"},
+				{"include": "#strings"},
+				{"include": "#fields"},
+				{"include": "#variables"}
+			]
+			
+
+		},
+
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.gotmpl",
-				"match": "\\b(if|while|for|return)\\b"
+				"match": "\\b(if|end|with|else|range|break|continue|template)\\b"
+			},
+			{
+				"name": "keyword.operator",
+				"match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery)\\b"
+			}]
+		},
+		"fields":{
+			"patterns": [{
+				"name":"variable.language",
+				"match": "\\b\\.\\w*"
+			}]
+		},
+		"variables":{
+			"patterns": [{
+				"name":"variable.parameter",
+				"match": "$\\w*"
 			}]
 		},
 		"strings": {
