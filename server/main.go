@@ -21,10 +21,14 @@ func main() {
 	log.Print("starting server")
 
 	handler = protocol.Handler{
-		Initialize:  initialize,
-		Initialized: initialized,
-		Shutdown:    shutdown,
-		SetTrace:    setTrace,
+		Initialize:             initialize,
+		Initialized:            initialized,
+		Shutdown:               shutdown,
+		SetTrace:               setTrace,
+		TextDocumentCompletion: completion,
+		TextDocumentDidOpen:    didOpen,
+		TextDocumentDidChange:  didChange,
+		TextDocumentDidClose:   didClose,
 	}
 
 	lspServer := server.NewServer(&handler, lsName, false)
