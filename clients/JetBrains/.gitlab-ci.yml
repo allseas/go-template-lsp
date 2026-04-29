@@ -1,9 +1,7 @@
 workflow:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
-#    - if: $CI_PIPELINE_SOURCE == "pipeline"
-#    - if: $CI_PIPELINE_SOURCE == "push"
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - when: always
+
 
 stages:
   - lint
@@ -15,14 +13,16 @@ linting:
   image: gradle:9.0.0-jdk21-alpine
   #pull_policy: if-not-present
   script:
-    echo "running ktlint..."
-    cd go-text-template
-    ./gradlew ktlintCheck
+    - echo "running ktlint..."
+    - cd clients/JetBrains/go-text-template
+    - ./gradlew ktlintCheck
 
 testing:
   stage: test
   image: gradle:9.0.0-jdk21-alpine
+  before_script:
+    - apk add --no-cache gcompat libc6-compat
   script:
-    echo "running tests"
-    cd go-text-template
-    ./gradlew test
+    - echo "running tests"
+    - cd clients/JetBrains/go-text-template
+    - ./gradlew test --no-configuration-cache
