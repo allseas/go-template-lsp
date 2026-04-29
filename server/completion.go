@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -23,21 +24,28 @@ var (
 )
 
 // completion handles LSP "textDocument/completion" requests by identifying
-// the current template context and returning relevant variables and functions.
+// the current template context and returning relevant globalFunctions and variable names.
 func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	text, ok := store.Get(params.TextDocument.URI)
 	if !ok {
+		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
 		return nil, nil
 	}
 
 	offset := positionToOffset(text, params.Position)
 	if !isInsideTemplate(text, offset) {
+		log.Debug().
+			Int("offset", offset).
+			Msg("completion: cursor is not inside a template block, skipping")
 		return nil, nil
 	}
 
 	currentWord := getWordAtOffset(text, offset)
 	startChar := int(params.Position.Character) - len(currentWord)
 	if startChar < 0 {
+		log.Warn().
+			Int("char_position", int(params.Position.Character)).
+			Msg("completion: calculated negative start character; clamping to 0")
 		startChar = 0
 	}
 
@@ -86,53 +94,16 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 
 // extractVariables scans the template text up to the cursor to build a scope-aware list of defined variables.
 func extractVariables(text string, cursor int) []string {
-	if cursor > len(text) {
-		cursor = len(text)
-	}
-	if cursor < 0 {
-		cursor = 0
+	if cursor > len(text) || cursor < 0 {
+		log.Warn().Int("cursor", cursor).Msg("extractVariables: cursor out of bounds; clamping")
+		if cursor > len(text) {
+			cursor = len(text)
+		} else {
+			cursor = 0
+		}
 	}
 
-	visible := make(map[string]int)
-	scopeStack := []map[string]struct{}{
-		{},
-	}
-	order := make([]string, 0)
-	addVisible := func(name string) {
-		if name == "" {
-			return
-		}
-		if visible[name] == 0 {
-			order = append(order, name)
-		}
-		visible[name]++
-	}
-	removeVisible := func(name string) {
-		if visible[name] > 0 {
-			visible[name]--
-		}
-	}
-	addToCurrentScope := func(name string) {
-		if name == "" {
-			return
-		}
-		cur := scopeStack[len(scopeStack)-1]
-		cur[name] = struct{}{}
-		addVisible(name)
-	}
-	pushScope := func() {
-		scopeStack = append(scopeStack, map[string]struct{}{})
-	}
-	popScope := func() {
-		if len(scopeStack) <= 1 {
-			return
-		}
-		top := scopeStack[len(scopeStack)-1]
-		scopeStack = scopeStack[:len(scopeStack)-1]
-		for name := range top {
-			removeVisible(name)
-		}
-	}
+	s := newScopeTracker()
 
 	i := 0
 	for i < cursor {
@@ -146,55 +117,99 @@ func extractVariables(text string, cursor int) []string {
 		}
 
 		closeRel := strings.Index(text[open+2:cursor], "}}")
-		end := cursor
-		hasClose := false
-		if closeRel != -1 {
-			end = open + 2 + closeRel
-			hasClose = true
+		var action string
+		var next int
+		if closeRel == -1 {
+			action = strings.TrimSpace(text[open+2 : cursor])
+			next = cursor
+		} else {
+			closePos := open + 2 + closeRel
+			action = strings.TrimSpace(text[open+2 : closePos])
+			next = closePos + 2
 		}
 
-		action := text[open+2 : end]
-		trimmed := strings.TrimSpace(action)
-
-		if trimmed != "" && !strings.HasPrefix(trimmed, "/*") {
+		if action != "" && !strings.HasPrefix(action, "/*") {
 			switch {
-			case trimmed == "end" || strings.HasPrefix(trimmed, "end "):
-				popScope()
+			case action == "end" || strings.HasPrefix(action, "end "):
+				s.pop()
 
-			case strings.HasPrefix(trimmed, "range") && hasDecl(trimmed):
-				pushScope()
-				for _, name := range declaredVars(trimmed) {
-					addToCurrentScope(name)
+			case (strings.HasPrefix(action, "range") ||
+				strings.HasPrefix(action, "if") ||
+				strings.HasPrefix(action, "with")) &&
+				hasDecl(action): // Using the helper here
+				s.push()
+				for _, name := range declaredVars(action) { // Using the helper here
+					s.declare(name)
 				}
 
-			case strings.HasPrefix(trimmed, "if") && hasDecl(trimmed):
-				pushScope()
-				for _, name := range declaredVars(trimmed) {
-					addToCurrentScope(name)
-				}
-
-			case strings.HasPrefix(trimmed, "with") && hasDecl(trimmed):
-				pushScope()
-				for _, name := range declaredVars(trimmed) {
-					addToCurrentScope(name)
-				}
-
-			case strings.Contains(trimmed, ":="):
-				for _, name := range declaredVars(trimmed) {
-					addToCurrentScope(name)
+			case hasDecl(action): // Using the helper for simple assignments too
+				for _, name := range declaredVars(action) {
+					s.declare(name)
 				}
 			}
 		}
 
-		if !hasClose {
-			break
-		}
-		i = end + 2
+		i = next
 	}
 
-	result := make([]string, 0, len(order))
-	for _, name := range order {
-		if visible[name] > 0 {
+	return s.visibleVars()
+}
+
+// scopeTracker maintains the variable scope stack and visibility counts.
+// - scopeStack: a stack of scopes, each scope is a set of variable names declared in it
+// - visible: counts how many times a variable is in scope
+// - order: insertion order so results are stable and predictable
+type scopeTracker struct {
+	// stack of scopes - each scope holds variables declared at that level
+	// e.g. global scope at index 0, range block at index 1, etc.
+	stack []map[string]struct{}
+	// order tracks declaration order for stable results
+	order []string
+}
+
+func newScopeTracker() *scopeTracker {
+	return &scopeTracker{
+		stack: []map[string]struct{}{{}},
+		order: []string{},
+	}
+}
+
+func (s *scopeTracker) push() {
+	s.stack = append(s.stack, map[string]struct{}{})
+}
+
+func (s *scopeTracker) pop() {
+	if len(s.stack) > 1 {
+		s.stack = s.stack[:len(s.stack)-1]
+	}
+}
+
+func (s *scopeTracker) declare(name string) {
+	if name == "" {
+		return
+	}
+	// add to current (innermost) scope
+	top := s.stack[len(s.stack)-1]
+	if _, exists := top[name]; !exists {
+		top[name] = struct{}{}
+		s.order = append(s.order, name)
+	}
+}
+
+// visibleVars returns all variables present in any scope on the stack
+func (s *scopeTracker) visibleVars() []string {
+	// build a set of all visible names from all scopes
+	visible := map[string]struct{}{}
+	for _, scope := range s.stack {
+		for name := range scope {
+			visible[name] = struct{}{}
+		}
+	}
+
+	// return in declaration order
+	var result []string
+	for _, name := range s.order {
+		if _, ok := visible[name]; ok {
 			result = append(result, name)
 		}
 	}
@@ -231,11 +246,17 @@ func declaredVars(action string) []string {
 
 // isInsideTemplate determines if a given byte offset resides within the delimiters of a template action and is not a comment.
 func isInsideTemplate(text string, offset int) bool {
-	if offset > len(text) {
-		offset = len(text)
-	}
-	if offset < 0 {
-		offset = 0
+	if offset > len(text) || offset < 0 {
+		log.Warn().
+			Int("offset", offset).
+			Int("text_len", len(text)).
+			Msg("isInsideTemplate: offset out of bounds, clamping value")
+
+		if offset > len(text) {
+			offset = len(text)
+		} else {
+			offset = 0
+		}
 	}
 
 	sub := text[:offset]
@@ -259,11 +280,16 @@ func isInsideTemplate(text string, offset int) bool {
 
 // getWordAtOffset returns the sequence of valid identifier characters immediately preceding the given byte offset.
 func getWordAtOffset(text string, offset int) string {
-	if offset > len(text) {
-		offset = len(text)
-	}
-	if offset < 0 {
-		offset = 0
+	if offset > len(text) || offset < 0 {
+		log.Warn().
+			Int("offset", offset).
+			Msg("getWordAtOffset: offset out of bounds; clamping")
+
+		if offset > len(text) {
+			offset = len(text)
+		} else {
+			offset = 0
+		}
 	}
 
 	start := offset
@@ -277,10 +303,14 @@ func getWordAtOffset(text string, offset int) string {
 func positionToOffset(text string, pos protocol.Position) int {
 	lines := strings.Split(text, "\n")
 	line := int(pos.Line)
-	if line < 0 {
-		return 0
-	}
-	if line >= len(lines) {
+	if line < 0 || line >= len(lines) {
+		log.Warn().
+			Int("requested_line", line).
+			Msg("positionToOffset: line index out of bounds; clamping")
+
+		if line < 0 {
+			return 0
+		}
 		return len(text)
 	}
 
