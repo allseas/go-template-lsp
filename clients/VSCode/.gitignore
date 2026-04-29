@@ -1,4 +1,6 @@
 .vscode/**
+!.vscode/launch.json
+.node_modules/**
 out/
 node_modules/
 !.vscode/launch.json
