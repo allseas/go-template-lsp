@@ -34,7 +34,6 @@
           "gotmpl"
         ],
         "extensions": [
-          ".templ",
           ".tmpl"
         ],
         "configuration": "./language-configuration.json"
