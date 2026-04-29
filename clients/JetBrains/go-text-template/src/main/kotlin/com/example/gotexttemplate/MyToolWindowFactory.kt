@@ -12,23 +12,29 @@ import kotlin.random.Random
 class MyToolWindowFactory : ToolWindowFactory {
     override fun shouldBeAvailable(project: Project) = true
 
-    override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
+    override fun createToolWindowContent(
+        project: Project,
+        toolWindow: ToolWindow,
+    ) {
         val myToolWindow = MyToolWindow()
         val content = ContentFactory.getInstance().createContent(myToolWindow.getContent(), null, false)
         toolWindow.contentManager.addContent(content)
     }
 
     class MyToolWindow {
-        private val content = JBPanel<JBPanel<*>>().apply {
-            val label = JBLabel("The random number is: ?")
+        private val content =
+            JBPanel<JBPanel<*>>().apply {
+                val label = JBLabel("The random number is: ?")
 
-            add(label)
-            add(JButton("Shuffle").apply {
-                addActionListener {
-                    label.text = "The random number is: " + Random(System.currentTimeMillis()).nextInt(1000)
-                }
-            })
-        }
+                add(label)
+                add(
+                    JButton("Shuffle").apply {
+                        addActionListener {
+                            label.text = "The random number is: " + Random(System.currentTimeMillis()).nextInt(1000)
+                        }
+                    },
+                )
+            }
 
         fun getContent(): JBPanel<JBPanel<*>> = content
     }
