@@ -1,4 +1,4 @@
-// Package main provides a Language Server Protocol (LSP) implementation
+// Package main provides a Language Server Protocol implementation
 // for Go text/templates, featuring scope-aware variable completion
 // and built-in function support.
 package main
@@ -22,6 +22,8 @@ var (
 	}
 )
 
+// completion handles LSP "textDocument/completion" requests by identifying
+// the current template context and returning relevant variables and functions.
 func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	text, ok := store.Get(params.TextDocument.URI)
 	if !ok {
@@ -82,6 +84,7 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 	}, nil
 }
 
+// extractVariables scans the template text up to the cursor to build a scope-aware list of defined variables.
 func extractVariables(text string, cursor int) []string {
 	if cursor > len(text) {
 		cursor = len(text)
@@ -198,10 +201,12 @@ func extractVariables(text string, cursor int) []string {
 	return result
 }
 
+// hasDecl determines whether a template action string contains a variable declaration operator (:=)
 func hasDecl(action string) bool {
 	return strings.Contains(action, ":=")
 }
 
+// declaredVars parses the left-hand side of a variable declaration and returns the names of the variables being defined.
 func declaredVars(action string) []string {
 	left, _, found := strings.Cut(action, ":=")
 	if !found {
@@ -224,6 +229,7 @@ func declaredVars(action string) []string {
 	return out
 }
 
+// isInsideTemplate determines if a given byte offset resides within the delimiters of a template action and is not a comment.
 func isInsideTemplate(text string, offset int) bool {
 	if offset > len(text) {
 		offset = len(text)
@@ -251,6 +257,7 @@ func isInsideTemplate(text string, offset int) bool {
 	return true
 }
 
+// getWordAtOffset returns the sequence of valid identifier characters immediately preceding the given byte offset.
 func getWordAtOffset(text string, offset int) string {
 	if offset > len(text) {
 		offset = len(text)
@@ -266,6 +273,7 @@ func getWordAtOffset(text string, offset int) string {
 	return text[start:offset]
 }
 
+// positionToOffset translates an LSP line and character position into a flat byte offset, accounting for multibyte UTF-8 characters.
 func positionToOffset(text string, pos protocol.Position) int {
 	lines := strings.Split(text, "\n")
 	line := int(pos.Line)
@@ -298,6 +306,7 @@ func positionToOffset(text string, pos protocol.Position) int {
 	return offset + byteOffset
 }
 
+// isWordChar reports whether a rune is a valid character for a template variable or function name.
 func isWordChar(c rune) bool {
 	return (c >= 'a' && c <= 'z') ||
 		(c >= 'A' && c <= 'Z') ||
