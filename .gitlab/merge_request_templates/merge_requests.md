@@ -3,6 +3,7 @@ _describe what this merge request does_
 
 ## Issue
 _link to issue/bug/feature number_
+Resolves ...
 
 ## Changes made
 _describe the key changes made in this MR_
