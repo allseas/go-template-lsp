@@ -11,7 +11,12 @@
   ],
   "scripts": {
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "check-types": "tsc --noEmit",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "vscode:prepublish": "npm run package",
+    "package": "npm run check-types && node esbuild.js --production"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
@@ -19,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^25.6.0",
     "@types/vscode": "^1.116.0",
+    "esbuild": "^0.28.0",
     "typescript": "^6.0.3"
   },
   "main": "out/extension.js",

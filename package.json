@@ -1,0 +1,27 @@
+{
+  "name": "gotemplate-lsp",
+  "version": "1.0.0",
+  "description": "",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build:server": "ts-node --esm scripts/build-server-binaries.ts",
+    "build:vscode": "npm run build:server && (cd clients/VSCode && npm run package)"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "eslint": "^10.2.1",
+    "prettier": "^3.8.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24.11.0",
+    "npm": ">=11.12.0"
+  }
+}
