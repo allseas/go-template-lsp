@@ -23,8 +23,11 @@ export async function activate(context: ExtensionContext) {
     } else {
         binaryName = process.arch === 'arm64' ? 'gotmpl-server-arm64' : 'gotmpl-server';
     }
-    
-    let serverModule = context.asAbsolutePath(path.join('dist', 'server', 'bin', binaryName));
+
+    const isDebug = process.env.VSCODE_DEBUG === 'true' || process.env.NODE_ENV !== 'production';
+    const buildFolder = isDebug ? 'out' : 'dist';
+    let serverModule = context.asAbsolutePath(path.join(buildFolder, 'server', 'bin', binaryName));
+    console.log('Extension build folder:', buildFolder);
 
     const serverOptions: ServerOptions = {
         command: serverModule,
