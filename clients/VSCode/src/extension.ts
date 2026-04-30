@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { workspace, ExtensionContext } from 'vscode';
+import {workspace, ExtensionContext, RelativePattern, Uri, FileSystemWatcher} from 'vscode';
 
 import {
     LanguageClient,
@@ -11,6 +11,9 @@ import {
 let client: LanguageClient | undefined;
 
 export async function activate(context: ExtensionContext) {
+    
+    console.log('Extension activated!');
+
     let binaryName: string;
     
     if (process.platform === 'win32') {
@@ -21,19 +24,47 @@ export async function activate(context: ExtensionContext) {
         binaryName = process.arch === 'arm64' ? 'gotmpl-server-arm64' : 'gotmpl-server';
     }
     
-    let serverModule = context.asAbsolutePath(path.join('server', 'bin', binaryName));
+    let serverModule = context.asAbsolutePath(path.join('dist', 'server', 'bin', binaryName));
 
     const serverOptions: ServerOptions = {
-        module: serverModule,
+        command: serverModule,
         transport: TransportKind.stdio
     };
+
+    const folders = workspace.workspaceFolders;
+
+    const watchers: FileSystemWatcher[] = [];
+
+    if (!folders || folders.length === 0) {
+        console.log("No workspace folder is open");
+        return;
+    }
+
+    for (const folder of folders) {
+        console.log(`Watching workspace: ${folder.uri.fsPath}`);
+
+        const watcher = workspace.createFileSystemWatcher(
+            new RelativePattern(folder, "**/*.*.tmpl")
+        );
+
+        watchers.push(watcher)
+
+        context.subscriptions.push(
+            watcher,
+            watcher.onDidCreate(uri => console.log(`Created: ${uri.fsPath}`)),
+            watcher.onDidChange(uri => console.log(`Changed: ${uri.fsPath}`)),
+            watcher.onDidDelete(uri => console.log(`Deleted: ${uri.fsPath}`))
+        );
+    }
+
+    console.log('Server binary:', serverModule);
 
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
             { scheme: "file", language: "gotmpl" }
         ],
         synchronize: {
-            fileEvents: workspace.createFileSystemWatcher("**/*.*.tmpl")
+            fileEvents: watchers
         }
     };
 
@@ -44,10 +75,16 @@ export async function activate(context: ExtensionContext) {
         clientOptions
     );
 
-    await client.start();
+    try {
+        await client.start();
+        console.log("Language client started");
+    } catch (err) {
+        console.error("Language client failed:", err);
+    }
 }
 
 export async function deactivate() {
+
     if (!client) {
         return undefined
     }
