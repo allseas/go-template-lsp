@@ -28,9 +28,7 @@
     "typescript": "^6.0.3"
   },
   "main": "out/extension.js",
-  "activationEvents": [
-    "onLanguage:gotmpl"
-  ],
+  "activationEvents": [],
   "contributes": {
     "languages": [
       {
