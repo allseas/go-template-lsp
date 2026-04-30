@@ -1,0 +1,32 @@
+{
+  "name": "text-template-support",
+  "displayName": "text/template Support",
+  "description": "",
+  "version": "0.0.1",
+  "categories": [
+    "Programming Languages"
+  ],
+  "engines": { "vscode": "*" },
+  "contributes": {
+    "languages": [
+      {
+        "id": "gotmpl",
+        "aliases": [
+          "Go text/template",
+          "gotmpl"
+        ],
+        "extensions": [
+          ".tmpl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "gotmpl",
+        "scopeName": "source.gotmpl",
+        "path": "./Syntaxes/gotmpl.tmLanguage.json"
+      }
+    ]
+  }
+}
