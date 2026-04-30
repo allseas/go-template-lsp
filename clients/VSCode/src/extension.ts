@@ -11,8 +11,16 @@ import {
 let client: LanguageClient | undefined;
 
 export async function activate(context: ExtensionContext) {
-    // gotmpl-server is the compiled Go binary, not ts or js, as the server is written in go
-    const binaryName = process.platform === 'win32' ? 'gotmpl-server.exe' : 'gotmpl-server';
+    let binaryName: string;
+    
+    if (process.platform === 'win32') {
+        binaryName = process.arch === 'arm64' ? 'gotmpl-server-arm64.exe' : 'gotmpl-server.exe';
+    } else if (process.platform === 'darwin') { // macOS
+        binaryName = process.arch === 'arm64' ? 'gotmpl-server-darwin-arm64' : 'gotmpl-server-darwin-amd64';
+    } else {
+        binaryName = process.arch === 'arm64' ? 'gotmpl-server-arm64' : 'gotmpl-server';
+    }
+    
     let serverModule = context.asAbsolutePath(path.join('server', 'bin', binaryName));
 
     const serverOptions: ServerOptions = {

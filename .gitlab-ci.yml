@@ -1,0 +1,36 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+
+stages:
+  - triggers
+
+trigger-jetbrains:
+  stage: triggers
+  trigger:
+    include: clients/JetBrains/.gitlab-ci.yml
+    strategy: depend
+  rules:
+    - changes:
+        - clients/JetBrains/**/*
+
+#trigger-vscode:
+#  stage: triggers
+#  trigger:
+#    include: clients/VSCode/.gitlab-ci.yml
+#    strategy: depend
+#  rules:
+#    - changes:
+#        - clients/VSCode/**/*
+#
+#trigger-server:
+#  stage: triggers
+#  trigger:
+#    include: server/.gitlab-ci.yml
+#    strategy: depend
+#  rules:
+#    - changes:
+#        - server/**/*
