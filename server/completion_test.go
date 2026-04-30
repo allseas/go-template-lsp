@@ -3,22 +3,22 @@ package main
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 func TestCompletionLogic(t *testing.T) {
 	uri := "file:///scope-test.tmpl"
-
 	content := `
-{{ $top := . }}
-{{ range $i, $v := .Items }}
-	{{ $he
-{{ end }}
-{{ $late := . }}
-`
+		{{ $top := . }}
+		{{ range $i, $v := .Items }}
+			{{ $he
+		{{ end }}
+		{{ $late := . }}
+		`
 
 	store.Set(uri, content)
-	defer store.Remove(uri)
 
 	params := &protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
@@ -28,36 +28,23 @@ func TestCompletionLogic(t *testing.T) {
 	}
 
 	resp, err := completion(nil, params)
-	if err != nil {
-		t.Fatalf("Completion handler failed: %v", err)
-	}
 
-	list := resp.(protocol.CompletionList)
+	require.NoError(t, err)
 
-	found := map[string]bool{}
+	list, ok := resp.(protocol.CompletionList)
+	require.True(t, ok, "response should be a CompletionList")
+
+	var labels []string
 	for _, item := range list.Items {
-		found[item.Label] = true
+		labels = append(labels, item.Label)
 	}
 
-	if !found["$top"] {
-		t.Error("missing $top")
-	}
+	assert.Contains(t, labels, "$top", "Top-level variable should be visible")
+	assert.Contains(t, labels, "$i", "Index variable should be visible inside range")
+	assert.Contains(t, labels, "$v", "Value variable should be visible inside range")
+	assert.NotContains(t, labels, "$late", "$late should be out of scope (defined after cursor)")
 
-	if !found["$i"] {
-		t.Error("missing $i (range variable)")
-	}
-	if !found["$v"] {
-		t.Error("missing $v (range variable)")
-	}
+	assert.Subset(t, labels, []string{"len", "printf"}, "Global functions should be included")
 
-	if found["$late"] {
-		t.Error("unexpected $late in completion (out of scope)")
-	}
-
-	if !found["len"] {
-		t.Error("missing function len")
-	}
-	if !found["printf"] {
-		t.Error("missing function printf")
-	}
+	store.Remove(uri)
 }

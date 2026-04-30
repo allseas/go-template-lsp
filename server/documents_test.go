@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDocumentStore(t *testing.T) {
@@ -12,28 +14,23 @@ func TestDocumentStore(t *testing.T) {
 	t.Run("Set and Get", func(t *testing.T) {
 		ds.Set(uri, content)
 		val, ok := ds.Get(uri)
-		if !ok {
-			t.Fatal("Expected to find document in store")
-		}
-		if val != content {
-			t.Errorf("Expected %q, got %q", content, val)
-		}
+
+		assert.True(t, ok, "Document should exist in the store")
+		assert.Equal(t, content, val)
 	})
 
 	t.Run("Overwrite Content", func(t *testing.T) {
 		newContent := "Updated Content"
 		ds.Set(uri, newContent)
 		val, _ := ds.Get(uri)
-		if val != newContent {
-			t.Errorf("Expected %q after update, got %q", newContent, val)
-		}
+
+		assert.Equal(t, newContent, val, "Content should match the updated value")
 	})
 
 	t.Run("Remove Document", func(t *testing.T) {
 		ds.Remove(uri)
 		_, ok := ds.Get(uri)
-		if ok {
-			t.Error("Document should have been deleted from store")
-		}
+
+		assert.False(t, ok, "Document should no longer exist after removal")
 	})
 }
