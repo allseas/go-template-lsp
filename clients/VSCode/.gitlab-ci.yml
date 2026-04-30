@@ -1,0 +1,26 @@
+workflow:
+  rules:
+    - when: always
+
+stages:
+  - lint
+  - test
+#  - deploy
+
+linting:
+  stage: lint
+  image: alpine:3.22.4
+  before_script:
+    - apk add --update npm
+    - cd clients/VSCode
+    - npm install
+  script:
+    - echo "Running TSESLint"
+    - npx eslint .
+
+
+testing:
+  stage: test
+  image: alpine:3.22.4
+  script:
+    - echo "NO TESTS YET..."

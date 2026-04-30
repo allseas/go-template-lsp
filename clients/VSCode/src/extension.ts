@@ -1,5 +1,5 @@
 import * as path from 'path';
-import {workspace, ExtensionContext, RelativePattern, Uri, FileSystemWatcher} from 'vscode';
+import {workspace, ExtensionContext, RelativePattern, FileSystemWatcher} from 'vscode'; //Uri removed due to linter
 
 import {
     LanguageClient,
@@ -26,7 +26,7 @@ export async function activate(context: ExtensionContext) {
 
     const isDebug = process.env.VSCODE_DEBUG === 'true' || process.env.NODE_ENV !== 'production';
     const buildFolder = isDebug ? 'out' : 'dist';
-    let serverModule = context.asAbsolutePath(path.join(buildFolder, 'server', 'bin', binaryName));
+    const serverModule = context.asAbsolutePath(path.join(buildFolder, 'server', 'bin', binaryName));
     console.log('Extension build folder:', buildFolder);
 
     const serverOptions: ServerOptions = {
