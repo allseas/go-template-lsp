@@ -30,11 +30,11 @@ trigger-vscode:
     - changes:
         - clients/VSCode/**/*
 
-#trigger-server:
-#  stage: triggers
-#  trigger:
-#    include: server/.gitlab-ci.yml
-#    strategy: depend
-#  rules:
-#    - changes:
-#        - server/**/*
+trigger-server:
+  stage: triggers
+  trigger:
+    include: server/.gitlab-ci.yml
+    strategy: depend
+  rules:
+    - changes:
+        - server/**/*
