@@ -1,10 +1,12 @@
 {
   "version": "0.0.1",
-  "configurations": [{
-    "name": "Extension",
-    "type": "extensionHost",
-    "request": "launch",
-    "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-    "outFiles": ["${workspaceFolder}/out/extension.js"]
-  }]
+  "configurations": [
+    {
+      "name": "Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/out/extension.js"]
+    }
+  ]
 }

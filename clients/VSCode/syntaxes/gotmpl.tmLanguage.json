@@ -1,68 +1,74 @@
 {
-	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-	"name": "Go text/template",
-	"patterns": [
-		{
-			"include": "#comment"
-		},
-		{
-			"include": "#control"
-		}
-	],
-	"repository": {
-		"comment":{
-			"patterns": [{
-				"name":"comment.block",
-				"match": "{{-?\\s*\\/\\*([^\\*]|\\s|(\\*[^\\/]))*\\*\\/\\s*-?}}"
-			}]
-		},
-		"control": {
-			"name": "meta.tag",
-			"begin": "{{-|{{",
-			"end": "-}}|}}",
-			"patterns": [
-				{"include": "#keywords"},
-				{"include": "#strings"},
-				{"include": "#fields"},
-				{"include": "#variables"}
-			]
-			
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Go text/template",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#control"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        {
+          "name": "comment.block",
+          "match": "{{-?\\s*\\/\\*([^\\*]|\\s|(\\*[^\\/]))*\\*\\/\\s*-?}}"
+        }
+      ]
+    },
+    "control": {
+      "name": "meta.tag",
+      "begin": "{{-|{{",
+      "end": "-}}|}}",
+      "patterns": [
+        { "include": "#keywords" },
+        { "include": "#strings" },
+        { "include": "#fields" },
+        { "include": "#variables" }
+      ]
+    },
 
-		},
-
-		"keywords": {
-			"patterns": [{
-				"name": "keyword.control.gotmpl",
-				"match": "\\b(if|end|with|else|range|break|continue|template)\\b"
-			},
-			{
-				"name": "keyword.operator",
-				"match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery)\\b"
-			}]
-		},
-		"fields":{
-			"patterns": [{
-				"name":"variable.language",
-				"match": "\\b\\.\\w*"
-			}]
-		},
-		"variables":{
-			"patterns": [{
-				"name":"variable.parameter",
-				"match": "$\\w*"
-			}]
-		},
-		"strings": {
-			"name": "string.quoted.double.gotmpl",
-			"begin": "\"",
-			"end": "\"",
-			"patterns": [
-				{
-					"name": "constant.character.escape.gotmpl",
-					"match": "\\\\."
-				}
-			]
-		}
-	},
-	"scopeName": "source.gotmpl"
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.gotmpl",
+          "match": "\\b(if|end|with|else|range|break|continue|template)\\b"
+        },
+        {
+          "name": "keyword.operator",
+          "match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery)\\b"
+        }
+      ]
+    },
+    "fields": {
+      "patterns": [
+        {
+          "name": "variable.language",
+          "match": "\\b\\.\\w*"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.parameter",
+          "match": "$\\w*"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.gotmpl",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.gotmpl",
+          "match": "\\\\."
+        }
+      ]
+    }
+  },
+  "scopeName": "source.gotmpl"
 }

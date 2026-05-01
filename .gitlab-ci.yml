@@ -21,15 +21,15 @@ trigger-jetbrains:
     - changes:
         - clients/JetBrains/**/*
 
-#trigger-vscode:
-#  stage: triggers
-#  trigger:
-#    include: clients/VSCode/.gitlab-ci.yml
-#    strategy: depend
-#  rules:
-#    - changes:
-#        - clients/VSCode/**/*
-#
+trigger-vscode:
+  stage: triggers
+  trigger:
+    include: clients/VSCode/.gitlab-ci.yml
+    strategy: depend
+  rules:
+    - changes:
+        - clients/VSCode/**/*
+
 #trigger-server:
 #  stage: triggers
 #  trigger:
