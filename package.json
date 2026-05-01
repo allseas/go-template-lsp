@@ -7,7 +7,9 @@
   },
   "scripts": {
     "build:server": "ts-node --esm scripts/build-server-binaries.ts",
-    "build:vscode": "npm run build:server && (cd clients/VSCode && npm run package)"
+    "build:vscode": "npm run build:server && (cd clients/VSCode && npm run compile)",
+    "package:vscode": "npm run build:server && (cd clients/VSCode && npm run package)",
+    "watch:vscode": "(ts-node --esm scripts/watch-server-binaries.ts) | (cd clients/VSCode && npm run watch)"
   },
   "keywords": [],
   "author": "",

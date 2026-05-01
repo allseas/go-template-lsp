@@ -2,11 +2,15 @@ workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
-      when: never
 
 stages:
+  - setup
   - triggers
+
+pipeline-initialized:
+  stage: setup
+  script:
+    - echo "Pipeline triggered successfully."
 
 trigger-jetbrains:
   stage: triggers
@@ -17,15 +21,15 @@ trigger-jetbrains:
     - changes:
         - clients/JetBrains/**/*
 
-#trigger-vscode:
-#  stage: triggers
-#  trigger:
-#    include: clients/VSCode/.gitlab-ci.yml
-#    strategy: depend
-#  rules:
-#    - changes:
-#        - clients/VSCode/**/*
-#
+trigger-vscode:
+  stage: triggers
+  trigger:
+    include: clients/VSCode/.gitlab-ci.yml
+    strategy: depend
+  rules:
+    - changes:
+        - clients/VSCode/**/*
+
 #trigger-server:
 #  stage: triggers
 #  trigger:
