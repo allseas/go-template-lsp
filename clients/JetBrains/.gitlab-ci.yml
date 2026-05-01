@@ -19,13 +19,15 @@ linting:
 
 testing:
   stage: test
-  image: gradle:9.0.0-jdk21-alpine
+#  image: gradle:9.0.0-jdk21-alpine
+  image: golang:tip-alpine3.23
   before_script:
     - apk update
     - apk upgrade
     - apk add --no-cache gcompat libc6-compat
-    - apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community nodejs npm
+    - apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community nodejs npm openjdk21
     - npm install
+    - apk add --no-cache go
   script:
     - echo "running tests"
     - cd clients/JetBrains/go-text-template
