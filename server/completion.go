@@ -41,7 +41,8 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 	}
 
 	currentWord := getWordAtOffset(text, offset)
-	startChar := int(params.Position.Character) - len(currentWord)
+	wordUTF16Len := utf16Len(currentWord)
+	startChar := int(params.Position.Character) - wordUTF16Len
 	if startChar < 0 {
 		log.Warn().
 			Int("char_position", int(params.Position.Character)).
@@ -304,13 +305,6 @@ func positionToOffset(text string, pos protocol.Position) int {
 	lines := strings.Split(text, "\n")
 	line := int(pos.Line)
 	if line < 0 || line >= len(lines) {
-		log.Warn().
-			Int("requested_line", line).
-			Msg("positionToOffset: line index out of bounds; clamping")
-
-		if line < 0 {
-			return 0
-		}
 		return len(text)
 	}
 
@@ -320,17 +314,20 @@ func positionToOffset(text string, pos protocol.Position) int {
 	}
 
 	lineText := lines[line]
-	char := int(pos.Character)
-	if char < 0 {
-		char = 0
-	}
-
+	charTarget := int(pos.Character)
 	byteOffset := 0
-	for i := 0; i < len(lineText) && char > 0; {
-		_, size := utf8.DecodeRuneInString(lineText[i:])
+	utf16Count := 0
+
+	for i := 0; i < len(lineText) && utf16Count < charTarget; {
+		r, size := utf8.DecodeRuneInString(lineText[i:])
+		if r > 0xFFFF {
+			utf16Count += 2
+		} else {
+			utf16Count += 1
+		}
+
 		i += size
 		byteOffset += size
-		char--
 	}
 
 	return offset + byteOffset
@@ -342,4 +339,16 @@ func isWordChar(c rune) bool {
 		(c >= 'A' && c <= 'Z') ||
 		(c >= '0' && c <= '9') ||
 		c == '_' || c == '$'
+}
+
+func utf16Len(s string) int {
+	count := 0
+	for _, r := range s {
+		if r > 0xFFFF {
+			count += 2
+		} else {
+			count += 1
+		}
+	}
+	return count
 }
