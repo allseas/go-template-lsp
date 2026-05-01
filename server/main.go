@@ -29,6 +29,7 @@ func main() {
 		TextDocumentDidOpen:    didOpen,
 		TextDocumentDidChange:  didChange,
 		TextDocumentDidClose:   didClose,
+		TextDocumentHover:      hover,
 	}
 
 	lspServer := server.NewServer(&handler, lsName, false)
