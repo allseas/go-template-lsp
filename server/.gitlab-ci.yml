@@ -1,0 +1,23 @@
+workflow:
+  rules:
+    - when : always
+
+stages:
+  - lint
+  - test
+
+linting:
+  stage: lint
+  image: golangci/golangci-lint:v2.11.4-alpine
+  script:
+    - echo "Running Golangci-lint"
+    - cd server
+    - golangci-lint run
+
+testing:
+  stage: test
+  image: golang:tip-alpine3.23
+  script:
+    - echo "Running Tests"
+    - cd server
+    - go test
