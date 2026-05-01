@@ -22,7 +22,9 @@ testing:
   image: gradle:9.0.0-jdk21-alpine
   before_script:
     - apk add --no-cache gcompat libc6-compat
+    - apk add npm
   script:
     - echo "running tests"
+    - npm install
     - cd clients/JetBrains/go-text-template
     - ./gradlew test --no-configuration-cache
