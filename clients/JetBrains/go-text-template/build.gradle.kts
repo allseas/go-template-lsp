@@ -1,3 +1,4 @@
+
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.1.20"
@@ -25,8 +26,10 @@ dependencies {
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
 
         // Add plugin dependencies for compilation here:
-
+        bundledPlugin("com.intellij.properties")
         bundledPlugin("com.intellij.modules.json")
+        bundledPlugin("org.jetbrains.plugins.textmate")
+        plugin("com.redhat.devtools.lsp4ij", "0.9.0")
     }
 }
 
@@ -49,6 +52,40 @@ tasks {
         sourceCompatibility = "21"
         targetCompatibility = "21"
     }
+
+    prepareSandbox {
+        from("src/main/resources/textmate/go-text-template") {
+            into(pluginName.map { "$it/textmate/go-text-template" })
+        }
+    }
+}
+
+tasks.register<Exec>("compileServer") {
+    workingDir = rootDir.resolve("..").resolve("..")
+    val npmCommand = if (System.getProperty("os.name").lowercase().contains("windows")) "npm.cmd" else "npm"
+    commandLine(npmCommand, "run", "build:server")
+}
+
+tasks.register<Copy>("copyServerBin") {
+    dependsOn("compileServer")
+    from(
+        rootDir
+            .resolve("..")
+            .resolve("..")
+            .resolve("..")
+            .resolve("dist")
+            .resolve("server"),
+    )
+    include("**")
+
+    into(
+        rootDir
+            .resolve("src")
+            .resolve("main")
+            .resolve("resources")
+            .resolve("bin")
+            .resolve("language-server"),
+    )
 }
 
 kotlin {
@@ -58,4 +95,8 @@ kotlin {
 }
 tasks.build {
     dependsOn("addKtlintCheckGitPreCommitHook")
+}
+
+tasks.processResources {
+    dependsOn("copyServerBin")
 }
