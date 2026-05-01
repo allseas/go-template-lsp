@@ -19,6 +19,10 @@ var (
 		"urlquery", "html", "js", "eq", "ne", "lt", "gt", "le", "ge",
 		"and", "or", "not", "call",
 	}
+
+	templateKeywords = []string{
+		"range", "if", "with", "else", "end", "template", "block", "define",
+	}
 )
 
 // completion handles LSP "textDocument/completion" requests by identifying
@@ -82,6 +86,16 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 			Label:    fn,
 			Kind:     &fnKind,
 			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: fn},
+		})
+	}
+
+	keywordKind := protocol.CompletionItemKindKeyword
+
+	for _, kw := range templateKeywords {
+		items = append(items, protocol.CompletionItem{
+			Label:    kw,
+			Kind:     &keywordKind,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: kw},
 		})
 	}
 
