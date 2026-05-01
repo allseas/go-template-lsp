@@ -21,8 +21,10 @@ testing:
   stage: test
   image: gradle:9.0.0-jdk21-alpine
   before_script:
+    - apk update
+    - apk upgrade
     - apk add --no-cache gcompat libc6-compat
-    - apk add -U 'nodejs>24.11.0' 'npm>11.12.0'
+    - apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community nodejs npm
     - npm install
   script:
     - echo "running tests"
