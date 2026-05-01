@@ -16,7 +16,7 @@ linting:
     - npm install
   script:
     - echo "Running TSESLint"
-    - npx eslint .
+    - npm run lint:check
 
 
 testing:
