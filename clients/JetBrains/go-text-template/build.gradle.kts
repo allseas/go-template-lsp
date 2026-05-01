@@ -62,7 +62,8 @@ tasks {
 
 tasks.register<Exec>("compileServer") {
     workingDir = rootDir.resolve("..").resolve("..")
-    commandLine("npm", "run", "build:server")
+    val npmCommand = if (System.getProperty("os.name").lowercase().contains("windows")) "npm.cmd" else "npm"
+    commandLine(npmCommand, "run", "build:server")
 }
 
 tasks.register<Copy>("copyServerBin") {
