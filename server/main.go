@@ -44,7 +44,7 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 	log.Debug().Any("params", params).Msg("initializing")
 
 	capabilities := handler.CreateServerCapabilities()
-
+	capabilities.CompletionProvider = &protocol.CompletionOptions{}
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
 		ServerInfo: &protocol.InitializeResultServerInfo{
