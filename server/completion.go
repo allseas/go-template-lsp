@@ -4,13 +4,11 @@
 package main
 
 import (
-	"regexp"
-	"strings"
-	"unicode/utf8"
-
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
+	"regexp"
+	"strings"
 )
 
 var (
@@ -33,10 +31,10 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 	}
 
 	offset := positionToOffset(text, params.Position)
+	log.Debug().
+		Int("offset new ", offset).
+		Msg("completion: cursor is not inside a template block, skipping")
 	if !isInsideTemplate(text, offset) {
-		log.Debug().
-			Int("offset", offset).
-			Msg("completion: cursor is not inside a template block, skipping")
 		return nil, nil
 	}
 
@@ -302,35 +300,36 @@ func getWordAtOffset(text string, offset int) string {
 
 // positionToOffset translates an LSP line and character position into a flat byte offset, accounting for multibyte UTF-8 characters.
 func positionToOffset(text string, pos protocol.Position) int {
-	lines := strings.Split(text, "\n")
-	line := int(pos.Line)
-	if line < 0 || line >= len(lines) {
-		return len(text)
-	}
+	line := uint32(0)
+	charUTF16 := uint32(0)
 
-	offset := 0
-	for i := 0; i < line; i++ {
-		offset += len(lines[i]) + 1
-	}
-
-	lineText := lines[line]
-	charTarget := int(pos.Character)
-	byteOffset := 0
-	utf16Count := 0
-
-	for i := 0; i < len(lineText) && utf16Count < charTarget; {
-		r, size := utf8.DecodeRuneInString(lineText[i:])
-		if r > 0xFFFF {
-			utf16Count += 2
-		} else {
-			utf16Count += 1
+	for byteOffset, r := range text {
+		if line == uint32(pos.Line) && charUTF16 >= uint32(pos.Character) {
+			return byteOffset
 		}
 
-		i += size
-		byteOffset += size
+		if r == '\n' {
+			line++
+			charUTF16 = 0
+			continue
+		}
+
+		if line == uint32(pos.Line) {
+			if r > 0xFFFF {
+				charUTF16 += 2
+			} else {
+				charUTF16++
+			}
+		}
 	}
 
-	return offset + byteOffset
+	log.Debug().
+		Int("line", int(line)).
+		Int("chars", int(charUTF16)).
+		Msg("character emitted by pos")
+
+	return len(text)
+
 }
 
 // isWordChar reports whether a rune is a valid character for a template variable or function name.
