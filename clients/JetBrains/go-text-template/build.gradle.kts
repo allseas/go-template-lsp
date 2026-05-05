@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
@@ -76,7 +77,15 @@ val integrationTest by intellijPlatformTesting.testIdeUi.registering {
 tasks.test {
     testLogging {
         showStandardStreams = true
+        showCauses = true
+        showExceptions = true
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        events(
+            TestLogEvent.FAILED,
+            TestLogEvent.PASSED,
+            TestLogEvent.SKIPPED,
+            TestLogEvent.STANDARD_OUT,
+        )
     }
 }
 
