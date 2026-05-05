@@ -27,16 +27,19 @@ var (
 // completion handles LSP "textDocument/completion" requests by identifying
 // the current template context and returning relevant globalFunctions and variable names.
 func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+	doc, ok := store.Get(params.TextDocument.URI)
 	if !GetConfig().EnableServer {
 		log.Debug().Msg("completion requested but server is disabled by config")
 		return nil, nil
 	}
 
-	text, ok := store.Get(params.TextDocument.URI)
 	if !ok {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
 		return nil, nil
 	}
+
+	// later also use tree
+	text := doc.text
 
 	offset := positionToOffset(text, params.Position)
 	if !isInsideTemplate(text, offset) {
