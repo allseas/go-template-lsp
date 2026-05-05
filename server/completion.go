@@ -43,9 +43,6 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 
 	// later also use tree
 	text := doc.text
-	tree := doc.tree
-
-	log.Warn().Msg(tree.Root.String())
 
 	offset := positionToOffset(text, params.Position)
 	if !isInsideTemplate(text, offset) {
