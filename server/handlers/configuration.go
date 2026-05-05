@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"slices"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -10,6 +11,9 @@ import (
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
+
+// TraceValueMessages is the "messages" trace level. The "message" one in glsp is wrong.
+const TraceValueMessages = protocol.TraceValue("messages")
 
 // Config represents the server's configuration settings, including whether the server is enabled and the trace level for logging. It is designed to be updated based on client settings and can be safely accessed across concurrent requests.
 type Config struct {
@@ -39,10 +43,21 @@ func setConfig(c Config) {
 
 func traceFromConfig(c Config) protocol.TraceValue {
 	if c.Trace.Server != "" {
+
+		valid := []protocol.TraceValue{
+			protocol.TraceValueOff,
+			TraceValueMessages,
+			protocol.TraceValueVerbose,
+		}
+
+		if !slices.Contains(valid, c.Trace.Server) {
+			return TraceValueMessages
+		}
+
 		return c.Trace.Server
 	}
 
-	return protocol.TraceValueMessage
+	return TraceValueMessages
 }
 
 func applyTraceLevel(trace protocol.TraceValue) {
@@ -51,7 +66,7 @@ func applyTraceLevel(trace protocol.TraceValue) {
 	switch trace {
 	case protocol.TraceValueOff:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	case protocol.TraceValueMessage:
+	case TraceValueMessages:
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	case protocol.TraceValueVerbose:
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
@@ -100,13 +115,13 @@ func ConfigChanged(_ *glsp.Context, params *protocol.DidChangeConfigurationParam
 	raw, err := json.Marshal(params.Settings)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to marshal changed settings")
-		return nil
+		return err
 	}
 
 	c := GetConfig()
 	if err := json.Unmarshal(raw, &c); err != nil {
 		log.Error().Err(err).Msg("failed to parse changed settings")
-		return nil
+		return err
 	}
 
 	applyConfig(c)
