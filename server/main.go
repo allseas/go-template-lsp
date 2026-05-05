@@ -45,7 +45,7 @@ func main() {
 	}
 }
 
-func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
+func initialize(_ *glsp.Context, _ *protocol.InitializeParams) (any, error) {
 	capabilities := handler.CreateServerCapabilities()
 
 	openClose := true

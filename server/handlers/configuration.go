@@ -1,3 +1,4 @@
+// Package handlers provides handlers for LSP requests and notifications related to server configuration, including retrieving and updating settings, and managing trace levels for logging.
 package handlers
 
 import (
@@ -10,6 +11,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+// Config represents the server's configuration settings, including whether the server is enabled and the trace level for logging. It is designed to be updated based on client settings and can be safely accessed across concurrent requests.
 type Config struct {
 	EnableServer bool `json:"enableServer"`
 	Trace        struct {
@@ -22,6 +24,7 @@ var (
 	configMu      sync.RWMutex
 )
 
+// GetConfig safely retrieves the current configuration settings. It uses a read lock to ensure thread-safe access to the global configuration variable.
 func GetConfig() Config {
 	configMu.RLock()
 	defer configMu.RUnlock()
@@ -65,6 +68,7 @@ func applyConfig(c Config) {
 	applyTraceLevel(trace)
 }
 
+// RequestConfig is an LSP request that retrieves the current configuration settings from the client. It sends a "workspace/configuration" request to the client, parses the response, and updates the server's configuration accordingly.
 func RequestConfig(context *glsp.Context) error {
 	section := "goTmplSupport"
 	params := protocol.ConfigurationParams{
@@ -91,6 +95,7 @@ func RequestConfig(context *glsp.Context) error {
 	return nil
 }
 
+// ConfigChanged is an LSP notification handler that updates the server's configuration when the client sends new settings. It parses the incoming configuration, updates the global configuration, and applies any necessary changes.
 func ConfigChanged(_ *glsp.Context, params *protocol.DidChangeConfigurationParams) error {
 	raw, err := json.Marshal(params.Settings)
 	if err != nil {
@@ -110,6 +115,7 @@ func ConfigChanged(_ *glsp.Context, params *protocol.DidChangeConfigurationParam
 	return nil
 }
 
+// SetTrace is an LSP request handler that updates the server's trace level based on client requests. It updates the global configuration and applies the new trace level immediately.
 func SetTrace(_ *glsp.Context, params *protocol.SetTraceParams) error {
 	log.Debug().Any("params", params).Msg("SetTrace")
 
