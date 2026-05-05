@@ -44,8 +44,6 @@ func main() {
 }
 
 func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
-	// log.Debug().Any("params", params).Msg("initializing")
-
 	capabilities := handler.CreateServerCapabilities()
 
 	return protocol.InitializeResult{
@@ -58,7 +56,7 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 }
 
 func initialized(context *glsp.Context, params *protocol.InitializedParams) error {
-	log.Debug().Any("params", params).Msg("initialized")
+	log.Debug().Msg("initialized")
 
 	if err := handlers.RequestConfig(context); err != nil {
 		log.Error().Err(err).Msg("failed to request config")

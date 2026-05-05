@@ -4,6 +4,7 @@ package main
 
 import (
 	"sync"
+	"text-template-server/handlers"
 
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -45,6 +46,10 @@ func (ds *DocumentStore) Remove(uri string) {
 
 // didOpen is an LSP notification handler that registers a new document in the store when it is opened.
 func didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
+	if !handlers.GetConfig().Enable {
+		return nil
+	}
+
 	store.Set(params.TextDocument.URI, params.TextDocument.Text)
 	return nil
 }

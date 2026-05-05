@@ -6,6 +6,7 @@ package main
 import (
 	"regexp"
 	"strings"
+	"text-template-server/handlers"
 	"unicode/utf8"
 
 	"github.com/rs/zerolog/log"
@@ -26,6 +27,10 @@ var (
 // completion handles LSP "textDocument/completion" requests by identifying
 // the current template context and returning relevant globalFunctions and variable names.
 func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+	if !handlers.GetConfig().Enable {
+		return nil, nil
+	}
+
 	text, ok := store.Get(params.TextDocument.URI)
 	if !ok {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
