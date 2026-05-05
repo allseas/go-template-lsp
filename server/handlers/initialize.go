@@ -13,9 +13,10 @@ var (
 	lsName  string
 )
 
-func Init(lsName_ string, version_ string) error {
-	lsName = lsName_
-	version = version_
+// Init initializes the LSP server with the provided name and version, sets up the request handlers, and starts the server using standard I/O for communication. It returns an error if the server fails to start.
+func Init(langServerName string, langServerVersion string) error {
+	lsName = langServerName
+	version = langServerVersion
 
 	handler = protocol.Handler{
 		Initialize:                      initialize,

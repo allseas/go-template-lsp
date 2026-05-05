@@ -1,3 +1,4 @@
+// Package main initializes and starts the Go text/template Language Server Protocol (LSP) server, setting up logging and handling any initialization errors.
 package main
 
 import (
@@ -8,8 +9,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const lsName = "goTmpl"
-const version = "0.0.1"
+const (
+	lsName  = "goTmpl"
+	version = "0.0.1"
+)
 
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -18,7 +21,6 @@ func main() {
 	log.Print("starting server")
 
 	err := handlers.Init(lsName, version)
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("error initializing handlers")
 	}

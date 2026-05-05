@@ -1,5 +1,4 @@
-// Package main provides a document synchronization and
-// completion engine for Go text/templates.
+// Package handlers provides a document synchronization and completion engine for Go text/templates.
 package handlers
 
 import (
