@@ -42,7 +42,7 @@ func traceFromConfig(c Config) protocol.TraceValue {
 		return c.Trace.Server
 	}
 
-	return protocol.TraceValueMessage
+	return "messages"
 }
 
 func applyTraceLevel(trace protocol.TraceValue) {
