@@ -1,0 +1,45 @@
+version: "2"
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+linters:
+  enable:
+    - staticcheck
+    - govet
+    - errcheck
+    - gosec
+    - revive
+    - gocyclo
+    - misspell
+    - unconvert
+    - unparam
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  
+  govet:
+    enable-all: true
+  
+  gocyclo:
+    min-complexity: 15
+  
+  revive:
+    severity: warning
+    rules:
+      - name: var-naming
+        severity: warning
+        arguments:
+          - ["ID", "URL", "HTTP", "API", "JSON", "XML"]  # Allowed initialisms
+      - name: cognitive-complexity
+        arguments: [15]
+      - name: cyclomatic
+        arguments: [10]
+      - name: line-length-limit
+        arguments: [120]
+      - name: function-length
+        arguments: [50, 0]

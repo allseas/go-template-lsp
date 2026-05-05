@@ -4,11 +4,13 @@
 package main
 
 import (
+	"regexp"
+	"strings"
+	"text-template-server/handlers"
+
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"regexp"
-	"strings"
 )
 
 var (
@@ -29,6 +31,11 @@ var (
 // the current template context and returning relevant globalFunctions and variable names.
 func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
+	if !handlers.GetConfig().EnableServer {
+		log.Debug().Msg("completion requested but server is disabled by config")
+		return nil, nil
+	}
+
 	if !ok {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
 		return nil, nil
@@ -36,6 +43,9 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 
 	// later also use tree
 	text := doc.text
+	tree := doc.tree
+
+	log.Debug().Str("ast", tree.Root.String())
 
 	offset := positionToOffset(text, params.Position)
 	if !isInsideTemplate(text, offset) {

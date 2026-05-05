@@ -56,6 +56,26 @@
         "scopeName": "source.gotmpl",
         "path": "./syntaxes/gotmpl.tmLanguage.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "text/template Support",
+      "properties": {
+        "goTmplSupport.enableServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable the language server."
+        },
+        "goTmplSupport.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "messages",
+          "description": "Trace communication with the language server."
+        }
+      }
+    }
   }
 }
