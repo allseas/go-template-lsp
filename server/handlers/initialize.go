@@ -13,8 +13,8 @@ var (
 	lsName  string
 )
 
-// Init initializes the LSP server with the provided name and version, sets up the request handlers, and starts the server using standard I/O for communication. It returns an error if the server fails to start.
-func Init(langServerName string, langServerVersion string) error {
+// setupHandlers initializes the handler configuration with the given language server name and version. This is separated from server startup to enable testing.
+func setupHandlers(langServerName string, langServerVersion string) {
 	lsName = langServerName
 	version = langServerVersion
 
@@ -29,6 +29,11 @@ func Init(langServerName string, langServerVersion string) error {
 		SetTrace:                        SetTrace,
 		WorkspaceDidChangeConfiguration: ConfigChanged,
 	}
+}
+
+// Init initializes the LSP server with the provided name and version, sets up the request handlers, and starts the server using standard I/O for communication. It returns an error if the server fails to start.
+func Init(langServerName string, langServerVersion string) error {
+	setupHandlers(langServerName, langServerVersion)
 
 	lspServer := server.NewServer(&handler, lsName, false)
 
