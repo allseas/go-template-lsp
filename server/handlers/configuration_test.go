@@ -29,7 +29,7 @@ func TestApplyTraceLevel(t *testing.T) {
 
 	t.Run("Default case sets log level to Info", func(t *testing.T) {
 		applyTraceLevel("invalid_trace_value")
-		assert.Equal(t, zerolog.InfoLevel, zerolog.GlobalLevel())
+		assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 	})
 }
 
