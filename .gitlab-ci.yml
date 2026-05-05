@@ -7,6 +7,9 @@ stages:
   - setup
   - triggers
 
+default:
+  interruptible: true
+
 pipeline-initialized:
   stage: setup
   script:
