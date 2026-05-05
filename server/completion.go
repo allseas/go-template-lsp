@@ -4,13 +4,11 @@
 package main
 
 import (
-	"regexp"
-	"strings"
-	"unicode/utf8"
-
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
+	"regexp"
+	"strings"
 )
 
 var (
@@ -20,6 +18,10 @@ var (
 		"len", "index", "slice", "print", "printf", "println",
 		"urlquery", "html", "js", "eq", "ne", "lt", "gt", "le", "ge",
 		"and", "or", "not", "call",
+	}
+
+	templateKeywords = []string{
+		"range", "if", "with", "else", "end", "template", "block", "define",
 	}
 )
 
@@ -35,13 +37,14 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 	offset := positionToOffset(text, params.Position)
 	if !isInsideTemplate(text, offset) {
 		log.Debug().
-			Int("offset", offset).
+			Int("offset new ", offset).
 			Msg("completion: cursor is not inside a template block, skipping")
 		return nil, nil
 	}
 
 	currentWord := getWordAtOffset(text, offset)
-	startChar := int(params.Position.Character) - len(currentWord)
+	wordUTF16Len := utf16Len(currentWord)
+	startChar := int(params.Position.Character) - wordUTF16Len
 	if startChar < 0 {
 		log.Warn().
 			Int("char_position", int(params.Position.Character)).
@@ -83,6 +86,16 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 			Label:    fn,
 			Kind:     &fnKind,
 			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: fn},
+		})
+	}
+
+	keywordKind := protocol.CompletionItemKindKeyword
+
+	for _, kw := range templateKeywords {
+		items = append(items, protocol.CompletionItem{
+			Label:    kw,
+			Kind:     &keywordKind,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: kw},
 		})
 	}
 
@@ -301,39 +314,36 @@ func getWordAtOffset(text string, offset int) string {
 
 // positionToOffset translates an LSP line and character position into a flat byte offset, accounting for multibyte UTF-8 characters.
 func positionToOffset(text string, pos protocol.Position) int {
-	lines := strings.Split(text, "\n")
-	line := int(pos.Line)
-	if line < 0 || line >= len(lines) {
-		log.Warn().
-			Int("requested_line", line).
-			Msg("positionToOffset: line index out of bounds; clamping")
+	line := uint32(0)
+	charUTF16 := uint32(0)
 
-		if line < 0 {
-			return 0
+	for byteOffset, r := range text {
+		if line == uint32(pos.Line) && charUTF16 >= uint32(pos.Character) {
+			return byteOffset
 		}
-		return len(text)
+
+		if r == '\n' {
+			line++
+			charUTF16 = 0
+			continue
+		}
+
+		if line == uint32(pos.Line) {
+			if r > 0xFFFF {
+				charUTF16 += 2
+			} else {
+				charUTF16++
+			}
+		}
 	}
 
-	offset := 0
-	for i := 0; i < line; i++ {
-		offset += len(lines[i]) + 1
-	}
+	log.Debug().
+		Int("line", int(line)).
+		Int("chars", int(charUTF16)).
+		Msg("character emitted by pos")
 
-	lineText := lines[line]
-	char := int(pos.Character)
-	if char < 0 {
-		char = 0
-	}
+	return len(text)
 
-	byteOffset := 0
-	for i := 0; i < len(lineText) && char > 0; {
-		_, size := utf8.DecodeRuneInString(lineText[i:])
-		i += size
-		byteOffset += size
-		char--
-	}
-
-	return offset + byteOffset
 }
 
 // isWordChar reports whether a rune is a valid character for a template variable or function name.
@@ -342,4 +352,16 @@ func isWordChar(c rune) bool {
 		(c >= 'A' && c <= 'Z') ||
 		(c >= '0' && c <= '9') ||
 		c == '_' || c == '$'
+}
+
+func utf16Len(s string) int {
+	count := 0
+	for _, r := range s {
+		if r > 0xFFFF {
+			count += 2
+		} else {
+			count += 1
+		}
+	}
+	return count
 }
