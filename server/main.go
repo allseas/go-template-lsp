@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"text-template-server/handlers"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -17,18 +20,20 @@ var (
 
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, NoColor: true})
 
 	log.Print("starting server")
 
 	handler = protocol.Handler{
-		Initialize:             initialize,
-		Initialized:            initialized,
-		Shutdown:               shutdown,
-		SetTrace:               setTrace,
-		TextDocumentCompletion: completion,
-		TextDocumentDidOpen:    didOpen,
-		TextDocumentDidChange:  didChange,
-		TextDocumentDidClose:   didClose,
+		Initialize:                      initialize,
+		Initialized:                     initialized,
+		Shutdown:                        shutdown,
+		TextDocumentCompletion:          completion,
+		TextDocumentDidOpen:             didOpen,
+		TextDocumentDidChange:           didChange,
+		TextDocumentDidClose:            didClose,
+		SetTrace:                        handlers.SetTrace,
+		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
 	}
 
 	lspServer := server.NewServer(&handler, lsName, false)
@@ -40,9 +45,7 @@ func main() {
 	}
 }
 
-func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
-	log.Debug().Any("params", params).Msg("initializing")
-
+func initialize(_ *glsp.Context, _ *protocol.InitializeParams) (any, error) {
 	capabilities := handler.CreateServerCapabilities()
 
 	openClose := true
@@ -63,8 +66,15 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 	}, nil
 }
 
-func initialized(_ *glsp.Context, params *protocol.InitializedParams) error {
-	log.Debug().Any("params", params).Msg("initialized")
+func initialized(context *glsp.Context, _ *protocol.InitializedParams) error {
+	log.Debug().Msg("initialized")
+
+	// so we don't block the initialized request handler.
+	go func(ctx *glsp.Context) {
+		if err := handlers.RequestConfig(ctx); err != nil {
+			log.Error().Err(err).Msg("failed to request config")
+		}
+	}(context)
 
 	return nil
 }
@@ -73,11 +83,5 @@ func shutdown(_ *glsp.Context) error {
 	log.Debug().Msg("shutting down")
 
 	protocol.SetTraceValue(protocol.TraceValueOff)
-	return nil
-}
-
-func setTrace(_ *glsp.Context, params *protocol.SetTraceParams) error {
-	log.Debug().Any("params", params).Msg("setting trace")
-	protocol.SetTraceValue(params.Value)
 	return nil
 }

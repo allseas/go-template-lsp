@@ -15,7 +15,7 @@ linting:
   script:
     - echo "Running Golangci-lint"
     - cd server
-    - golangci-lint run
+    - golangci-lint run --timeout=5m
 
 testing:
   stage: test
