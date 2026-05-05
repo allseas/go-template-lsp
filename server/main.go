@@ -29,6 +29,7 @@ func main() {
 		TextDocumentDidOpen:    didOpen,
 		TextDocumentDidChange:  didChange,
 		TextDocumentDidClose:   didClose,
+		TextDocumentReferences: references,
 	}
 
 	lspServer := server.NewServer(&handler, lsName, false)
@@ -54,6 +55,7 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 	}
 
 	capabilities.CompletionProvider = &protocol.CompletionOptions{}
+	capabilities.ReferencesProvider = &protocol.ReferenceOptions{}
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
 		ServerInfo: &protocol.InitializeResultServerInfo{
