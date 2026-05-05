@@ -8,7 +8,6 @@ import (
 )
 
 func TestSetupHandlers(t *testing.T) {
-	// Test handler setup without starting the server on stdio
 	setupHandlers("TestServer", "1.0.0")
 
 	assert.Equal(t, "TestServer", lsName, "language server name should be set")
@@ -18,7 +17,6 @@ func TestSetupHandlers(t *testing.T) {
 }
 
 func TestInitializeHandler(t *testing.T) {
-	// Test the initialize handler without starting the full server
 	setupHandlers("goTmpl", "0.0.1")
 	result, err := initialize(nil, &protocol.InitializeParams{})
 

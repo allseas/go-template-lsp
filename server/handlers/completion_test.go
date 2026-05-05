@@ -59,7 +59,12 @@ func TestCompletionLogic(t *testing.T) {
 		assert.Contains(t, labels, "$top", "top-level variable should be visible")
 		assert.Contains(t, labels, "$i", "index variable should be visible inside range")
 		assert.Contains(t, labels, "$v", "value variable should be visible inside range")
-		assert.NotContains(t, labels, "$late", "$late should be out of scope (defined after cursor)")
+		assert.NotContains(
+			t,
+			labels,
+			"$late",
+			"$late should be out of scope (defined after cursor)",
+		)
 		assert.Contains(t, labels, "len", "global functions should be included")
 		assert.Contains(t, labels, "range", "keywords should be included")
 	})
@@ -322,6 +327,10 @@ func TestPositionToOffset(t *testing.T) {
 	})
 
 	t.Run("position beyond end of text returns len", func(t *testing.T) {
-		assert.Equal(t, len(text), positionToOffset(text, protocol.Position{Line: 10, Character: 0}))
+		assert.Equal(
+			t,
+			len(text),
+			positionToOffset(text, protocol.Position{Line: 10, Character: 0}),
+		)
 	})
 }

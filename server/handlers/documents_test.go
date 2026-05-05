@@ -9,7 +9,6 @@ import (
 )
 
 func TestDocumentStore(t *testing.T) {
-	// FIX: docs must be map[string]*document, not map[string]string
 	ds := &documentStore{docs: make(map[string]*document)}
 	uri := "file:///test-document.txt"
 	content := "Initial Content"
@@ -19,7 +18,6 @@ func TestDocumentStore(t *testing.T) {
 		val, ok := ds.Get(uri)
 
 		assert.True(t, ok, "Document should exist in the store")
-		// FIX: val is a *document, so check val.text
 		assert.Equal(t, content, val.text)
 	})
 
@@ -128,9 +126,7 @@ func TestDocumentStore(t *testing.T) {
 }
 
 func TestDidOpenAndChange(t *testing.T) {
-
 	t.Run("DidOpen and DidChange", func(t *testing.T) {
-		// First ensure the server is enabled for this test
 		originalConfig := GetConfig()
 		applyConfig(Config{EnableServer: true})
 		defer applyConfig(originalConfig)
@@ -210,5 +206,6 @@ func TestDidOpenAndChange(t *testing.T) {
 		assert.NoError(t, err, "didClose should not error")
 		val, ok = store.Get(uri)
 		assert.False(t, ok, "Document should not exist after Close")
+		assert.Nil(t, val, "Value should be nil after Close")
 	})
 }
