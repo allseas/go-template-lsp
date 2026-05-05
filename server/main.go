@@ -1,6 +1,8 @@
 package main
 
 import (
+	"text-template-server/handlers"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -21,14 +23,15 @@ func main() {
 	log.Print("starting server")
 
 	handler = protocol.Handler{
-		Initialize:             initialize,
-		Initialized:            initialized,
-		Shutdown:               shutdown,
-		SetTrace:               setTrace,
-		TextDocumentCompletion: completion,
-		TextDocumentDidOpen:    didOpen,
-		TextDocumentDidChange:  didChange,
-		TextDocumentDidClose:   didClose,
+		Initialize:                      initialize,
+		Initialized:                     initialized,
+		Shutdown:                        shutdown,
+		SetTrace:                        setTrace,
+		TextDocumentCompletion:          completion,
+		TextDocumentDidOpen:             didOpen,
+		TextDocumentDidChange:           didChange,
+		TextDocumentDidClose:            didClose,
+		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
 	}
 
 	lspServer := server.NewServer(&handler, lsName, false)
@@ -38,6 +41,9 @@ func main() {
 		log.Error().Err(err).Msg("error starting server")
 		return
 	}
+
+	// get config
+	handlers.RequestConfig(nil, nil)
 }
 
 func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {

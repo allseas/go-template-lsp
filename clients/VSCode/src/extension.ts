@@ -82,6 +82,7 @@ export async function activate(context: ExtensionContext) {
     documentSelector: [{ scheme: "file", language: "gotmpl" }],
     synchronize: {
       fileEvents: watchers,
+      configurationSection: "goTmplSupport",
     },
   };
 
