@@ -1,0 +1,46 @@
+
+-- Go text/template for generating a SELECT SQL query
+-- Expected input (example in Go):
+-- tmpl.Execute(w, map[string]interface{}{
+--   "Table": "users",
+--   "Columns": []string{"id", "name", "email"},
+--   "Where": []string{"active = 1", "age > 18"},
+--   "OrderBy": "created_at DESC",
+--   "Limit": 10,
+--   "Offset": 0,
+-- })
+
+SELECT
+{{- if .Columns }}
+	{{- range $i, $col := .Columns }}
+		{{- if gt $i 0 }}, {{ end }}{{ $col }}
+	{{- end }}
+{{- else }}
+	*
+{{- end }}
+FROM {{ .Table }}
+
+{{- if .Join }}
+	{{- range .Join }}
+		{{ . }}
+	{{- end }}
+{{- end }}
+
+{{- if .Where }}
+WHERE
+	{{- range $i, $w := .Where }}
+		{{- if gt $i 0 }} AND {{ end }}({{ $w }})
+	{{- end }}
+{{- end }}
+
+{{- if .OrderBy }}
+ORDER BY {{ .OrderBy }}
+{{- end }}
+
+{{- if .Limit }}
+LIMIT {{ .Limit }}
+{{- end }}
+
+{{- if .Offset }}
+OFFSET {{ .Offset }}
+{{- end }};

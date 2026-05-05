@@ -1,0 +1,48 @@
+<!-- Go text/template for generating a project README.md -->
+<!-- Example Execute data:
+tmpl.Execute(w, map[string]interface{}{
+  "ProjectName": "AwesomeProject",
+  "Tagline": "Do amazing things",
+  "Overview": "Short project overview goes here.",
+  "Features": []string{"Fast", "Small", "Secure"},
+  "Contributors": []map[string]string{{"Name":"Alice","Role":"Maintainer"},{"Name":"Bob","Role":"Contributor"}},
+  "License": "MIT",
+  "Date": "2026-04-30",
+})
+-->
+
+# {{ .ProjectName }}
+
+{{- if .Tagline }}
+> {{ .Tagline }}
+{{- end }}
+
+## Overview
+
+{{ .Overview }}
+
+{{- if .Features }}
+## Features
+{{- range $i, $feat := .Features }}
+- {{ $feat }}
+{{- end }}
+
+{{- end }}
+
+{{- if .Contributors }}
+## Contributors ({{ len .Contributors }})
+{{- range .Contributors }}
+- {{ .Name }} — {{ .Role }}
+{{- end }}
+{{- else }}
+_No contributors listed._
+{{- end }}
+
+{{- if .License }}
+## License
+Licensed under the {{ .License }} license.
+{{- end }}
+
+_Released on {{ printf "%s" .Date }}._
+
+<!-- End of README template -->

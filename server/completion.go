@@ -4,11 +4,13 @@
 package main
 
 import (
+	"regexp"
+	"strings"
+	"text-template-server/handlers"
+
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"regexp"
-	"strings"
 )
 
 var (
@@ -28,11 +30,19 @@ var (
 // completion handles LSP "textDocument/completion" requests by identifying
 // the current template context and returning relevant globalFunctions and variable names.
 func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
-	text, ok := store.Get(params.TextDocument.URI)
+	doc, ok := store.Get(params.TextDocument.URI)
+	if !handlers.GetConfig().EnableServer {
+		log.Debug().Msg("completion requested but server is disabled by config")
+		return nil, nil
+	}
+
 	if !ok {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
 		return nil, nil
 	}
+
+	// later also use tree
+	text := doc.text
 
 	offset := positionToOffset(text, params.Position)
 	if !isInsideTemplate(text, offset) {
@@ -318,7 +328,7 @@ func positionToOffset(text string, pos protocol.Position) int {
 	charUTF16 := uint32(0)
 
 	for byteOffset, r := range text {
-		if line == uint32(pos.Line) && charUTF16 >= uint32(pos.Character) {
+		if line == pos.Line && charUTF16 >= pos.Character {
 			return byteOffset
 		}
 
@@ -328,7 +338,7 @@ func positionToOffset(text string, pos protocol.Position) int {
 			continue
 		}
 
-		if line == uint32(pos.Line) {
+		if line == pos.Line {
 			if r > 0xFFFF {
 				charUTF16 += 2
 			} else {
@@ -343,7 +353,6 @@ func positionToOffset(text string, pos protocol.Position) int {
 		Msg("character emitted by pos")
 
 	return len(text)
-
 }
 
 // isWordChar reports whether a rune is a valid character for a template variable or function name.
@@ -360,7 +369,7 @@ func utf16Len(s string) int {
 		if r > 0xFFFF {
 			count += 2
 		} else {
-			count += 1
+			count++
 		}
 	}
 	return count
