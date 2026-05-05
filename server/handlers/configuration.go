@@ -42,7 +42,7 @@ func traceFromConfig(c Config) protocol.TraceValue {
 		return c.Trace.Server
 	}
 
-	return protocol.TraceValueMessage
+	return "messages"
 }
 
 func applyTraceLevel(trace protocol.TraceValue) {
@@ -50,13 +50,15 @@ func applyTraceLevel(trace protocol.TraceValue) {
 
 	switch trace {
 	case protocol.TraceValueOff:
+		log.Warn().Msg("trace is off, setting log level to info")
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	case protocol.TraceValueMessage:
+	case "messages":
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	case protocol.TraceValueVerbose:
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	default:
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		log.Error().Any("trace", trace).Msg("default, setting log level to debug")
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 }
 
