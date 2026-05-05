@@ -58,9 +58,8 @@ func didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error 
 
 // didChange is an LSP notification handler that updates the stored document content when the user edits the file.
 func didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
-	log.Info().
+	log.Debug().
 		Str("uri", params.TextDocument.URI).
-		Any("config", handlers.GetConfig()).
 		Msg("document changed")
 
 	if !handlers.GetConfig().EnableServer {
