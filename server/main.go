@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"text-template-server/handlers"
 
 	"github.com/rs/zerolog"
@@ -19,6 +20,7 @@ var (
 
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, NoColor: true})
 
 	log.Print("starting server")
 
@@ -55,12 +57,15 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 	}, nil
 }
 
-func initialized(context *glsp.Context, params *protocol.InitializedParams) error {
+func initialized(context *glsp.Context, _ *protocol.InitializedParams) error {
 	log.Debug().Msg("initialized")
 
-	if err := handlers.RequestConfig(context); err != nil {
-		log.Error().Err(err).Msg("failed to request config")
-	}
+	// so we don't block the initialized request handler.
+	go func(ctx *glsp.Context) {
+		if err := handlers.RequestConfig(ctx); err != nil {
+			log.Error().Err(err).Msg("failed to request config")
+		}
+	}(context)
 
 	return nil
 }
