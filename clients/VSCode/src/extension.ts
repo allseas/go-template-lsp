@@ -87,7 +87,7 @@ export async function activate(context: ExtensionContext) {
   };
 
   client = new LanguageClient(
-    "gotmplLanguageServer",
+    "goTmplSupport",
     "Go Template Language Server",
     serverOptions,
     clientOptions,

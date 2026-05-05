@@ -26,11 +26,11 @@ func main() {
 		Initialize:                      initialize,
 		Initialized:                     initialized,
 		Shutdown:                        shutdown,
-		SetTrace:                        setTrace,
 		TextDocumentCompletion:          completion,
 		TextDocumentDidOpen:             didOpen,
 		TextDocumentDidChange:           didChange,
 		TextDocumentDidClose:            didClose,
+		SetTrace:                        handlers.SetTrace,
 		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
 	}
 
@@ -41,13 +41,10 @@ func main() {
 		log.Error().Err(err).Msg("error starting server")
 		return
 	}
-
-	// get config
-	handlers.RequestConfig(nil, nil)
 }
 
 func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
-	log.Debug().Any("params", params).Msg("initializing")
+	// log.Debug().Any("params", params).Msg("initializing")
 
 	capabilities := handler.CreateServerCapabilities()
 
@@ -60,8 +57,10 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 	}, nil
 }
 
-func initialized(_ *glsp.Context, params *protocol.InitializedParams) error {
+func initialized(context *glsp.Context, params *protocol.InitializedParams) error {
 	log.Debug().Any("params", params).Msg("initialized")
+
+	go handlers.RequestConfig(context)
 
 	return nil
 }
@@ -70,11 +69,5 @@ func shutdown(_ *glsp.Context) error {
 	log.Debug().Msg("shutting down")
 
 	protocol.SetTraceValue(protocol.TraceValueOff)
-	return nil
-}
-
-func setTrace(_ *glsp.Context, params *protocol.SetTraceParams) error {
-	log.Debug().Any("params", params).Msg("setting trace")
-	protocol.SetTraceValue(params.Value)
 	return nil
 }

@@ -72,7 +72,7 @@
             "messages",
             "verbose"
           ],
-          "default": "verbose",
+          "default": "messages",
           "description": "Trace communication with the language server."
         }
       }
