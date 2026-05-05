@@ -48,6 +48,15 @@ func main() {
 func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
 	capabilities := handler.CreateServerCapabilities()
 
+	openClose := true
+	changeKind := protocol.TextDocumentSyncKindFull
+
+	capabilities.TextDocumentSync = &protocol.TextDocumentSyncOptions{
+		OpenClose: &openClose,
+		Change:    &changeKind,
+	}
+
+	capabilities.CompletionProvider = &protocol.CompletionOptions{}
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
 		ServerInfo: &protocol.InitializeResultServerInfo{
