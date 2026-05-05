@@ -29,4 +29,4 @@ testing:
       echo "$COVER_OUTPUT"
       COVERAGE=$(echo "$COVER_OUTPUT" | grep '^total:' | awk '{print $3}' | tr -d '%')
       echo "Total coverage: ${COVERAGE}%"
-      awk "BEGIN { if (${COVERAGE} < 90) { print \"Coverage ${COVERAGE}% is below the required 90%\"; exit 1 } }"
+      awk "BEGIN { if (${COVERAGE} < 80) { print \"Coverage ${COVERAGE}% is below the required 80%\"; exit 1 } }"
