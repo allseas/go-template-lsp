@@ -57,7 +57,9 @@ func RequestConfig(context *glsp.Context) error {
 }
 
 func ConfigChanged(context *glsp.Context, _ *protocol.DidChangeConfigurationParams) error {
-	go RequestConfig(context)
+	if err := RequestConfig(context); err != nil {
+		log.Error().Err(err).Msg("failed to request config")
+	}
 
 	return nil
 }
