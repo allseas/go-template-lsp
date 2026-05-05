@@ -6,6 +6,7 @@ import (
 	"sync"
 	"text-template-server/handlers"
 
+	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -46,7 +47,8 @@ func (ds *DocumentStore) Remove(uri string) {
 
 // didOpen is an LSP notification handler that registers a new document in the store when it is opened.
 func didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-	if !handlers.GetConfig().Enable {
+	if !handlers.GetConfig().EnableServer {
+		log.Debug().Msg("didOpen received but server is disabled by config")
 		return nil
 	}
 
@@ -56,6 +58,13 @@ func didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error 
 
 // didChange is an LSP notification handler that updates the stored document content when the user edits the file.
 func didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
+	log.Info().Str("uri", params.TextDocument.URI).Any("config", handlers.GetConfig()).Msg("document changed")
+
+	if !handlers.GetConfig().EnableServer {
+		log.Debug().Msg("didOpen received but server is disabled by config")
+		return nil
+	}
+
 	for _, change := range params.ContentChanges {
 		if c, ok := change.(protocol.TextDocumentContentChangeEventWhole); ok {
 			store.Set(params.TextDocument.URI, c.Text)

@@ -60,7 +60,7 @@
     "configuration": {
       "title": "text/template Support",
       "properties": {
-        "goTmplSupport.enable": {
+        "goTmplSupport.enableServer": {
           "type": "boolean",
           "default": true,
           "description": "Enable/disable the language server."
