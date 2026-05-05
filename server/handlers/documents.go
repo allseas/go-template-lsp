@@ -1,10 +1,9 @@
 // Package main provides a document synchronization and
 // completion engine for Go text/templates.
-package main
+package handlers
 
 import (
 	"sync"
-	"text-template-server/handlers"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -47,7 +46,7 @@ func (ds *DocumentStore) Remove(uri string) {
 
 // didOpen is an LSP notification handler that registers a new document in the store when it is opened.
 func didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-	if !handlers.GetConfig().EnableServer {
+	if !GetConfig().EnableServer {
 		log.Debug().Msg("didOpen received but server is disabled by config")
 		return nil
 	}
@@ -60,10 +59,10 @@ func didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error 
 func didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
 	log.Info().
 		Str("uri", params.TextDocument.URI).
-		Any("config", handlers.GetConfig()).
+		Any("config", GetConfig()).
 		Msg("document changed")
 
-	if !handlers.GetConfig().EnableServer {
+	if !GetConfig().EnableServer {
 		log.Debug().Msg("didOpen received but server is disabled by config")
 		return nil
 	}

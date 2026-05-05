@@ -1,12 +1,11 @@
 // Package main provides a Language Server Protocol implementation
 // for Go text/templates, featuring scope-aware variable completion
 // and built-in function support.
-package main
+package handlers
 
 import (
 	"regexp"
 	"strings"
-	"text-template-server/handlers"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -30,7 +29,7 @@ var (
 // completion handles LSP "textDocument/completion" requests by identifying
 // the current template context and returning relevant globalFunctions and variable names.
 func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
-	if !handlers.GetConfig().EnableServer {
+	if !GetConfig().EnableServer {
 		log.Debug().Msg("completion requested but server is disabled by config")
 		return nil, nil
 	}
