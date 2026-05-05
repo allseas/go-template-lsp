@@ -46,7 +46,7 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 
 	offset := positionToOffset(text, params.Position)
 	if !isInsideTemplate(text, offset) {
-		log.Warn().
+		log.Debug().
 			Int("offset new ", offset).
 			Msg("completion: cursor is not inside a template block, skipping")
 		return nil, nil
