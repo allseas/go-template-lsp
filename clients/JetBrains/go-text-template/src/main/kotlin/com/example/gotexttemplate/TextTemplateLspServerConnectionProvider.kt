@@ -19,7 +19,7 @@ class TextTemplateLspServerConnectionProvider(
     private fun getBinary(): File {
         val platform = detectPlatform()
         val binaryName = "gotmpl-server$platform"
-        val resource = javaClass.getResourceAsStream("bin/language-server$binaryName")
+        val resource = javaClass.classLoader.getResourceAsStream("bin/language-server/$binaryName")
         val cacheDir = File(PathManager.getSystemPath(), "go-text-template-lsp").also { it.mkdirs() }
         val binaryFile = File(cacheDir, binaryName)
 

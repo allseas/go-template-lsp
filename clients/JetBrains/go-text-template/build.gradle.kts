@@ -29,7 +29,7 @@ dependencies {
         bundledPlugin("com.intellij.properties")
         bundledPlugin("com.intellij.modules.json")
         bundledPlugin("org.jetbrains.plugins.textmate")
-        plugin("com.redhat.devtools.lsp4ij", "0.9.0")
+        plugin("com.redhat.devtools.lsp4ij", "0.19.3")
     }
 }
 
