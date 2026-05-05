@@ -6,6 +6,9 @@ stages:
   - lint
   - test
 
+default:
+  interruptible: true
+
 linting:
   stage: lint
   image: golangci/golangci-lint:v2.11.4-alpine

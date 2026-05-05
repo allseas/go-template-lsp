@@ -7,6 +7,9 @@ stages:
   - test
 #  - deploy
 
+default:
+  interruptible: true
+
 linting:
   stage: lint
   image: alpine:3.22.4
