@@ -3,12 +3,13 @@
 package main
 
 import (
-	"github.com/rs/zerolog/log"
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
 	"sync"
 	"text-template-server/handlers"
 	"text/template/parse"
+
+	"github.com/rs/zerolog/log"
+	"github.com/tliron/glsp"
+	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 type document struct {
@@ -57,7 +58,6 @@ func parseTemplate(uri, text string) (*parse.Tree, error) {
 	tree, err := tryParse(text)
 	if err != nil {
 		log.Debug().Str("uri", uri).Err(err).Msg("full parse failed, tree is not updated")
-
 	}
 	return tree, err
 }

@@ -331,7 +331,7 @@ func positionToOffset(text string, pos protocol.Position) int {
 	charUTF16 := uint32(0)
 
 	for byteOffset, r := range text {
-		if line == uint32(pos.Line) && charUTF16 >= uint32(pos.Character) {
+		if line == pos.Line && charUTF16 >= pos.Character {
 			return byteOffset
 		}
 
@@ -341,7 +341,7 @@ func positionToOffset(text string, pos protocol.Position) int {
 			continue
 		}
 
-		if line == uint32(pos.Line) {
+		if line == pos.Line {
 			if r > 0xFFFF {
 				charUTF16 += 2
 			} else {
@@ -356,7 +356,6 @@ func positionToOffset(text string, pos protocol.Position) int {
 		Msg("character emitted by pos")
 
 	return len(text)
-
 }
 
 // isWordChar reports whether a rune is a valid character for a template variable or function name.
@@ -373,7 +372,7 @@ func utf16Len(s string) int {
 		if r > 0xFFFF {
 			count += 2
 		} else {
-			count += 1
+			count++
 		}
 	}
 	return count
