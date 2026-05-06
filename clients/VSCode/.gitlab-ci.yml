@@ -1,39 +1,52 @@
 workflow:
-  rules:
-    - when: always
+    rules:
+        - when: always
 
 stages:
-  - lint
-  - test
+    - lint
+    - test
 #  - deploy
 
 default:
-  interruptible: true
+    interruptible: true
 
 linting:
-  stage: lint
-  image: alpine:3.22.4
-  before_script:
-    - apk add --update npm
-    - cd clients/VSCode
-    - npm install
-  script:
-    - echo "Running TSESLint"
-    - npm run lint:check
+    stage: lint
+    image: alpine:3.22.4
+    before_script:
+        - apk add --update npm
+        - cd clients/VSCode
+        - npm install
+    script:
+        - echo "Running TSESLint"
+        - npm run lint:check
 
 formatting:
-  stage: lint
-  image: alpine:3.22.4
-  before_script:
-    - apk add --update npm
-    - cd clients/VSCode
-    - npm install
-  script:
-    - echo "Running Prettier"
-    - npm run format:check
+    stage: lint
+    image: alpine:3.22.4
+    before_script:
+        - apk add --update npm
+        - cd clients/VSCode
+        - npm install
+    script:
+        - echo "Running Prettier"
+        - npm run format:check
 
 testing:
-  stage: test
-  image: alpine:3.22.4
-  script:
-    - echo "NO TESTS YET..."
+    stage: test
+    image: golang:tip-trixie
+    before_script:
+        - apt -q --yes update
+        - apt -q --yes upgrade
+        - apt -q --yes install xvfb
+        - apt -q --yes install chromium
+        - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash #NVM https://nodejs.org/en/download
+        - \. "$HOME/.nvm/nvm.sh"
+        - nvm install 24
+        - npm install npm -g
+        - npm install
+        - cd clients/VSCode
+        - npm install
+    script:
+        - echo "running tests"
+        - xvfb-run --server-args="-screen 0 1920x1080x24" npm test
