@@ -69,6 +69,7 @@ func TestCompletionLogic(t *testing.T) {
 		assert.Contains(t, labels, "range", "keywords should be included")
 	})
 
+	// ai
 	t.Run("Server disabled returns nil", func(t *testing.T) {
 		original := GetConfig()
 		setConfig(Config{EnableServer: false})
@@ -90,6 +91,7 @@ func TestCompletionLogic(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
+	// ai
 	t.Run("Document not found returns nil", func(t *testing.T) {
 		enableServer(t)
 
@@ -105,6 +107,7 @@ func TestCompletionLogic(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
+	// ai
 	t.Run("Cursor outside template block returns nil", func(t *testing.T) {
 		enableServer(t)
 
@@ -125,6 +128,7 @@ func TestCompletionLogic(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 
+	// ai
 	t.Run("Variables from ended scope not visible", func(t *testing.T) {
 		enableServer(t)
 
@@ -149,6 +153,7 @@ func TestCompletionLogic(t *testing.T) {
 		assert.NotContains(t, labels, "$inner", "$inner should not be visible after its scope ends")
 	})
 
+	// ai
 	t.Run("Nested range scopes all visible at cursor", func(t *testing.T) {
 		enableServer(t)
 
@@ -173,6 +178,7 @@ func TestCompletionLogic(t *testing.T) {
 		assert.Contains(t, labels, "$j")
 	})
 
+	// ai
 	t.Run("If block variable visible inside block", func(t *testing.T) {
 		enableServer(t)
 
@@ -197,6 +203,7 @@ func TestCompletionLogic(t *testing.T) {
 	})
 }
 
+// ai
 func TestIsInsideTemplate(t *testing.T) {
 	t.Run("inside unclosed action", func(t *testing.T) {
 		assert.True(t, isInsideTemplate("{{ $x", 5))
@@ -227,6 +234,7 @@ func TestIsInsideTemplate(t *testing.T) {
 	})
 }
 
+// ai
 func TestGetWordAtOffset(t *testing.T) {
 	t.Run("returns full variable name", func(t *testing.T) {
 		assert.Equal(t, "$foo", getWordAtOffset("{{ $foo", 7))
@@ -250,6 +258,7 @@ func TestGetWordAtOffset(t *testing.T) {
 	})
 }
 
+// ai
 func TestExtractVariables(t *testing.T) {
 	t.Run("simple top-level assignment", func(t *testing.T) {
 		text := "{{ $x := . }}"
@@ -287,6 +296,7 @@ func TestExtractVariables(t *testing.T) {
 	})
 }
 
+// ai
 func TestDeclaredVars(t *testing.T) {
 	t.Run("simple assignment", func(t *testing.T) {
 		assert.Equal(t, []string{"$x"}, declaredVars("$x := ."))
@@ -307,6 +317,7 @@ func TestDeclaredVars(t *testing.T) {
 	})
 }
 
+// ai
 func TestPositionToOffset(t *testing.T) {
 	text := "hello\nworld"
 

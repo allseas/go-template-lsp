@@ -99,6 +99,7 @@ func TestApplyConfig(t *testing.T) {
 		assert.Equal(t, zerolog.InfoLevel, zerolog.GlobalLevel())
 	})
 
+	// ai
 	t.Run("Overrides existing config values", func(t *testing.T) {
 		initialConfig := Config{
 			Trace: struct {
@@ -173,6 +174,7 @@ func TestApplyConfig(t *testing.T) {
 }
 
 func TestRequestConfig(t *testing.T) {
+	// ai
 	t.Run("RequestConfig keeps config when response is empty", func(t *testing.T) {
 		initialConfig := Config{EnableServer: false}
 		setConfig(initialConfig)
@@ -189,6 +191,7 @@ func TestRequestConfig(t *testing.T) {
 		assert.Equal(t, initialConfig, GetConfig())
 	})
 
+	// ai
 	t.Run("RequestConfig updates config on successful response", func(t *testing.T) {
 		context := &glsp.Context{
 			Call: func(method string, _ any, result any) {
@@ -209,6 +212,7 @@ func TestRequestConfig(t *testing.T) {
 }
 
 func TestConfigChanged(t *testing.T) {
+	// ai
 	t.Run("ConfigChanged applies new config", func(t *testing.T) {
 		initialConfig := Config{EnableServer: false}
 		setConfig(initialConfig)
@@ -223,6 +227,7 @@ func TestConfigChanged(t *testing.T) {
 		assert.Equal(t, true, GetConfig().EnableServer)
 	})
 
+	// ai
 	t.Run("ConfigChanged handles invalid config", func(t *testing.T) {
 		initialConfig := Config{EnableServer: false}
 		setConfig(initialConfig)
@@ -239,6 +244,7 @@ func TestConfigChanged(t *testing.T) {
 		assert.Equal(t, true, GetConfig().EnableServer)
 	})
 
+	// ai
 	t.Run("ConfigChanged handles empty config", func(t *testing.T) {
 		initialConfig := Config{EnableServer: false}
 		setConfig(initialConfig)
@@ -253,6 +259,7 @@ func TestConfigChanged(t *testing.T) {
 		assert.Equal(t, false, GetConfig().EnableServer)
 	})
 
+	// ai
 	t.Run("ConfigChanged handles partial config", func(t *testing.T) {
 		initialConfig := Config{EnableServer: false}
 		setConfig(initialConfig)
@@ -267,6 +274,7 @@ func TestConfigChanged(t *testing.T) {
 		assert.Equal(t, true, GetConfig().EnableServer)
 	})
 
+	// ai
 	t.Run("ConfigChanged handles invalid JSON config", func(t *testing.T) {
 		initialConfig := Config{EnableServer: false}
 		setConfig(initialConfig)

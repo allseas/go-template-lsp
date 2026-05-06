@@ -37,6 +37,7 @@ func TestDocumentStore(t *testing.T) {
 		assert.False(t, ok, "Document should no longer exist after removal")
 	})
 
+	// ai
 	t.Run("Concurrent Access", func(t *testing.T) {
 		uris := []string{"file:///doc1.txt", "file:///doc2.txt", "file:///doc3.txt"}
 		var wg sync.WaitGroup
@@ -57,6 +58,7 @@ func TestDocumentStore(t *testing.T) {
 		}
 	})
 
+	// ai
 	t.Run("Parse Errors", func(t *testing.T) {
 		invalidContent := "{{ unclosed"
 		ds.Set(uri, invalidContent)
@@ -67,6 +69,7 @@ func TestDocumentStore(t *testing.T) {
 		assert.Nil(t, val.tree, "Tree should be nil if parsing fails")
 	})
 
+	// ai
 	t.Run("Parse Valid Content", func(t *testing.T) {
 		validContent := "{{ . }}"
 		ds.Set(uri, validContent)
@@ -77,6 +80,7 @@ func TestDocumentStore(t *testing.T) {
 		assert.NotNil(t, val.tree, "Tree should be set for valid content")
 	})
 
+	// ai
 	t.Run("Remove Nonexistent Document", func(t *testing.T) {
 		nonexistentURI := "file:///nonexistent.txt"
 		ds.Remove(nonexistentURI) // Should not panic
@@ -84,6 +88,7 @@ func TestDocumentStore(t *testing.T) {
 		assert.False(t, ok, "Document should not exist in the store")
 	})
 
+	// ai
 	t.Run("Empty Content", func(t *testing.T) {
 		emptyContent := ""
 		ds.Set(uri, emptyContent)
@@ -94,6 +99,7 @@ func TestDocumentStore(t *testing.T) {
 		assert.NotNil(t, val.tree, "Tree should be set for empty content (valid template)")
 	})
 
+	// ai
 	t.Run("Multiple Documents", func(t *testing.T) {
 		uris := []string{"file:///docA.txt", "file:///docB.txt", "file:///docC.txt"}
 		for _, u := range uris {
@@ -107,6 +113,7 @@ func TestDocumentStore(t *testing.T) {
 		}
 	})
 
+	// ai
 	t.Run("Invalid URI", func(t *testing.T) {
 		invalidURI := "not-a-valid-uri"
 		ds.Set(invalidURI, "Some content")
@@ -116,6 +123,7 @@ func TestDocumentStore(t *testing.T) {
 		assert.Equal(t, "Some content", val.text)
 	})
 
+	// ai
 	t.Run("Delete", func(t *testing.T) {
 		uriToDelete := "file:///to-delete.txt"
 		ds.Set(uriToDelete, "Content to delete")
@@ -126,6 +134,7 @@ func TestDocumentStore(t *testing.T) {
 }
 
 func TestDidOpenAndChange(t *testing.T) {
+	// ai
 	t.Run("DidOpen and DidChange", func(t *testing.T) {
 		originalConfig := GetConfig()
 		applyConfig(Config{EnableServer: true})
@@ -174,6 +183,7 @@ func TestDidOpenAndChange(t *testing.T) {
 		store.Delete(uri)
 	})
 
+	// ai
 	t.Run("DidClose", func(t *testing.T) {
 		originalConfig := GetConfig()
 		applyConfig(Config{EnableServer: true})
