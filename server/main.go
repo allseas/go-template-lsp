@@ -6,14 +6,12 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 const lsName = "goTmpl"
 
 var (
 	version = "0.0.1"
-	handler protocol.Handler
 )
 
 func main() {
