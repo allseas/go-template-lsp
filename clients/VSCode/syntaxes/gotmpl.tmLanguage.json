@@ -14,7 +14,8 @@
       "patterns": [
         {
           "name": "comment.block",
-          "match": "{{-?\\s*\\/\\*([^\\*]|\\s|(\\*[^\\/]))*\\*\\/\\s*-?}}"
+          "begin": "{{-?\\s*\\/\\*",
+          "end": "\\*\\/\\s*-?}}"
         }
       ]
     },
@@ -23,10 +24,18 @@
       "begin": "{{-|{{",
       "end": "-}}|}}",
       "patterns": [
-        { "include": "#keywords" },
-        { "include": "#strings" },
-        { "include": "#fields" },
-        { "include": "#variables" }
+        {
+          "include": "#keywords"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#fields"
+        },
+        {
+          "include": "#variables"
+        }
       ]
     },
     "keywords": {
