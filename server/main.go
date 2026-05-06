@@ -34,8 +34,7 @@ func main() {
 		TextDocumentDidClose:            didClose,
 		SetTrace:                        handlers.SetTrace,
 		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
-		TextDocumentReferences: references,
-
+		TextDocumentReferences:          references,
 	}
 
 	lspServer := server.NewServer(&handler, lsName, false)
