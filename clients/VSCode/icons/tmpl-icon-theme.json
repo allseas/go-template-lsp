@@ -1,0 +1,13 @@
+{
+  "iconDefinitions": {
+    "_tmpl": {
+      "iconPath": "./icon.svg"
+    }
+  },
+  "fileExtensions": {
+    "tmpl": "_tmpl"
+  },
+  "languageIds": {
+    "go-template": "_tmpl"
+  }
+}
