@@ -1,103 +1,57 @@
 {
-    "If": {
-        "prefix": [
-            "if"
-        ],
-        "body": [
-            "{{ if $1 }}$0{{ end }}"
-        ],
-        "description": "A small if block."
-    },
-    "Range": {
-        "prefix": [
-            "range"
-        ],
-        "body": [
-            "{{ range $1 }}$0{{ end }}"
-        ],
-        "description": "A range block."
-    },
-    "Break": {
-        "prefix": [
-            "break"
-        ],
-        "body": [
-            "{{ break }}"
-        ],
-        "description": "Break block."
-    },
-    "Continue": {
-        "prefix": [
-            "continue"
-        ],
-        "body": [
-            "{{ continue }}"
-        ],
-        "description": "Continue block."
-    },
-    "Else": {
-        "prefix": [
-            "else"
-        ],
-        "body": [
-            "{{ else }}$0"
-        ],
-        "description": "Else block."
-    },
-    "Else If": {
-        "prefix": [
-            "else if",
-            "elif"
-        ],
-        "body": [
-            "{{ else if $1 }}$0"
-        ],
-        "description": "Else if block."
-    },
-    "Variable declaration": {
-        "prefix": [
-            "var"
-        ],
-        "body": [
-            "{{ \\$$1 := $2 }}$0"
-        ],
-        "description": "Declare a variable."
-    },
-    "With": {
-        "prefix": [
-            "with"
-        ],
-        "body": [
-            "{{ with $1 }}$0{{ end }}"
-        ],
-        "description": "A with block."
-    },
-    "Else with": {
-        "prefix": [
-            "with else",
-            "else with"
-        ],
-        "body": [
-            "{{ else with $1 }}$0"
-        ],
-        "description": "A with block with else."
-    },
-    "Template": {
-        "prefix": [
-            "template"
-        ],
-        "body": [
-            "{{ template \"$1\" $2 }}$0"
-        ],
-        "description": "Include another template."
-    },
-    "Block": {
-        "prefix": [
-            "block"
-        ],
-        "body": [
-            "{{ block \"$1\" $2 }}$0{{ end }}"
-        ],
-        "description": "Define a block that can be overridden by other templates."
-    }
+  "If": {
+    "prefix": ["if"],
+    "body": ["{{ if $1 }}$0{{ end }}"],
+    "description": "A small if block."
+  },
+  "Range": {
+    "prefix": ["range"],
+    "body": ["{{ range $1 }}$0{{ end }}"],
+    "description": "A range block."
+  },
+  "Break": {
+    "prefix": ["break"],
+    "body": ["{{ break }}"],
+    "description": "Break block."
+  },
+  "Continue": {
+    "prefix": ["continue"],
+    "body": ["{{ continue }}"],
+    "description": "Continue block."
+  },
+  "Else": {
+    "prefix": ["else"],
+    "body": ["{{ else }}$0"],
+    "description": "Else block."
+  },
+  "Else If": {
+    "prefix": ["else if", "elif"],
+    "body": ["{{ else if $1 }}$0"],
+    "description": "Else if block."
+  },
+  "Variable declaration": {
+    "prefix": ["var"],
+    "body": ["{{ \\$$1 := $2 }}$0"],
+    "description": "Declare a variable."
+  },
+  "With": {
+    "prefix": ["with"],
+    "body": ["{{ with $1 }}$0{{ end }}"],
+    "description": "A with block."
+  },
+  "Else with": {
+    "prefix": ["with else", "else with"],
+    "body": ["{{ else with $1 }}$0"],
+    "description": "A with block with else."
+  },
+  "Template": {
+    "prefix": ["template"],
+    "body": ["{{ template \"$1\" $2 }}$0"],
+    "description": "Include another template."
+  },
+  "Block": {
+    "prefix": ["block"],
+    "body": ["{{ block \"$1\" $2 }}$0{{ end }}"],
+    "description": "Define a block that can be overridden by other templates."
+  }
 }
