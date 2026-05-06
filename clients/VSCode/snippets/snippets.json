@@ -53,5 +53,25 @@
     "prefix": ["block"],
     "body": ["{{ block \"$1\" $2 }}$0{{ end }}"],
     "description": "Define a block that can be overridden by other templates."
+  },
+  "Wrap If": {
+    "prefix": ["wif"],
+    "body": ["{{ if $1 }}$TM_SELECTED_TEXT{{ end }}"],
+    "description": "Wrap selection with if block."
+  },
+  "Wrap Range": {
+    "prefix": ["wrange"],
+    "body": ["{{ range $1 }}$TM_SELECTED_TEXT{{ end }}"],
+    "description": "Wrap selection with range block."
+  },
+  "Wrap With": {
+    "prefix": ["wwith"],
+    "body": ["{{ with $1 }}$TM_SELECTED_TEXT{{ end }}"],
+    "description": "Wrap selection with with block."
+  },
+  "Wrap Block": {
+    "prefix": ["wblock"],
+    "body": ["{{ block \"$1\" $2 }}$TM_SELECTED_TEXT{{ end }}"],
+    "description": "Wrap selection with block."
   }
 }

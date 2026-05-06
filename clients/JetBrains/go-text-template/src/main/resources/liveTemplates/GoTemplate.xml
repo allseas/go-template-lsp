@@ -90,4 +90,33 @@
       <option name="GOTMPL" value="true" />
     </context>
   </template>
+
+  <template name="wif" value="{{ if $VAR1$ }}$SELECTION${{ end }}" description="Wrap with if block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="wrange" value="{{ range $VAR1$ }}$SELECTION${{ end }}" description="Wrap with range block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="wwith" value="{{ with $VAR1$ }}$SELECTION${{ end }}" description="Wrap with with block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="wblock" value="{{ block &quot;$VAR1$&quot; $VAR2$ }}$SELECTION${{ end }}" description="Wrap with block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <variable name="VAR2" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
 </templateSet>
