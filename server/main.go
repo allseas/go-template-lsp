@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 const lsName = "goTmpl"

@@ -28,6 +28,7 @@ func setupHandlers(langServerName string, langServerVersion string) {
 		TextDocumentDidClose:            didClose,
 		SetTrace:                        SetTrace,
 		WorkspaceDidChangeConfiguration: ConfigChanged,
+		TextDocumentReferences:          references,
 	}
 }
 
