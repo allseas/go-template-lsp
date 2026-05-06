@@ -31,6 +31,11 @@
         <toolWindow id="MyToolWindow" factoryClass="com.example.gotexttemplate.MyToolWindowFactory"
                     icon="AllIcons.Toolwindows.ToolWindowPalette"/>
         <textmate.bundleProvider implementation="com.example.gotexttemplate.TemplateTextMateBundleProvider" />
+
+        <defaultLiveTemplates file="liveTemplates/GoTemplate.xml"/>
+        <liveTemplateContext
+                contextId="GOTMPL"
+                implementation="com.example.gotexttemplate.GoTextTemplateContext"/>
     </extensions>
     
     <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">

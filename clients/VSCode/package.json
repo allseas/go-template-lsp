@@ -76,6 +76,12 @@
           "description": "Trace communication with the language server."
         }
       }
-    }
+    },
+    "snippets": [
+      {
+        "language": "gotmpl",
+        "path": "snippets/snippets.json"
+      }
+    ]
   }
 }
