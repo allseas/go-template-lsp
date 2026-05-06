@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templateSet group="Go text/template">
+  <template name="if" value="{{ if $VAR1$ }}$END${{ end }}" description="A small if block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="range" value="{{ range $VAR1$ }}$END${{ end }}" description="A range block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="break" value="{{ break }}" description="Break block." toReformat="true" toShortenFQNames="true">
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="continue" value="{{ continue }}" description="Continue block." toReformat="true" toShortenFQNames="true">
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="else" value="{{ else }}$END$" description="Else block." toReformat="true" toShortenFQNames="true">
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="elif" value="{{ else if $VAR1$ }}$END$" description="Else if block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="else if" value="{{ else if $VAR1$ }}$END$" description="Else if block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="var" value="{{ $$$VAR1$ := $VAR2$ }}$END$" description="Declare a variable." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <variable name="VAR2" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="with" value="{{ with $VAR1$ }}$END${{ end }}" description="A with block." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="with else" value="{{ else with $VAR1$ }}$END$" description="A with block with else." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="else with" value="{{ else with $VAR1$ }}$END$" description="A with block with else." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="template" value="{{ template &quot;$VAR1$&quot; $VAR2$ }}$END$" description="Include another template." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <variable name="VAR2" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+
+  <template name="block" value="{{ block &quot;$VAR1$&quot; $VAR2$ }}$END${{ end }}" description="Define a block that can be overridden by other templates." toReformat="true" toShortenFQNames="true">
+    <variable name="VAR1" expression="" defaultValue="" alwaysStopAt="true" />
+    <variable name="VAR2" expression="" defaultValue="" alwaysStopAt="true" />
+    <context>
+      <option name="GOTMPL" value="true" />
+    </context>
+  </template>
+</templateSet>
