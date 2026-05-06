@@ -21,7 +21,8 @@
         "lint:check": "npx eslint .",
         "format": "npx prettier --write .",
         "format:check": "npx prettier --check .",
-        "test": "vscode-test"
+        "test": "npm run compile; vscode-test",
+        "verify": "npm test && npm run lint:check && npm run format:check"
     },
     "dependencies": {
         "vscode-languageclient": "^9.0.1"
@@ -80,7 +81,6 @@
                 }
             }
         },
-
         "snippets": [
             {
                 "language": "gotmpl",

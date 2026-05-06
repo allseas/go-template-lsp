@@ -49,5 +49,4 @@ testing:
         - npm install
     script:
         - echo "running tests"
-        - npm run compile
         - xvfb-run --server-args="-screen 0 1920x1080x24" npm test
