@@ -791,6 +791,7 @@ var robustTests = []robustTest{
 	{"unclosed-if",
 		"{{if .X}}hello",
 		noError, ``},
+	// subsequent tests are ai generated
 	{"unclosed-range",
 		"{{range .Items}}item",
 		noError, ``},
