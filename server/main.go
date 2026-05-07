@@ -1,3 +1,4 @@
+// Package main initializes and starts the Go text/template Language Server Protocol (LSP) server, setting up logging and handling any initialization errors.
 package main
 
 import (
@@ -8,9 +9,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const lsName = "goTmpl"
-
-var (
+const (
+	lsName  = "goTmpl"
 	version = "0.0.1"
 )
 
