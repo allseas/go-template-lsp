@@ -25,6 +25,67 @@ func position(line, char uint32) protocol.Position {
 	return protocol.Position{Line: line, Character: char}
 }
 
+// references tests
+
+func TestReferencesFindsAllOccurrences(t *testing.T) {
+	src := `{{ $x := 1 }}
+			{{ $x }}
+			{{ $x }}`
+	uri := "file:///test.tmpl"
+	store.Set(uri, src)
+
+	params := &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(0, 17),
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: true},
+	}
+
+	results, err := references(nil, params)
+	require.NoError(t, err)
+	assert.Len(t, results, 3)
+}
+
+func TestReferencesIdentifier(t *testing.T) {
+	src := `{{ printf "a" }}
+			{{ printf "b" }}`
+	uri := "file:///test2.tmpl"
+	store.Set(uri, src)
+
+	params := &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(0, 4),
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: true},
+	}
+
+	results, err := references(nil, params)
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+	store.Delete(uri)
+}
+
+func TestReferencesCursorOnNonNode(t *testing.T) {
+	src := `hello {{ $x := 1 }}`
+	uri := "file:///test3.tmpl"
+	store.Set(uri, src)
+
+	params := &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(0, 1),
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: true},
+	}
+
+	results, err := references(nil, params)
+	require.NoError(t, err)
+	assert.Empty(t, results)
+	store.Delete(uri)
+}
+
 // nodeKey tests
 
 func TestNodeKeyVariable(t *testing.T) {
