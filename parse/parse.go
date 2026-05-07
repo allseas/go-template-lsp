@@ -312,7 +312,7 @@ func IsEmptyTree(n Node) bool {
 // It runs to EOF.
 func (t *Tree) parse() {
 	t.Root = t.newList(t.peek().pos)
-	for t.peek().typ != itemEOF && t.peek().typ != itemError {
+	for t.peek().typ != itemEOF && (t.Mode&IgnoreErrors == 0 || t.peek().typ != itemError) {
 		if t.peek().typ == itemLeftDelim {
 			delim := t.next()
 			if t.nextNonSpace().typ == itemDefine {
@@ -459,12 +459,12 @@ func (t *Tree) action() (n Node) {
 		return t.templateControl()
 	case itemWith:
 		return t.withControl()
-	case itemError:
-		if t.Mode&IgnoreErrors == 0 {
-			t.errorf("%s", token)
-		} else {
-			return t.newUndefined(token.pos, token.val)
-		}
+		// case itemError:
+		// 	if t.Mode&IgnoreErrors == 0 {
+		// 		t.unexpected(token, context)
+		// 	} else {
+		// 		return t.newUndefined(token.pos, token.val)
+		// 	}
 	}
 	t.backup()
 	token := t.peek()
@@ -835,7 +835,7 @@ func (t *Tree) command() *CommandNode {
 			// nothing here; break loop below
 		default:
 			if t.Mode&IgnoreErrors == 0 {
-				t.unexpected(token, "command")
+				t.unexpected(token, "operand")
 			} else {
 				cmd.append(t.newUndefined(token.pos, "unexpected token in command: "+token.String()))
 				return cmd
