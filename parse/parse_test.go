@@ -730,3 +730,179 @@ func BenchmarkListString(b *testing.B) {
 		b.Fatal("Benchmark was not run")
 	}
 }
+
+type robustTest struct {
+	name    string
+	input   string
+	ok      bool
+	message string
+}
+
+var robustTests = []robustTest{
+	{"empty", "", noError, ""},
+	{"comment", "{{/*\n\n\n*/}}", noError, ""},
+	{"spaces", " \t\n", noError, ""},
+	{"text", "some text", noError, ""},
+	{"unclosed1",
+		"line1\n{{",
+		noError, ``},
+	{"unclosed2",
+		"line1\n{{define `x`}}line2\n{{",
+		noError, ``},
+	{"unclosed3",
+		"line1\n{{\"x\"\n\"y\"\n",
+		noError, ``},
+	{"unclosed4",
+		"{{\n\n\n\n\n",
+		noError, ``},
+	{"var1",
+		"line1\n{{\nx\n}}",
+		noError, ``},
+	// Specific errors.
+	{"function",
+		"{{foo}}",
+		noError, ``},
+	{"comment1",
+		"{{/*}}",
+		noError, ``},
+	{"comment2",
+		"{{/*\nhello\n}}",
+		noError, ``},
+	{"lparen",
+		"{{.X (1 2 3}}",
+		noError, ``},
+	{"rparen",
+		"{{.X 1 2 3 ) }}",
+		noError, ``},
+	// Unclosed strings
+	{"unclosed-string1",
+		`{{define "foo}}`,
+		noError, ``},
+	{"unclosed-string2",
+		`{{"hello world}}`,
+		noError, ``},
+	{"unclosed-string3",
+		`{{print "foo}}`,
+		noError, ``},
+	{"unclosed-raw-string",
+		"{{`hello\nworld}}",
+		noError, ``},
+	// Unclosed control structures
+	{"unclosed-if",
+		"{{if .X}}hello",
+		noError, ``},
+	{"unclosed-range",
+		"{{range .Items}}item",
+		noError, ``},
+	{"unclosed-with",
+		"{{with .Y}}value",
+		noError, ``},
+	{"unclosed-block",
+		"{{block `main` .}}content",
+		noError, ``},
+	{"unclosed-define",
+		"{{define `template`}}body",
+		noError, ``},
+	{"nested-unclosed",
+		"{{range .X}}{{if .Y}}",
+		noError, ``},
+	// Missing template names
+	{"define-no-name",
+		"{{define}}body{{end}}",
+		noError, ``},
+	{"template-no-name",
+		"{{template}}",
+		noError, ``},
+	{"block-no-name",
+		"{{block}}content{{end}}",
+		noError, ``},
+	// Broken pipe syntax
+	{"pipe-no-command",
+		"{{.X | }}",
+		noError, ``},
+	{"pipe-incomplete",
+		"{{.X | print",
+		noError, ``},
+	{"double-pipe",
+		"{{.X || .Y}}",
+		noError, ``},
+	// Malformed field access
+	{"field-missing-name",
+		"{{.}}",
+		noError, ``},
+	{"field-bad-syntax",
+		"{{..X}}",
+		noError, ``},
+	{"field-trailing-dot",
+		"{{.X.}}",
+		noError, ``},
+	// Malformed numbers
+	{"number-bad-format",
+		"{{0x}}",
+		noError, ``},
+	{"number-incomplete",
+		"{{1.2.3}}",
+		noError, ``},
+	// Unmatched delimiters
+	{"close-no-open",
+		"}}",
+		noError, ``},
+	{"mismatched-end",
+		"{{end}}",
+		noError, ``},
+	{"wrong-closer",
+		"{{if .X}}{{endif}}",
+		noError, ``},
+	// Multiple errors
+	{"multi-error1",
+		`{{if .X}}{{range}}{{define "}}`,
+		noError, ``},
+	{"multi-error2",
+		"{{.X | | }} {{if}} {{`unclosed",
+		noError, ``},
+	{"multi-error3",
+		"{{(((}}{{)))}}{{[[]]}}",
+		noError, ``},
+	// Invalid syntax
+	{"assign-no-value",
+		"{{$x := }}",
+		noError, ``},
+	{"assign-bad-name",
+		"{{$ := .X}}",
+		noError, ``},
+	{"comma-no-context",
+		"{{,}}",
+		noError, ``},
+	{"equal-no-context",
+		"{{=}}",
+		noError, ``},
+	// Complex malformed
+	{"nested-quotes",
+		`{{"foo"bar"}}`,
+		noError, ``},
+	{"broken-args",
+		"{{print 1 2 3 ( 4 5}}",
+		noError, ``},
+	{"unclosed-nested-action",
+		"{{if .X}}text{{range .Y",
+		noError, ``},
+}
+
+func TestRobustness(t *testing.T) {
+	for _, test := range robustTests {
+		t.Run(test.name, func(t *testing.T) {
+			tr := New("robust")
+			tr.Mode = IgnoreErrors
+			_, err := tr.Parse(test.input, "", "", make(map[string]*Tree), nil)
+			if err != nil && test.ok {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if err == nil && !test.ok {
+				t.Errorf("expected error, got none")
+			}
+			if err != nil && !strings.Contains(err.Error(), test.message) {
+				t.Errorf("error %q does not contain %q", err, test.message)
+			}
+		})
+	}
+}

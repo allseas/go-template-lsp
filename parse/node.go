@@ -73,9 +73,48 @@ const (
 	NodeComment                    // A comment.
 	NodeBreak                      // A break action.
 	NodeContinue                   // A continue action.
+	NodeUndefined                  // An undefined node
 )
 
 // Nodes.
+
+type UndefinedNode struct {
+	NodeType
+	Pos
+	tr    *Tree
+	cause string
+}
+
+func (u *UndefinedNode) tree() *Tree {
+	return u.tr
+}
+
+func (u *UndefinedNode) String() string {
+	return "undefined at position " + strconv.Itoa(int(u.Pos)) + ": " + u.cause
+}
+
+func (u *UndefinedNode) writeTo(sb *strings.Builder) {
+	sb.WriteString(u.String())
+}
+
+func (u *UndefinedNode) Type() NodeType {
+	return NodeUndefined
+}
+
+func (t *Tree) newUndefined(pos Pos, cause string) *UndefinedNode {
+	return &UndefinedNode{NodeType: NodeUndefined, Pos: pos, tr: t, cause: cause}
+}
+
+func (u *UndefinedNode) Copy() Node {
+	return u.CopyUndefined()
+}
+
+func (u *UndefinedNode) CopyUndefined() *UndefinedNode {
+	if u == nil {
+		return nil
+	}
+	return &UndefinedNode{NodeType: NodeUndefined, Pos: u.Pos, tr: u.tr, cause: u.cause}
+}
 
 // ListNode holds a sequence of nodes.
 type ListNode struct {
