@@ -1,7 +1,5 @@
-// Package main provides a Language Server Protocol implementation
-// for Go text/templates, featuring scope-aware variable completion
-// and built-in function support.
-package main
+// Package handlers provides a document synchronization and completion engine for Go text/templates.
+package handlers
 
 import (
 	"github.com/tliron/glsp"
