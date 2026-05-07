@@ -5,8 +5,21 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
 
 export default defineConfig(
-  js.configs.recommended,
-  tseslint.configs.strict,
-  tseslint.configs.stylistic,
-  globalIgnores(["esbuild.js", "out/**", "dist/**"]),
+    js.configs.recommended,
+    tseslint.configs.strict,
+    tseslint.configs.stylistic,
+    globalIgnores([
+        "esbuild.js",
+        "out/**",
+        "dist/**",
+        "node_modules/**",
+        ".vscode-test/**",
+    ]),
+    {
+        languageOptions: {
+            parserOptions: {
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+    },
 );

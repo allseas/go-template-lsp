@@ -9,6 +9,24 @@
 - Npm: 11.12.0+
 - gowatch (https://github.com/silenceper/gowatch)
 
+### Server
+
+#### Tests
+
+To run the tests you can use `go test`:
+
+```
+cd server
+go test ./...
+```
+
+To run them with calculated code coverage:
+```
+cd server
+go test ./... --coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
+
 ### VS Code extension
 
 #### Prerequisites:
