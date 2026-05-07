@@ -86,6 +86,26 @@ func TestReferencesCursorOnNonNode(t *testing.T) {
 	store.Delete(uri)
 }
 
+func TestReferencesMultiline(t *testing.T) {
+	src := "{{ $x := 1 }}\n" +
+		"{{ $x }}"
+	uri := "file:///multiline.tmpl"
+	store.Set(uri, src)
+	defer store.Delete(uri)
+
+	params := &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 3),
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: true},
+	}
+
+	results, err := references(nil, params)
+	require.NoError(t, err)
+	assert.Len(t, results, 2)
+}
+
 // nodeKey tests
 
 func TestNodeKeyVariable(t *testing.T) {
