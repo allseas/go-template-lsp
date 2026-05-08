@@ -36,6 +36,21 @@
         <liveTemplateContext
                 contextId="GOTMPL"
                 implementation="com.example.gotexttemplate.GoTextTemplateContext"/>
+
+        <applicationService
+                serviceImplementation="com.example.gotexttemplate.AppSettings"/>
+        <projectService
+                serviceImplementation="com.example.gotexttemplate.ProjectSettings"/>
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.example.gotexttemplate.AppSettingsConfigurable"
+                id="com.example.gotexttemplate.AppSettingsConfigurable"
+                displayName="Go Text Template Support"/>
+        <projectConfigurable
+                parentId="com.example.gotexttemplate.AppSettingsConfigurable"
+                instance="com.example.gotexttemplate.ProjectSettingsConfigurable"
+                id="com.example.gotexttemplate.ProjectSettingsConfigurable"
+                displayName="Project Settings"/>
     </extensions>
     
     <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
