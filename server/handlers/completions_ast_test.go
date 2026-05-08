@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	protocol "github.com/tliron/glsp/protocol_3_16"
 	"testing"
 	"text/template/parse"
 
@@ -328,5 +329,129 @@ func TestBuildPathScope(t *testing.T) {
 
 		_, hasOuter := ctx.Vars["$outer"]
 		assert.True(t, hasOuter, "$outer must survive if block")
+	})
+}
+
+// full completion tests
+
+func TestCompletionAst(t *testing.T) {
+	t.Run("returns nil when server disabled", func(t *testing.T) {
+		original := GetConfig()
+		setConfig(Config{EnableServer: false})
+		t.Cleanup(func() { setConfig(original) })
+
+		uri := "file:///disabled.tmpl"
+		store.Set(uri, "{{.}}")
+		t.Cleanup(func() { store.Remove(uri) })
+
+		result := completionAst(nil, &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+				Position:     protocol.Position{Line: 0, Character: 2},
+			},
+		})
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns nil when document not in store", func(t *testing.T) {
+		enableServer(t)
+		result := completionAst(nil, &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: "file:///missing.tmpl"},
+				Position:     protocol.Position{Line: 0, Character: 2},
+			},
+		})
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns nil when tree is nil", func(t *testing.T) {
+		enableServer(t)
+		uri := "file:///notree.tmpl"
+		// Set a document with no parsed tree by storing broken template
+		store.Set(uri, "{{invalid template {{{{")
+		t.Cleanup(func() { store.Remove(uri) })
+
+		result := completionAst(nil, &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+				Position:     protocol.Position{Line: 0, Character: 2},
+			},
+		})
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns nil when cursor outside template block", func(t *testing.T) {
+		enableServer(t)
+		uri := "file:///outside.tmpl"
+		store.Set(uri, "{{.}}\nplain text")
+		t.Cleanup(func() { store.Remove(uri) })
+
+		result := completionAst(nil, &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+				Position:     protocol.Position{Line: 1, Character: 2},
+			},
+		})
+		assert.Nil(t, result)
+	})
+
+	t.Run("returns CompletionList for valid template and position", func(t *testing.T) {
+		enableServer(t)
+		uri := "file:///valid.tmpl"
+		store.Set(uri, "{{.}}")
+		t.Cleanup(func() { store.Remove(uri) })
+
+		result := completionAst(nil, &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+				Position:     protocol.Position{Line: 0, Character: 2},
+			},
+		})
+		require.NotNil(t, result)
+		list, ok := result.(protocol.CompletionList)
+		require.True(t, ok)
+		assert.False(t, list.IsIncomplete)
+
+		labels := make([]string, len(list.Items))
+		for i, item := range list.Items {
+			labels[i] = item.Label
+		}
+		assert.Contains(t, labels, ".")
+	})
+}
+
+func TestCompletionWithFallback(t *testing.T) {
+	t.Run("returns ast result when ast succeeds", func(t *testing.T) {
+		enableServer(t)
+		uri := "file:///fallback-ok.tmpl"
+		store.Set(uri, "{{.}}")
+		t.Cleanup(func() { store.Remove(uri) })
+
+		resp, err := completionWithFallback(nil, &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+				Position:     protocol.Position{Line: 0, Character: 2},
+			},
+		})
+		require.NoError(t, err)
+		_, ok := resp.(protocol.CompletionList)
+		assert.True(t, ok, "expected CompletionList from ast path")
+	})
+
+	t.Run("falls back to regex when ast returns nil", func(t *testing.T) {
+		enableServer(t)
+		// cursor outside template — ast returns nil, fallback should run
+		uri := "file:///fallback-nil.tmpl"
+		store.Set(uri, "{{$x := .}}\nplain")
+		t.Cleanup(func() { store.Remove(uri) })
+
+		resp, err := completionWithFallback(nil, &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+				Position:     protocol.Position{Line: 1, Character: 2},
+			},
+		})
+		require.NoError(t, err)
+		_ = resp
 	})
 }
