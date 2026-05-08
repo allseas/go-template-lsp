@@ -41,6 +41,12 @@
     "main": "out/extension.js",
     "activationEvents": [],
     "contributes": {
+        "configurationDefaults": {
+            "[gotmpl]": {
+                "editor.snippetSuggestions": "none",
+                "editor.suggest.showSnippets": false
+            }
+        },
         "languages": [
             {
                 "id": "gotmpl",
