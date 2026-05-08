@@ -10,47 +10,61 @@
 		}
 	],
 	"repository": {
-		"comment":{
-			"patterns": [{
-				"name":"comment.block",
-				"match": "{{-?\\s*\\/\\*([^\\*]|\\s|(\\*[^\\/]))*\\*\\/\\s*-?}}"
-			}]
+		"comment": {
+			"patterns": [
+				{
+					"name": "comment.block",
+					"begin": "{{-?\\s*\\/\\*",
+					"end": "\\*\\/\\s*-?}}"
+				}
+			]
 		},
 		"control": {
 			"name": "meta.tag",
 			"begin": "{{-|{{",
 			"end": "-}}|}}",
 			"patterns": [
-				{"include": "#keywords"},
-				{"include": "#strings"},
-				{"include": "#fields"},
-				{"include": "#variables"}
+				{
+					"include": "#keywords"
+				},
+				{
+					"include": "#strings"
+				},
+				{
+					"include": "#fields"
+				},
+				{
+					"include": "#variables"
+				}
 			]
-			
-
 		},
-
 		"keywords": {
-			"patterns": [{
-				"name": "keyword.control.gotmpl",
-				"match": "\\b(if|end|with|else|range|break|continue|template)\\b"
-			},
-			{
-				"name": "keyword.operator",
-				"match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery)\\b"
-			}]
+			"patterns": [
+				{
+					"name": "keyword.control.gotmpl",
+					"match": "\\b(if|end|with|else|range|break|continue|template)\\b"
+				},
+				{
+					"name": "keyword.operator",
+					"match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery)\\b"
+				}
+			]
 		},
-		"fields":{
-			"patterns": [{
-				"name":"variable.language",
-				"match": "\\b\\.\\w*"
-			}]
+		"fields": {
+			"patterns": [
+				{
+					"name": "variable.language",
+					"match": "\\b\\.\\w*"
+				}
+			]
 		},
-		"variables":{
-			"patterns": [{
-				"name":"variable.parameter",
-				"match": "$\\w*"
-			}]
+		"variables": {
+			"patterns": [
+				{
+					"name": "variable.parameter",
+					"match": "$\\w*"
+				}
+			]
 		},
 		"strings": {
 			"name": "string.quoted.double.gotmpl",
