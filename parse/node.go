@@ -250,6 +250,10 @@ func (p *PipeNode) append(command *CommandNode) {
 }
 
 func (p *PipeNode) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+
 	var sb strings.Builder
 	p.writeTo(&sb)
 	return sb.String()

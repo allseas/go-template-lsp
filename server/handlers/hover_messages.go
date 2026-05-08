@@ -4,7 +4,7 @@ package handlers
 import (
 	"fmt"
 	"strings"
-	"text/template/parse"
+	parse "text-template-parser"
 )
 
 var nodeMessage = map[parse.NodeType]string{
@@ -25,6 +25,7 @@ var nodeMessage = map[parse.NodeType]string{
 	parse.NodeNumber:     "**Number literal** - `%s`\n\nA literal numeric value.",
 	parse.NodeString:     "**String literal** - `%s`\n\nA literal string value.",
 	parse.NodeNil:        "**Nil literal** - `nil`\n\nRepresents a nil value.",
+	parse.NodeUndefined:  "**Undefined** - \n\nError during parsing, node type is undefined: %s",
 }
 
 var specialMessages = map[string]string{
@@ -139,3 +140,10 @@ func MessageString(n *parse.StringNode) string {
 func MessageNil(_ *parse.NilNode) string {
 	return nodeMessage[parse.NodeNil]
 }
+
+// MessageUndefined generates a hover message for an undefined node type, including the node type information.
+func MessageUndefined(n *parse.UndefinedNode) string {
+	return fmt.Sprintf(nodeMessage[parse.NodeUndefined], n.String())
+}
+
+// GetHoverMessage generates a hover message for a given parse.Node based on its type.

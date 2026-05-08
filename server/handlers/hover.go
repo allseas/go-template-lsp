@@ -3,7 +3,7 @@ package handlers
 
 import (
 	"errors"
-	"text/template/parse"
+	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -128,6 +128,24 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		hover.Contents = protocol.MarkupContent{
 			Kind:  protocol.MarkupKindMarkdown,
 			Value: MessageNil(target),
+		}
+	case *parse.IfNode:
+		log.Debug().Msgf("Hover on %T", target)
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageBranch(&target.BranchNode),
+		}
+	case *parse.RangeNode:
+		log.Debug().Msgf("Hover on %T", target)
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageBranch(&target.BranchNode),
+		}
+	case *parse.WithNode:
+		log.Debug().Msgf("Hover on %T", target)
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageBranch(&target.BranchNode),
 		}
 	default:
 		log.Debug().Msgf("Hover on unknown node type: %T", target)
