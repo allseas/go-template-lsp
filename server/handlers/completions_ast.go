@@ -3,12 +3,14 @@ package handlers
 
 import (
 	"fmt"
+	"text/template/parse"
+
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"text/template/parse"
 )
 
+// Context struct is used only in completion_ast to construct Context to be scope aware
 type Context struct {
 	// chain from root to the Node
 	Path []parse.Node
@@ -50,22 +52,32 @@ var builtinOutput = map[string]outputKind{
 	"slice":    outputUntyped,
 }
 
+// completion entry point that has a fallback option
+func completionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+	result := completionAst(nil, params)
+	if result == nil {
+		log.Debug().Msg("ast completion failed or returned nil, falling back to regex completion")
+		return completion(nil, params)
+	}
+	return result, nil
+}
+
 // completions that use AST
-func completion_ast(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !GetConfig().EnableServer {
 		log.Debug().Msg("completion requested but server is disabled by config")
-		return nil, nil
+		return nil
 	}
 
 	if !ok {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
-		return nil, nil
+		return nil
 	}
 
 	if doc.tree == nil {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no parsed tree")
-		return nil, nil
+		return nil
 	}
 
 	text := doc.text
@@ -91,16 +103,18 @@ func completion_ast(_ *glsp.Context, params *protocol.CompletionParams) (any, er
 		log.Debug().
 			Int("offset new ", offset).
 			Msg("completion: cursor is not inside a template block, skipping")
-		return nil, nil
+		return nil
 	}
 
 	if !result {
 		log.Error().Msg("The target node is not found")
-		return nil, nil
+		return nil
 	}
 
 	log.Debug().Msg(tree.Root.String())
-	log.Debug().Str("type cur", fmt.Sprintf("%T, %c", curNode, text[curNode.Position()])).Msg(curNode.String())
+	log.Debug().
+		Str("type cur", fmt.Sprintf("%T, %c", curNode, text[curNode.Position()])).
+		Msg(curNode.String())
 	if parent == nil {
 		log.Debug().Msg("parent is nil")
 	} else {
@@ -111,7 +125,7 @@ func completion_ast(_ *glsp.Context, params *protocol.CompletionParams) (any, er
 	return protocol.CompletionList{
 		IsIncomplete: false,
 		Items:        items,
-	}, nil
+	}
 }
 
 var functionsAccepting = map[outputKind][]string{
@@ -172,8 +186,12 @@ func pipeFilteredItems(kind outputKind, ctx *Context) []protocol.CompletionItem 
 	return items
 }
 
-func suggest(cur parse.Node, parent parse.Node, ctx *Context, sChar uint8) []protocol.CompletionItem {
-
+func suggest(
+	cur parse.Node,
+	parent parse.Node,
+	ctx *Context,
+	sChar uint8,
+) []protocol.CompletionItem {
 	if sChar == '$' {
 		return varsToItems(ctx, true)
 	}
@@ -261,90 +279,17 @@ func builtinItems() []protocol.CompletionItem {
 
 func logPath(ctx *Context) {
 	for i, node := range ctx.Path {
-		log.Debug().Int("depth", i).Str("type", fmt.Sprintf("%T", node)).Str("content", node.String()).Msg("path")
+		log.Debug().
+			Int("depth", i).
+			Str("type", fmt.Sprintf("%T", node)).
+			Str("content", node.String()).
+			Msg("path")
 	}
 }
 
-func buildPath(n parse.Node, target parse.Node, ctx *Context) bool {
-	if n == target {
-		return true
-	}
-	ctx.Path = append(ctx.Path, n)
-
-	found := false
-	switch n := n.(type) {
-	case *parse.ListNode:
-		for _, child := range n.Nodes {
-			if buildPath(child, target, ctx) {
-				found = true
-				break
-			}
-		}
-	case *parse.ActionNode:
-		// the only child of Action is the Pipe
-		found = buildPath(n.Pipe, target, ctx)
-
-	case *parse.PipeNode:
-		for _, v := range n.Decl {
-			ctx.Vars[v.Ident[0]] = n
-		}
-		prevPipe := ctx.Pipe
-		ctx.Pipe = n
-
-		for _, cmd := range n.Cmds {
-			if buildPath(cmd, target, ctx) {
-				return true
-			}
-		}
-
-		ctx.Pipe = prevPipe
-		return false
-
-	case *parse.IfNode:
-		snapshot := snapshotVars(ctx.Vars)
-
-		found = buildPath(n.Pipe, target, ctx) ||
-			buildPath(n.List, target, ctx) ||
-			(n.ElseList != nil && buildPath(n.ElseList, target, ctx))
-
-		if !found {
-			ctx.Vars = snapshot
-		}
-
-	case *parse.RangeNode:
-		snapshot := snapshotVars(ctx.Vars)
-
-		found = buildPath(n.Pipe, target, ctx) ||
-			buildPath(n.List, target, ctx) ||
-			(n.ElseList != nil && buildPath(n.ElseList, target, ctx))
-
-		if !found {
-			ctx.Vars = snapshot
-		}
-
-	case *parse.WithNode:
-		snapshot := snapshotVars(ctx.Vars)
-
-		found = buildPath(n.Pipe, target, ctx) ||
-			buildPath(n.List, target, ctx) ||
-			(n.ElseList != nil && buildPath(n.ElseList, target, ctx))
-
-		if !found {
-			ctx.Vars = snapshot
-		}
-	case *parse.CommandNode:
-		for _, arg := range n.Args {
-			if buildPath(arg, target, ctx) {
-				found = true
-				break
-			}
-		}
-	case *parse.TemplateNode:
-		if n.Pipe != nil {
-			found = buildPath(n.Pipe, target, ctx)
-		}
-	case *parse.ChainNode:
-		found = buildPath(n.Node, target, ctx)
+// extract method for buildPath
+func isLeafNode(n parse.Node) bool {
+	switch n.(type) {
 	case *parse.IdentifierNode,
 		*parse.VariableNode,
 		*parse.FieldNode,
@@ -357,14 +302,105 @@ func buildPath(n parse.Node, target parse.Node, ctx *Context) bool {
 		*parse.CommentNode,
 		*parse.BreakNode,
 		*parse.ContinueNode:
-	// can be changed to Incomplete Node later when parser updated
-	default:
-		log.Error().Msg("The tree contains an incomplete Node")
+		return true
 	}
+	return false
+}
+
+// main build path function that calls supporting functions and builds path and context
+func buildPath(n parse.Node, target parse.Node, ctx *Context) bool {
+	if n == target {
+		return true
+	}
+	ctx.Path = append(ctx.Path, n)
+
+	found := buildPathChildren(n, target, ctx)
+
 	if !found {
 		ctx.Path = ctx.Path[:len(ctx.Path)-1]
 	}
 	return found
+}
+
+// builds path on the branch by taking snapshots and falling back in case not found
+func buildPathBranch(
+	pipe *parse.PipeNode,
+	list *parse.ListNode,
+	elseList *parse.ListNode,
+	target parse.Node,
+	ctx *Context,
+) bool {
+	snapshot := snapshotVars(ctx.Vars)
+
+	found := buildPath(pipe, target, ctx) ||
+		buildPath(list, target, ctx) ||
+		(elseList != nil && buildPath(elseList, target, ctx))
+
+	if !found {
+		ctx.Vars = snapshot
+	}
+	return found
+}
+
+// main traversal logic
+func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
+	if isLeafNode(n) {
+		return false
+	}
+
+	switch n := n.(type) {
+	case *parse.ListNode:
+		for _, child := range n.Nodes {
+			if buildPath(child, target, ctx) {
+				return true
+			}
+		}
+
+	case *parse.ActionNode:
+		return buildPath(n.Pipe, target, ctx)
+
+	case *parse.PipeNode:
+		for _, v := range n.Decl {
+			ctx.Vars[v.Ident[0]] = n
+		}
+		prevPipe := ctx.Pipe
+		ctx.Pipe = n
+		for _, cmd := range n.Cmds {
+			if buildPath(cmd, target, ctx) {
+				return true
+			}
+		}
+		ctx.Pipe = prevPipe
+		return false
+
+	case *parse.IfNode:
+		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+
+	case *parse.RangeNode:
+		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+
+	case *parse.WithNode:
+		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+
+	case *parse.CommandNode:
+		for _, arg := range n.Args {
+			if buildPath(arg, target, ctx) {
+				return true
+			}
+		}
+
+	case *parse.TemplateNode:
+		if n.Pipe != nil {
+			return buildPath(n.Pipe, target, ctx)
+		}
+
+	case *parse.ChainNode:
+		return buildPath(n.Node, target, ctx)
+
+	default:
+		log.Error().Msg("The tree contains an incomplete Node")
+	}
+	return false
 }
 
 // Take snapshots of defined variables, needed to change scope when the Node wasn't found in some path

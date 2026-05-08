@@ -22,7 +22,7 @@ func setupHandlers(langServerName string, langServerVersion string) {
 		Initialize:                      initialize,
 		Initialized:                     initialized,
 		Shutdown:                        shutdown,
-		TextDocumentCompletion:          completion_ast,
+		TextDocumentCompletion:          completionWithFallback,
 		TextDocumentDidOpen:             didOpen,
 		TextDocumentDidChange:           didChange,
 		TextDocumentDidClose:            didClose,
