@@ -22,12 +22,13 @@ func setupHandlers(langServerName string, langServerVersion string) {
 		Initialize:                      initialize,
 		Initialized:                     initialized,
 		Shutdown:                        shutdown,
-		TextDocumentCompletion:          completion,
+		TextDocumentCompletion:          completionWithFallback,
 		TextDocumentDidOpen:             didOpen,
 		TextDocumentDidChange:           didChange,
 		TextDocumentDidClose:            didClose,
 		SetTrace:                        SetTrace,
 		WorkspaceDidChangeConfiguration: ConfigChanged,
+		TextDocumentReferences:          references,
 	}
 }
 
@@ -57,7 +58,11 @@ func initialize(_ *glsp.Context, _ *protocol.InitializeParams) (any, error) {
 		Change:    &changeKind,
 	}
 
-	capabilities.CompletionProvider = &protocol.CompletionOptions{}
+	resolveProvider := false
+	capabilities.CompletionProvider = &protocol.CompletionOptions{
+		TriggerCharacters: []string{"$", "."},
+		ResolveProvider:   &resolveProvider,
+	}
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
 		ServerInfo: &protocol.InitializeResultServerInfo{
