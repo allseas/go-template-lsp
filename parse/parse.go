@@ -671,11 +671,14 @@ func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, 
 //
 // If keyword is past.
 func (t *Tree) ifControl() Node {
+	t.backup() // put back the "if" token so we can get its location.
+	position := t.next().pos
+
 	pos, line, pipe, list, elseList, err := t.parseControl("if")
 	if err != "" {
 		return t.newUndefined(pos, "error parsing if control: "+err)
 	}
-	return t.newIf(pos, line, pipe, list, elseList)
+	return t.newIf(position, line, pipe, list, elseList)
 }
 
 // Range:
@@ -685,11 +688,14 @@ func (t *Tree) ifControl() Node {
 //
 // Range keyword is past.
 func (t *Tree) rangeControl() Node {
+	t.backup() // put back the "range" token so we can get its location.
+	position := t.next().pos
+
 	pos, line, pipe, list, elseList, err := t.parseControl("range")
 	if err != "" {
 		return t.newUndefined(pos, "error parsing range control: "+err)
 	}
-	return t.newRange(pos, line, pipe, list, elseList)
+	return t.newRange(position, line, pipe, list, elseList)
 }
 
 // With:
@@ -697,13 +703,16 @@ func (t *Tree) rangeControl() Node {
 //	{{with pipeline}} itemList {{end}}
 //	{{with pipeline}} itemList {{else}} itemList {{end}}
 //
-// If keyword is past.
+// With keyword is past.
 func (t *Tree) withControl() Node {
+	t.backup() // put back the "with" token so we can get its location.
+	position := t.next().pos
+
 	pos, line, pipe, list, elseList, err := t.parseControl("with")
 	if err != "" {
 		return t.newUndefined(pos, "error parsing with control: "+err)
 	}
-	return t.newWith(pos, line, pipe, list, elseList)
+	return t.newWith(position, line, pipe, list, elseList)
 }
 
 // End:
