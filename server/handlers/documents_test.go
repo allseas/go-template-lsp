@@ -66,7 +66,8 @@ func TestDocumentStore(t *testing.T) {
 
 		assert.True(t, ok)
 		assert.Equal(t, invalidContent, val.text, "Content should be stored even if parsing fails")
-		assert.Nil(t, val.tree, "Tree should be nil if parsing fails")
+		// tree is not nil with the new parser
+		assert.NotNil(t, val.tree, "Tree should not be nil if parsing fails")
 	})
 
 	// ai
