@@ -6,6 +6,7 @@ This repository contains the source code of the *GoTemplate Support* extension. 
 
 - [Features](#features)
 - [Repository Structure](#repository-structure)
+  - [Documentation](#documentation)
 - [Development](#development)
   - [Requirements](#requirements)
   - [Language Server](#language-server)
@@ -24,6 +25,11 @@ This repository contains the source code of the *GoTemplate Support* extension. 
     - [Plugin Tests](#plugin-tests)
     - [Running the Plugin for Testing](#running-the-plugin-for-testing)
     - [Building the Plugin](#building-the-plugin)
+- [Architecture Overview](#architecture-overview)
+  - [Why This Architecture?](#why-this-architecture)
+- [Development Workflow](#development-workflow)
+  - [Adding New Features](#adding-new-features)
+- [Resources](#resources)
 
 ## Features
 
@@ -68,24 +74,64 @@ More can be read about the features in [docs/features.md](docs/features.md)
 
 ## Repository Structure
 
-This repository contains:
+This repository is organized as follows:
 
-- source code of the text/tempalte language server in `server`
-- source code of the modified text/template parser in `parse`
-- source code of the JetBrains plugin in `clients/JetBrains`
-- source code of the VS Code extension in `clients/VSCode`
-- build scripts for the server in `scripts`
-- resources for testing the extension in `test/resources`
+```files
+gotemplate-lsp/
+├── server/                    # Language server (Go)
+│   ├── main.go               # Entry point
+│   ├── handlers/             # LSP request handlers
+│   └── go.mod                # Go dependencies
+├── clients/
+│   ├── VSCode/               # VS Code extension (TypeScript)
+│   │   ├── src/              # Extension source
+│   │   ├── test/             # Extension tests
+│   │   ├── package.json      # Extension manifest
+│   │   └── syntaxes/         # TextMate grammar
+│   └── JetBrains/            # JetBrains plugin (Kotlin)
+│       └── go-text-template/ # Plugin source (Gradle project)
+│           ├── src/
+│           │   ├── main/
+│           │   │   ├── kotlin/      # Kotlin source code
+│           │   │   └── resources/
+│           │   │       └── META-INF/
+│           │   │           └── plugin.xml   # Plugin manifest
+│           │   └── test/            # Unit tests
+│           ├── build.gradle.kts     # Gradle build config
+│           └── gradle/              # Gradle wrapper
+├── scripts/                  # Build scripts (TypeScript)
+├── docs/                     # Documentation
+│   ├── features.md           # Feature overview and roadmap
+│   ├── server.md             # Language server architecture
+│   ├── vscode-extension.md   # VS Code extension development
+│   ├── jetbrains-plugin.md   # JetBrains plugin development
+│   └── example-*.md          # Detailed examples
+└── test/resources/           # Test templates and resources
+```
+
+### Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[features.md](docs/features.md)** — Complete feature matrix, design decisions, and contribution guide
+- **[server.md](docs/server.md)** — Language server architecture and guide for adding new features
+- **[vscode-extension.md](docs/vscode-extension.md)** — VS Code extension development guide with examples
+- **[jetbrains-plugin.md](docs/jetbrains-plugin.md)** — JetBrains plugin development guide with examples
 
 ## Development
 
 ### Requirements
 
-- Go: 1.26.2+
-- Node: 24.11.0+
-- Npm: 11.12.0+
-- gowatch (<https://github.com/silenceper/gowatch>)
-- Java [TODO: WHICH VERSION? 21?]
+- **Go:** 1.26.2 or later
+- **Node.js:** 24.11.0 or later
+- **npm:** 11.12.0 or later
+- **Java:** 21 or later (for JetBrains plugin development)
+- **gowatch:** For watch mode (`go install github.com/silenceper/gowatch@latest`)
+
+**Optional:**
+
+- golangci-lint (for server linting)
+- Gradle (auto-installed by gradlew for JetBrains plugin)
 
 ### Language Server
 
@@ -159,7 +205,16 @@ npm run lint:check
 
 #### Extension Tests
 
-[TODO: HOW TO RUN VS CODE TESTS]
+Run all extension tests:
+
+```bash
+cd clients/VSCode
+npm run test
+```
+
+This uses `@vscode/test-cli` to run tests in a headless VS Code instance. Tests are located in `src/test/` and should follow the naming pattern `*.test.ts`.
+
+For detailed testing information, see [vscode-testing.md](docs/vscode-testing.md) and [vscode-extension.md](docs/vscode-extension.md#testing).
 
 #### Running the Extension with Watching
 
@@ -229,4 +284,61 @@ cd clients/JetBrains/go-text-template/
 
 #### Building the Plugin
 
-[TODO: I HAVE NO CLUE ON HOW TO BUILD THE JETBRAINS PLUGIN]
+Build the plugin distribution:
+
+```bash
+cd clients/JetBrains/go-text-template/
+./gradlew build
+```
+
+This creates a distributable plugin ZIP file in `build/distributions/`.
+
+To build a signed plugin for publishing to the JetBrains Marketplace:
+
+```bash
+./gradlew signPlugin
+```
+
+To publish directly to the JetBrains Marketplace (requires authentication token):
+
+```bash
+./gradlew publishPlugin
+```
+
+For more detailed information on plugin development, see [jetbrains-plugin.md](docs/jetbrains-plugin.md).
+
+## Architecture Overview
+
+This project uses a **client-server architecture** with a shared language server that communicates using LSP via stdio.
+
+### Why This Architecture?
+
+- **Single Server, Multiple Clients** — The Language Server Protocol allows a single Go backend to serve VS Code, JetBrains, and potentially other IDEs without code duplication
+- **TypeScript for VS Code** — Uses standard VS Code extension APIs for seamless integration
+- **Kotlin for JetBrains** — Follows JetBrains' modern plugin development standards
+
+For detailed architecture information, see [server.md](docs/server.md).
+
+## Development Workflow
+
+### Adding New Features
+
+1. **Add feature to roadmap** in [docs/features.md](docs/features.md)
+2. **Implement in server** — Add LSP handler in `server/handlers/`
+3. **Add to VS Code** — Update `clients/VSCode/` if needed
+4. **Add to JetBrains** — Update `clients/JetBrains/` if needed
+5. **Add tests** — Write tests for new functionality
+6. **Update docs** — Document the new feature and any APIs
+
+Each component has its own development guide:
+
+- [server.md](docs/server.md) — How to add server features
+- [vscode-extension.md](docs/vscode-extension.md) — How to add VS Code features
+- [jetbrains-plugin.md](docs/jetbrains-plugin.md) — How to add JetBrains features
+
+## Resources
+
+- [Language Server Protocol Spec](https://microsoft.github.io/language-server-protocol/)
+- [Go text/template Package](https://pkg.go.dev/text/template)
+- [VS Code Extension API](https://code.visualstudio.com/api)
+- [JetBrains Plugin Development](https://plugins.jetbrains.com/docs/intellij/)
