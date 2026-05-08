@@ -41,6 +41,13 @@
     "main": "out/extension.js",
     "activationEvents": [],
     "contributes": {
+        "iconThemes": [
+            {
+                "id": "text-tmpl-icons",
+                "label": "Text Template Icons",
+                "path": "./icons/tmpl-icon-theme.json"
+            }
+        ],
         "languages": [
             {
                 "id": "gotmpl",
