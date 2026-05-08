@@ -1,9 +1,10 @@
 package handlers
 
 import (
-	protocol "github.com/tliron/glsp/protocol_3_16"
 	"testing"
 	"text/template/parse"
+
+	protocol "github.com/tliron/glsp/protocol_3_16"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
