@@ -3,8 +3,6 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 	"text/template/parse"
 
 	"github.com/rs/zerolog/log"
@@ -12,7 +10,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-func hover(ctx *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
+func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
 	// Get document content
 
 	doc, ok := store.Get(params.TextDocument.URI)
@@ -38,39 +36,98 @@ func hover(ctx *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hov
 		Range: &nodeRange,
 	}
 
-	switch target.(type) {
+	switch target := target.(type) {
 	case *parse.ActionNode:
 		log.Debug().Msg("Hover on ActionNode")
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageAction(target),
+		}
+	case *parse.BranchNode:
+		{
+			log.Debug().Msg("Hover on BranchNode")
+			hover.Contents = protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageBranch(target),
+			}
+		}
 	case *parse.CommandNode:
 		log.Debug().Msg("Hover on CommandNode")
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageCommand(target),
+		}
 	case *parse.DotNode:
 		log.Debug().Msg("Hover on DotNode")
 		hover.Contents = protocol.MarkupContent{
 			Kind:  protocol.MarkupKindMarkdown,
-			Value: "**Cursor** - `.`\n\nReturns the current context",
+			Value: MessageDot(target),
 		}
 	case *parse.FieldNode:
 		log.Debug().Msg("Hover on FieldNode")
-		target := target.(*parse.FieldNode)
 		hover.Contents = protocol.MarkupContent{
 			Kind:  protocol.MarkupKindMarkdown,
-			Value: fmt.Sprintf("**Field Access** - `%s`\n\nAccesses the `%s` field of the `.%s` context.", target.String(), target.Ident[0], strings.Join(target.Ident[1:], ".")),
+			Value: MessageField(target),
 		}
 	case *parse.IdentifierNode:
 		log.Debug().Msg("Hover on IdentifierNode")
-		target := target.(*parse.IdentifierNode)
 		hover.Contents = protocol.MarkupContent{
 			Kind:  protocol.MarkupKindMarkdown,
-			Value: fmt.Sprintf("**Identifier** - `%s`\n\nRepresents an identifier in a command or action.", target.Ident),
+			Value: MessageIdentifier(target),
 		}
 	case *parse.PipeNode:
 		log.Debug().Msg("Hover on PipeNode")
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessagePipe(target),
+		}
 	case *parse.VariableNode:
-		target := target.(*parse.VariableNode)
 		log.Debug().Msg("Hover on VariableNode")
 		hover.Contents = protocol.MarkupContent{
 			Kind:  protocol.MarkupKindMarkdown,
-			Value: fmt.Sprintf("**Variable** - `%s`\n\n", target.Ident[0]),
+			Value: MessageVariable(target),
+		}
+	case *parse.TextNode:
+		log.Debug().Msg("Hover on TextNode")
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageText(target),
+		}
+	case *parse.TemplateNode:
+		log.Debug().Msg("Hover on TemplateNode")
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageTemplate(target),
+		}
+	case *parse.ListNode:
+		log.Debug().Msg("Hover on ListNode")
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageList(target),
+		}
+	case *parse.BoolNode:
+		log.Debug().Msgf("Hover on %T", target)
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageBool(target),
+		}
+	case *parse.NumberNode:
+		log.Debug().Msgf("Hover on %T", target)
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageNumber(target),
+		}
+	case *parse.StringNode:
+		log.Debug().Msgf("Hover on %T", target)
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageString(target),
+		}
+	case *parse.NilNode:
+		log.Debug().Msgf("Hover on %T", target)
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageNil(target),
 		}
 	default:
 		log.Debug().Msgf("Hover on unknown node type: %T", target)
@@ -80,14 +137,4 @@ func hover(ctx *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hov
 	// Build hover content
 
 	return
-	// &protocol.Hover{
-	// 	Contents: protocol.MarkupContent{
-	// 		Kind:  protocol.MarkupKindMarkdown,
-	// 		Value: "Not Implemented Yet",
-	// 	},
-	// 	Range: &protocol.Range{
-	// 		Start: protocol.Position{Line: 0, Character: 0},
-	// 		End:   protocol.Position{Line: 0, Character: 3},
-	// 	},
-	// }, nil
 }

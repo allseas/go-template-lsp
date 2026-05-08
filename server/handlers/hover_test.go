@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"testing"
+	"text/template/parse"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: "**Field Access** - `.Name`\n\nAccesses the `Name` field of the `.` context.",
+				Value: MessageDot(&parse.DotNode{}),
 			},
 		},
 		expectingError: false,
@@ -60,7 +61,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: "**Variable** - `$lastLogin`\n\n",
+				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$lastLogin"}}),
 			},
 		},
 		expectingError: false,
@@ -74,7 +75,91 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: "if statement - `if` is used to conditionally execute a block of code based on the truthiness of the expression that follows it.",
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeIf}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Control structure hover - range statement",
+		documentText:           docText,
+		positionLine:           5,
+		positionCharacterStart: 3,
+		positionCharacterEnd:   10,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeRange}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Control structure hover - with statement",
+		documentText:           docText,
+		positionLine:           1,
+		positionCharacterStart: 3,
+		positionCharacterEnd:   10,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeWith}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Variable hover - index in range loop",
+		documentText:           docText,
+		positionLine:           6,
+		positionCharacterStart: 5,
+		positionCharacterEnd:   10,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIndexVariable(&parse.VariableNode{Ident: []string{"$i"}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Function hover - and function",
+		documentText:           docText,
+		positionLine:           8,
+		positionCharacterStart: 3,
+		positionCharacterEnd:   6,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "and"}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Function hover - not function",
+		documentText:           docText,
+		positionLine:           8,
+		positionCharacterStart: 11,
+		positionCharacterEnd:   14,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "not"}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Function hover - ge function",
+		documentText:           docText,
+		positionLine:           8,
+		positionCharacterStart: 16,
+		positionCharacterEnd:   18,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "ge"}),
 			},
 		},
 		expectingError: false,
