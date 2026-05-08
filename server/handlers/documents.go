@@ -3,7 +3,7 @@ package handlers
 
 import (
 	"sync"
-	"text/template/parse"
+	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -62,7 +62,7 @@ func parseTemplate(uri, text string) (*parse.Tree, error) {
 
 func tryParse(text string) (*parse.Tree, error) {
 	t := parse.New("t")
-	t.Mode = parse.SkipFuncCheck
+	t.Mode = parse.IgnoreErrors | parse.SkipFuncCheck
 	treeSet := map[string]*parse.Tree{}
 	_, err := t.Parse(text, "{{", "}}", treeSet)
 	if err != nil {
@@ -171,6 +171,8 @@ func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 			}
 		case *parse.TemplateNode:
 			walk(node.Pipe)
+		case *parse.UndefinedNode:
+			log.Debug().Msg("found the undefined node")
 		}
 	}
 

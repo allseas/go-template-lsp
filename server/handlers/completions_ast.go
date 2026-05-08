@@ -3,7 +3,7 @@ package handlers
 
 import (
 	"fmt"
-	"text/template/parse"
+	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -301,6 +301,7 @@ func isLeafNode(n parse.Node) bool {
 		*parse.TextNode,
 		*parse.CommentNode,
 		*parse.BreakNode,
+		*parse.UndefinedNode,
 		*parse.ContinueNode:
 		return true
 	}

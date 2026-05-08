@@ -2,12 +2,11 @@ package handlers
 
 import (
 	"testing"
-	"text/template/parse"
-
-	protocol "github.com/tliron/glsp/protocol_3_16"
+	parse "text-template-parser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 // suggestAt parses src, finds the node at offset, builds the path/context,
@@ -378,7 +377,8 @@ func TestCompletionAst(t *testing.T) {
 				Position:     protocol.Position{Line: 0, Character: 2},
 			},
 		})
-		assert.Nil(t, result)
+		// with the new parser, the tree is not nil in the wrong code case
+		assert.NotNil(t, result)
 	})
 
 	t.Run("returns nil when cursor outside template block", func(t *testing.T) {
