@@ -1,13 +1,11 @@
 package handlers
 
 import (
-	"testing"
-	"text/template/parse"
-
-	protocol "github.com/tliron/glsp/protocol_3_16"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	protocol "github.com/tliron/glsp/protocol_3_16"
+	"testing"
+	parse "text-template-parser"
 )
 
 // suggestAt parses src, finds the node at offset, builds the path/context,

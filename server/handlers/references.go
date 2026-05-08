@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"text/template/parse"
+	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"

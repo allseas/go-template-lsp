@@ -6,6 +6,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tliron/glsp v0.2.2
+	text-template-parser v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -32,3 +33,5 @@ require (
 	golang.org/x/term v0.42.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace text-template-parser => ../parse

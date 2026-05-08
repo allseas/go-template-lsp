@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"testing"
-	"text/template/parse"
+	parse "text-template-parser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
