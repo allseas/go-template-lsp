@@ -41,3 +41,12 @@ trigger-server:
   rules:
     - changes:
         - server/**/*
+
+trigger-parse:
+  stage: triggers
+  trigger:
+    include: parse/.gitlab-ci.yml
+    strategy: depend
+  rules:
+    - changes:
+      - parse/**/*

@@ -1,0 +1,15 @@
+workflow:
+  rules:
+    - when: always
+
+stages:
+  - test
+
+testing:
+  stage: test
+  image: golang:tip-alpine
+  before_script:
+    - cd parse
+  script:
+    - echo "Running Tests..."
+    - go test
