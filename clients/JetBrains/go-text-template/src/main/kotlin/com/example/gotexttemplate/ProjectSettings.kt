@@ -9,7 +9,6 @@ import com.intellij.openapi.project.Project
 @Service(Service.Level.PROJECT)
 @State(name = "com.example.gotexttemplate.ProjectSettings", storages = [Storage("goTextTemplateSettings.xml")])
 class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
-
     data class State(
         var enableServerOverride: Boolean? = null,
         var traceServerOverride: AppSettings.TraceLevel? = null,
@@ -36,7 +35,6 @@ class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
     }
 
     companion object {
-        fun getInstance(project: Project): ProjectSettings =
-            project.getService(ProjectSettings::class.java)
+        fun getInstance(project: Project): ProjectSettings = project.getService(ProjectSettings::class.java)
     }
 }

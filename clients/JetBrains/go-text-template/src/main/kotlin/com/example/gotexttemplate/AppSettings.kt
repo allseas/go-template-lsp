@@ -9,21 +9,21 @@ import com.intellij.openapi.components.Storage
 @Service(Service.Level.APP)
 @State(name = "com.example.gotexttemplate.AppSettings", storages = [Storage("GoTextTemplateSettings.xml")])
 class AppSettings : PersistentStateComponent<AppSettings.State> {
-
     data class State(
         var enableServer: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
     )
 
-    enum class TraceLevel(val value: String) {
+    enum class TraceLevel(
+        val value: String,
+    ) {
         OFF("off"),
         MESSAGES("messages"),
         VERBOSE("verbose"),
         ;
 
         companion object {
-            fun fromValue(value: String): TraceLevel =
-                entries.firstOrNull { it.value == value } ?: MESSAGES
+            fun fromValue(value: String): TraceLevel = entries.firstOrNull { it.value == value } ?: MESSAGES
         }
     }
 
@@ -36,7 +36,6 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
     }
 
     companion object {
-        fun getInstance(): AppSettings =
-            ApplicationManager.getApplication().getService(AppSettings::class.java)
+        fun getInstance(): AppSettings = ApplicationManager.getApplication().getService(AppSettings::class.java)
     }
 }
