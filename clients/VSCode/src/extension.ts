@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as vscode from 'vscode';
 import {
     workspace,
     ExtensionContext,
@@ -98,6 +99,18 @@ export async function activate(context: ExtensionContext) {
         console.log("Language client started");
     } catch (err) {
         console.error("Language client failed:", err);
+    }
+
+    const versionKey = 'goTmplSupport.version';
+    
+    const previousVersion = context.globalState.get<string>(versionKey);
+    const currentVersion = context.extension.packageJSON.version;
+
+    if (previousVersion === undefined || previousVersion !== currentVersion) {
+        const welcomeFilePath = vscode.Uri.file(path.join(context.extensionPath, 'welcome.md'));
+        
+        vscode.commands.executeCommand('markdown.showPreview', welcomeFilePath);
+        context.globalState.update(versionKey, currentVersion);
     }
 }
 
