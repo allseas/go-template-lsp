@@ -1,5 +1,5 @@
 ## Parser
-This is an extended version of the go/test/template/parse package.
+This is an extended version of the go/text/template/parse package.
 
 Changes implemented:
 
