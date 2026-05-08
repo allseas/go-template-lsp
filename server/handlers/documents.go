@@ -3,7 +3,7 @@ package handlers
 
 import (
 	"sync"
-	"text/template/parse"
+	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -62,7 +62,7 @@ func parseTemplate(uri, text string) (*parse.Tree, error) {
 
 func tryParse(text string) (*parse.Tree, error) {
 	t := parse.New("t")
-	t.Mode = parse.SkipFuncCheck
+	t.Mode = parse.IgnoreErrors | parse.SkipFuncCheck
 	treeSet := map[string]*parse.Tree{}
 	_, err := t.Parse(text, "{{", "}}", treeSet)
 	if err != nil {
@@ -112,4 +112,70 @@ func didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) er
 func didClose(_ *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
 	store.Remove(params.TextDocument.URI)
 	return nil
+}
+
+// nodeFind finds a node in a tree given the offset
+func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
+	best := root
+	bestPos := parse.Pos(0)
+
+	var walk func(n parse.Node)
+	walk = func(n parse.Node) {
+		if n == nil {
+			return
+		}
+
+		pos := n.Position()
+		if pos <= offset && pos >= bestPos {
+			bestPos = pos
+			best = n
+		}
+
+		switch node := n.(type) {
+		case *parse.ListNode:
+			for _, child := range node.Nodes {
+				walk(child)
+			}
+		case *parse.ActionNode:
+			walk(node.Pipe)
+		case *parse.PipeNode:
+			for _, v := range node.Decl {
+				walk(v)
+			}
+			for _, cmd := range node.Cmds {
+				walk(cmd)
+			}
+		case *parse.CommandNode:
+			for _, arg := range node.Args {
+				walk(arg)
+			}
+		case *parse.ChainNode:
+			walk(node.Node)
+		case *parse.IfNode:
+			walk(node.Pipe)
+			walk(node.List)
+			if node.ElseList != nil {
+				walk(node.ElseList)
+			}
+		case *parse.RangeNode:
+			walk(node.Pipe)
+			walk(node.List)
+			if node.ElseList != nil {
+				walk(node.ElseList)
+			}
+		case *parse.WithNode:
+			walk(node.Pipe)
+			walk(node.List)
+			if node.ElseList != nil {
+				walk(node.ElseList)
+			}
+		case *parse.TemplateNode:
+			walk(node.Pipe)
+		case *parse.UndefinedNode:
+			log.Debug().Msg("found the undefined node")
+		}
+	}
+
+	walk(root)
+	return best
 }
