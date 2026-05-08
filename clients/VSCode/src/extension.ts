@@ -36,10 +36,7 @@ export async function activate(context: ExtensionContext) {
             process.arch === "arm64" ? "gotmpl-server-arm64" : "gotmpl-server";
     }
 
-    const isDebug =
-        process.env.VSCODE_DEBUG === "true" ||
-        process.env.NODE_ENV !== "production";
-    const buildFolder = isDebug ? "out" : "dist";
+    const buildFolder = "out";
     const serverModule = context.asAbsolutePath(
         path.join(buildFolder, "server", "bin", binaryName),
     );
