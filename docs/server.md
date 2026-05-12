@@ -80,13 +80,14 @@ func didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) erro
 
 #### Completion
 
-Returns a list of completion items when the user requests code completion.
+Returns a list of completion items when the user requests code completion. It relies on the parser to build the context (scope, path to the node). Completions also work with context aware pipes, we only suggest some function if the output of the previous function is a valid input of a new function.
+The completions can either be triggered by typing or by pressing <kbd>Ctrl</kbd>+<kbd>Space</kbd>
 
 ```go
 func completion(ctx *glsp.Context, params *protocol.CompletionParams) (any, error) {
     // 1. Get document content
     // 2. Parse template to understand context
-    // 3. Determine what to suggest based on cursor position
+    // 3. Determine what to suggest based on cursor position and context
     // 4. Return []protocol.CompletionItem
 }
 ```
