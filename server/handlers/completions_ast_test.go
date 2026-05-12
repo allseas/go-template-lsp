@@ -11,7 +11,7 @@ import (
 
 // suggestAt parses src, finds the node at offset, builds the path/context,
 // and returns the suggestion labels. It is the core helper for all AST tests.
-func suggestAt(t *testing.T, src string, offset int) []string {
+func suggestAt(t *testing.T, src string, offset int, isInvoked bool) []string {
 	t.Helper()
 
 	trees, err := parse.Parse("test", src, "", "", builtins())
@@ -31,7 +31,7 @@ func suggestAt(t *testing.T, src string, offset int) []string {
 	}
 
 	sChar := src[offset]
-	items := suggest(cur, parent, ctx, sChar)
+	items := suggest(cur, parent, ctx, sChar, isInvoked)
 
 	labels := make([]string, len(items))
 	for i, item := range items {
@@ -71,13 +71,13 @@ func TestDotSuggestions(t *testing.T) {
 	t.Run("bare dot action returns dot item", func(t *testing.T) {
 		src := `{{.}}`
 		// offset 2 is the '.' character
-		labels := suggestAt(t, src, 2)
+		labels := suggestAt(t, src, 2, false)
 		assert.Contains(t, labels, ".")
 	})
 
 	t.Run("dot in if condition", func(t *testing.T) {
 		src := `{{if .}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, ".", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, ".", 0), false)
 		assert.Contains(t, labels, ".")
 		assert.NotContains(t, labels, "eq")
 		assert.NotContains(t, labels, "len")
@@ -85,7 +85,7 @@ func TestDotSuggestions(t *testing.T) {
 
 	t.Run("dot in range pipeline", func(t *testing.T) {
 		src := `{{range .}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, ".", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, ".", 0), false)
 		assert.Contains(t, labels, ".")
 		assert.NotContains(t, labels, "eq")
 		assert.NotContains(t, labels, "len")
@@ -93,7 +93,7 @@ func TestDotSuggestions(t *testing.T) {
 
 	t.Run("dot in with pipeline", func(t *testing.T) {
 		src := `{{with .}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, ".", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, ".", 0), false)
 		assert.Contains(t, labels, ".")
 		assert.NotContains(t, labels, "eq")
 		assert.NotContains(t, labels, "len")
@@ -101,37 +101,36 @@ func TestDotSuggestions(t *testing.T) {
 
 	t.Run("sChar dot returns only dot item, not builtins", func(t *testing.T) {
 		src := `{{.}}`
-		labels := suggestAt(t, src, 2)
+		labels := suggestAt(t, src, 2, false)
 		assert.NotContains(t, labels, "eq")
 		assert.NotContains(t, labels, "len")
 	})
 }
 
 // variables
-
 func TestVariableSuggestions(t *testing.T) {
 	t.Run("sChar dollar returns vars without sigil", func(t *testing.T) {
 		src := `{{$top := .}}{{$}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
 		assert.Contains(t, labels, "top")
 		assert.NotContains(t, labels, "$top", "should react on $")
 	})
 
 	t.Run("sChar non-dollar includes full $var label", func(t *testing.T) {
 		src := `{{$top := .}}{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
 		assert.Contains(t, labels, "$top")
 	})
 
 	t.Run("variable declared before cursor is visible", func(t *testing.T) {
 		src := `{{$x := .}}{{$x}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
 		assert.Contains(t, labels, "x")
 	})
 
 	t.Run("variable declared after cursor is not visible", func(t *testing.T) {
 		src := `{{$early := .}}{{$}}{{$late := .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
 		assert.Contains(t, labels, "early")
 		assert.NotContains(t, labels, "late")
 		assert.NotContains(t, labels, "$late")
@@ -139,21 +138,21 @@ func TestVariableSuggestions(t *testing.T) {
 
 	t.Run("range index and value variables visible inside body", func(t *testing.T) {
 		src := `{{range $i, $v := .}}{{$}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 2))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 2), false)
 		assert.Contains(t, labels, "i")
 		assert.Contains(t, labels, "v")
 	})
 
 	t.Run("range variable not visible after end", func(t *testing.T) {
 		src := `{{range $inner := .}}{{end}}{{$}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
 		assert.NotContains(t, labels, "inner")
 		assert.NotContains(t, labels, "$inner")
 	})
 
 	t.Run("outer variable visible inside nested range", func(t *testing.T) {
 		src := `{{$outer := .}}{{range $i := .}}{{range $j := .}}{{$}}{{end}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 3))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 3), false)
 		assert.Contains(t, labels, "outer")
 		assert.Contains(t, labels, "i")
 		assert.Contains(t, labels, "j")
@@ -161,13 +160,13 @@ func TestVariableSuggestions(t *testing.T) {
 
 	t.Run("if condition variable visible inside block", func(t *testing.T) {
 		src := `{{if $cond := .}}{{$}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
 		assert.Contains(t, labels, "cond")
 	})
 
 	t.Run("with variable visible inside block", func(t *testing.T) {
 		src := `{{with $w := .}}{{$}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
 		assert.Contains(t, labels, "w")
 	})
 }
@@ -177,7 +176,7 @@ func TestVariableSuggestions(t *testing.T) {
 func TestBuiltinSuggestions(t *testing.T) {
 	t.Run("builtins appear in general context", func(t *testing.T) {
 		src := `{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
 		for _, fn := range []string{"len", "eq", "ne", "and", "or", "not", "print", "printf", "println", "index"} {
 			assert.Contains(t, labels, fn, "builtin %q should be present", fn)
 		}
@@ -185,13 +184,13 @@ func TestBuiltinSuggestions(t *testing.T) {
 
 	t.Run("builtins not returned when sChar is dot", func(t *testing.T) {
 		src := `{{.}}`
-		labels := suggestAt(t, src, 2)
+		labels := suggestAt(t, src, 2, false)
 		assert.NotContains(t, labels, "len")
 	})
 
 	t.Run("builtins not returned when sChar is dollar", func(t *testing.T) {
 		src := `{{$x := .}}{{$}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1))
+		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
 		assert.NotContains(t, labels, "len")
 		assert.NotContains(t, labels, "range")
 	})
@@ -202,7 +201,7 @@ func TestBuiltinSuggestions(t *testing.T) {
 func TestPipeFilteredSuggestions(t *testing.T) {
 	t.Run("after len pipe, only int-accepting functions suggested", func(t *testing.T) {
 		src := `{{len . | eq . .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "e", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, "e", 0), false)
 		assert.Contains(t, labels, "eq")
 		assert.Contains(t, labels, "lt")
 		assert.Contains(t, labels, "print")
@@ -211,9 +210,23 @@ func TestPipeFilteredSuggestions(t *testing.T) {
 		assert.NotContains(t, labels, "js")
 	})
 
+	t.Run(
+		"after len pipe, only int-accepting functions suggested on ctrl+space",
+		func(t *testing.T) {
+			src := `{{. | len | }}`
+			labels := suggestAt(t, src, offsetOf(t, src, "}}", 0)-1, true)
+			assert.Contains(t, labels, "eq")
+			assert.Contains(t, labels, "lt")
+			assert.Contains(t, labels, "print")
+			// those should get filtered out
+			assert.NotContains(t, labels, "index")
+			assert.NotContains(t, labels, "js")
+		},
+	)
+
 	t.Run("after not pipe, only bool-accepting functions suggested", func(t *testing.T) {
 		src := `{{not . | and . .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "a", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, "a", 0), false)
 		assert.Contains(t, labels, "and")
 		assert.Contains(t, labels, "or")
 		assert.Contains(t, labels, "not")
@@ -223,7 +236,7 @@ func TestPipeFilteredSuggestions(t *testing.T) {
 
 	t.Run("after html pipe, only string-accepting functions suggested", func(t *testing.T) {
 		src := `{{html . | len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
 		assert.Contains(t, labels, "len")
 		assert.Contains(t, labels, "index")
 		assert.NotContains(t, labels, "and")
@@ -232,7 +245,7 @@ func TestPipeFilteredSuggestions(t *testing.T) {
 
 	t.Run("no preceding pipe returns full list", func(t *testing.T) {
 		src := `{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
 		assert.Contains(t, labels, "len")
 		assert.Contains(t, labels, "html")
 		assert.Contains(t, labels, "and")
@@ -244,14 +257,14 @@ func TestPipeFilteredSuggestions(t *testing.T) {
 func TestCommandNodePositionSuggestions(t *testing.T) {
 	t.Run("first arg of command returns only builtins", func(t *testing.T) {
 		src := `{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
 		assert.Contains(t, labels, "len")
 		assert.Contains(t, labels, "eq")
 	})
 
 	t.Run("second arg of command returns all", func(t *testing.T) {
 		src := `{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, ".", 0))
+		labels := suggestAt(t, src, offsetOf(t, src, ".", 0), false)
 		assert.Contains(t, labels, ".")
 	})
 }
