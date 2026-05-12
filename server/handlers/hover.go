@@ -166,20 +166,41 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 }
 
 func isIndexVariable(target *parse.VariableNode, root *parse.ListNode) bool {
-	ctx := &Context{}
+	ctx := &Context{Vars: make(map[string]parse.Node)}
 	buildPath(root, target, ctx)
 
 	path := ctx.Path
-	branch := path[len(path)-3] // branch is the second to last element in the path
-	if _, ok := branch.(*parse.BranchNode); !ok {
-		return false
+	branch := path[len(path)-2] // branch is the second to last element in the path
+	if _, ok := branch.(*parse.RangeNode); !ok {
+		return wasDeclaredAsIndex(target, ctx)
 	}
-	branchNode := branch.(*parse.BranchNode)
-	if branchNode.NodeType != parse.NodeRange {
-		return false
-	}
+	branchNode := branch.(*parse.RangeNode)
+
 	pipe := branchNode.Pipe
 
-	return pipe.Decl[1] == target
+	return pipe.Decl[0] == target
 
+}
+
+func wasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
+	for ident, pipe := range ctx.Vars {
+		if ident != target.Ident[0] {
+			continue
+		}
+		if pipe.(*parse.PipeNode).Decl[0].Ident[0] != target.Ident[0] {
+			return false
+		}
+		for _, node := range ctx.Path {
+			if _, ok := node.(*parse.RangeNode); !ok {
+				continue
+			}
+			rangeNode := node.(*parse.RangeNode)
+
+			if rangeNode.Pipe != pipe {
+				continue
+			}
+			return true
+		}
+	}
+	return false
 }

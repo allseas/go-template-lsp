@@ -1,0 +1,237 @@
+package handlers
+
+import (
+	parse "text-template-parser"
+
+	protocol "github.com/tliron/glsp/protocol_3_16"
+)
+
+type hoverTestCase struct {
+	name                   string
+	documentText           string
+	positionLine           uint32
+	endLine                uint32
+	positionCharacterStart uint32
+	positionCharacterEnd   uint32
+	positionRangeEnd       uint32
+	expectedHover          *protocol.Hover
+	expectingError         bool
+}
+
+var docText = `
+{{ with .User }}
+	Name: {{ .Name }}
+	Age: {{.Age}}
+	{{- range .Roles }}
+    	- {{ . }}
+	{{- end }}
+	{{ if .IsActive }}
+	{{ and (.Likes) (ge len .Permissions 5) | not }}
+	{{ else }}
+	{{ $lastLogin := .LastLogin }}
+	{{range $i, $v := .LoginHistory }}
+		{{ $i }}: {{ $v }} - {{ $lastLogin }}
+	{{ end }}
+	{{ end }}
+{{ end }}
+`
+var shortDocText = `
+{{range $i, $v := .Items }}
+	{{$i}} - {{ $v }} 
+{{ end }}`
+
+var hoverTestCases = []hoverTestCase{
+	{
+		name:                   "Index variable hover use - index variable used in range loop body",
+		documentText:           shortDocText,
+		positionLine:           2,
+		endLine:                2,
+		positionCharacterStart: 3,
+		positionCharacterEnd:   5,
+		positionRangeEnd:       5,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIndexVariable(&parse.VariableNode{Ident: []string{"$i"}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Index variable hover - range loop index variable",
+		documentText:           shortDocText,
+		positionLine:           1,
+		endLine:                1,
+		positionCharacterStart: 8,
+		positionCharacterEnd:   10,
+		positionRangeEnd:       10,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIndexVariable(&parse.VariableNode{Ident: []string{"$i"}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Value variable hover - range loop value variable",
+		documentText:           shortDocText,
+		positionLine:           1,
+		endLine:                1,
+		positionCharacterStart: 12,
+		positionCharacterEnd:   14,
+		positionRangeEnd:       14,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$v"}}),
+			},
+		},
+		expectingError: false,
+	},
+
+	{
+		name:                   "FieldNode hover - simple field access",
+		documentText:           docText,
+		positionLine:           2,
+		endLine:                2,
+		positionCharacterStart: 10,
+		positionCharacterEnd:   15,
+		positionRangeEnd:       15,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageField(&parse.FieldNode{Ident: []string{"Name"}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "IdentifierNode hover - variable identifier",
+		documentText:           docText,
+		positionLine:           12,
+		endLine:                12,
+		positionCharacterStart: 26,
+		positionCharacterEnd:   36,
+		positionRangeEnd:       36,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$lastLogin"}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Control structure hover - if statement",
+		documentText:           docText,
+		positionLine:           7,
+		endLine:                13,
+		positionCharacterStart: 4,
+		positionCharacterEnd:   5,
+		positionRangeEnd:       5,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeIf, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".IsActive"}}}}}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Control structure hover - range statement",
+		documentText:           docText,
+		positionLine:           4,
+		endLine:                6,
+		positionCharacterStart: 5,
+		positionCharacterEnd:   5,
+		positionRangeEnd:       5,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeRange, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".Roles"}}}}}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Control structure hover - with statement",
+		documentText:           docText,
+		positionLine:           1,
+		endLine:                12,
+		positionCharacterStart: 3,
+		positionCharacterEnd:   7,
+		positionRangeEnd:       37,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeWith, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".User"}}}}}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Variable hover - index in range loop",
+		documentText:           docText,
+		positionLine:           11,
+		endLine:                11,
+		positionCharacterStart: 9,
+		positionCharacterEnd:   11,
+		positionRangeEnd:       11,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIndexVariable(&parse.VariableNode{Ident: []string{"$i"}}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Function hover - and function",
+		documentText:           docText,
+		positionLine:           8,
+		endLine:                8,
+		positionCharacterStart: 4,
+		positionCharacterEnd:   7,
+		positionRangeEnd:       7,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "and"}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Function hover - not function",
+		documentText:           docText,
+		positionLine:           8,
+		endLine:                8,
+		positionCharacterStart: 43,
+		positionCharacterEnd:   46,
+		positionRangeEnd:       46,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "not"}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "Function hover - ge function",
+		documentText:           docText,
+		positionLine:           8,
+		endLine:                8,
+		positionCharacterStart: 18,
+		positionCharacterEnd:   20,
+		positionRangeEnd:       20,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "ge"}),
+			},
+		},
+		expectingError: false,
+	},
+}
