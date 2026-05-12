@@ -157,7 +157,6 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	cmds := ctx.Pipe.Cmds
 	precedingIdx := len(cmds) - 2
 
-	log.Debug().Int("%d", precedingIdx).Msg("THIS IS A PRECEDING INDEX")
 	if isInvoked {
 		precedingIdx = len(cmds) - 1
 	}
@@ -165,7 +164,6 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 		return outputAny
 	}
 	preceding := cmds[precedingIdx]
-	log.Debug().Msg(preceding.String() + "THIS IS A PRECEDING NODE")
 	if len(preceding.Args) == 0 {
 		return outputAny
 	}
