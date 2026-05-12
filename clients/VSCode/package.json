@@ -20,14 +20,12 @@
         "check-types": "tsc --noEmit",
         "watch:esbuild": "node esbuild.js --watch",
         "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-        "deprecated:vscode:prepublish": "npm run package",
-        "deprecated:package": "npm run check-types && node esbuild.js --production",
         "lint:fix": "npx eslint . --fix",
         "lint:check": "npx eslint .",
-        "format": "npx prettier --write .",
+        "format:fix": "npx prettier --write .",
         "format:check": "npx prettier --check .",
         "test": "npm run compile; vscode-test",
-        "verify": "npm test && npm run lint:check && npm run format:check",
+        "verify": "npm run lint:check && npm run format:check && npm test",
         "package": "npm run verify && node esbuild.js --production && vsce package && find . | grep '.vsix' | xargs -i mv {} ../../"
     },
     "dependencies": {

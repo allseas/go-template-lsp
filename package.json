@@ -1,10 +1,12 @@
 {
-  "name": "gotemplate-lsp",
+  "name": "go-template-extensions",
   "version": "1.0.0",
   "description": "",
+  "private": "true",
   "directories": {
     "doc": "docs"
   },
+  "workspaces": ["clients/*", "scripts"],
   "scripts": {
     "build:server": "ts-node --esm scripts/build-server-binaries.ts",
     "build:vscode": "npm run build:server && (cd clients/VSCode; npm run compile)",
