@@ -26,7 +26,7 @@
         "format:check": "npx prettier --check .",
         "test": "npm run compile; vscode-test",
         "verify": "npm run lint:check && npm run format:check && npm test",
-        "package": "npm run verify && node esbuild.js --production && vsce package && find . | grep '.vsix' | xargs -i mv {} ../../"
+        "package": "npm run verify && node esbuild.js --production && vsce package --no-dependencies && find . | grep '.vsix' | xargs -i mv {} ../../"
     },
     "dependencies": {
         "vscode-languageclient": "^9.0.1"
@@ -47,10 +47,7 @@
     "activationEvents": [],
     "contributes": {
         "configurationDefaults": {
-            "[gotmpl]": {
-                "editor.snippetSuggestions": "none",
-                "editor.suggest.showSnippets": false
-            }
+            "[gotmpl]": {}
         },
         "iconThemes": [
             {
