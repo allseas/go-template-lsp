@@ -83,7 +83,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	text := doc.text
 	tree := doc.tree
 
-	ctx := &Context{Vars: map[string]parse.Node{}}
+	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
 
 	offset := positionToOffset(text, params.Position)
 
@@ -91,6 +91,9 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	result := buildPath(tree.Root, curNode, ctx)
 
 	logPath(ctx)
+
+	isInvoked := params.Context != nil &&
+		params.Context.TriggerKind == protocol.CompletionTriggerKindInvoked
 
 	var parent parse.Node
 	if len(ctx.Path) <= 1 {
@@ -120,7 +123,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	} else {
 		log.Debug().Str("type", fmt.Sprintf("%T", parent)).Msg(parent.String())
 	}
-	items := suggest(curNode, parent, ctx, text[curNode.Position()])
+	items := suggest(curNode, parent, ctx, text[curNode.Position()], isInvoked)
 
 	return protocol.CompletionList{
 		IsIncomplete: false,
@@ -146,11 +149,23 @@ var functionsAccepting = map[outputKind][]string{
 	},
 }
 
-func pipeOutputKind(ctx *Context) outputKind {
-	if ctx.Pipe == nil || len(ctx.Pipe.Cmds) < 2 {
+func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
+	if ctx.Pipe == nil {
+		log.Debug().Msg("no pipe")
 		return outputAny
 	}
-	preceding := ctx.Pipe.Cmds[len(ctx.Pipe.Cmds)-2]
+	cmds := ctx.Pipe.Cmds
+	precedingIdx := len(cmds) - 2
+
+	log.Debug().Int("%d", precedingIdx).Msg("THIS IS A PRECEDING INDEX")
+	if isInvoked {
+		precedingIdx = len(cmds) - 1
+	}
+	if precedingIdx < 0 || len(cmds) < 1 {
+		return outputAny
+	}
+	preceding := cmds[precedingIdx]
+	log.Debug().Msg(preceding.String() + "THIS IS A PRECEDING NODE")
 	if len(preceding.Args) == 0 {
 		return outputAny
 	}
@@ -191,6 +206,7 @@ func suggest(
 	parent parse.Node,
 	ctx *Context,
 	sChar uint8,
+	isInvoked bool,
 ) []protocol.CompletionItem {
 	if sChar == '$' {
 		return varsToItems(ctx, true)
@@ -201,7 +217,7 @@ func suggest(
 	}
 
 	all := func() []protocol.CompletionItem {
-		if kind := pipeOutputKind(ctx); kind != outputAny {
+		if kind := pipeOutputKind(ctx, isInvoked); kind != outputAny {
 			return pipeFilteredItems(kind, ctx)
 		}
 		return append(append(dotItem(), varsToItems(ctx, false)...), builtinItems()...)
