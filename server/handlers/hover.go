@@ -83,9 +83,17 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		}
 	case *parse.VariableNode:
 		log.Debug().Msg("Hover on VariableNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageVariable(target),
+
+		if isIndexVariable(target, doc.tree.Root) {
+			hover.Contents = protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIndexVariable(target),
+			}
+		} else {
+			hover.Contents = protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageVariable(target),
+			}
 		}
 	case *parse.TextNode:
 		log.Debug().Msg("Hover on TextNode")
@@ -155,4 +163,23 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 	// Build hover content
 
 	return
+}
+
+func isIndexVariable(target *parse.VariableNode, root *parse.ListNode) bool {
+	ctx := &Context{}
+	buildPath(root, target, ctx)
+
+	path := ctx.Path
+	branch := path[len(path)-3] // branch is the second to last element in the path
+	if _, ok := branch.(*parse.BranchNode); !ok {
+		return false
+	}
+	branchNode := branch.(*parse.BranchNode)
+	if branchNode.NodeType != parse.NodeRange {
+		return false
+	}
+	pipe := branchNode.Pipe
+
+	return pipe.Decl[1] == target
+
 }

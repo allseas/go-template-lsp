@@ -16,6 +16,7 @@ type hoverTestCase struct {
 	endLine                uint32
 	positionCharacterStart uint32
 	positionCharacterEnd   uint32
+	positionRangeEnd       uint32
 	expectedHover          *protocol.Hover
 	expectingError         bool
 }
@@ -46,6 +47,7 @@ var hoverTestCases = []hoverTestCase{
 		endLine:                2,
 		positionCharacterStart: 10,
 		positionCharacterEnd:   15,
+		positionRangeEnd:       15,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
@@ -61,6 +63,7 @@ var hoverTestCases = []hoverTestCase{
 		endLine:                12,
 		positionCharacterStart: 26,
 		positionCharacterEnd:   36,
+		positionRangeEnd:       36,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
@@ -76,10 +79,11 @@ var hoverTestCases = []hoverTestCase{
 		endLine:                13,
 		positionCharacterStart: 4,
 		positionCharacterEnd:   5,
+		positionRangeEnd:       5,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeIf}),
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeIf, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".IsActive"}}}}}}),
 			},
 		},
 		expectingError: false,
@@ -87,14 +91,15 @@ var hoverTestCases = []hoverTestCase{
 	{
 		name:                   "Control structure hover - range statement",
 		documentText:           docText,
-		positionLine:           5,
+		positionLine:           4,
 		endLine:                6,
-		positionCharacterStart: 4,
+		positionCharacterStart: 5,
 		positionCharacterEnd:   5,
+		positionRangeEnd:       5,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeRange}),
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeRange, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".Roles"}}}}}}),
 			},
 		},
 		expectingError: false,
@@ -103,13 +108,14 @@ var hoverTestCases = []hoverTestCase{
 		name:                   "Control structure hover - with statement",
 		documentText:           docText,
 		positionLine:           1,
-		endLine:                13,
+		endLine:                12,
 		positionCharacterStart: 3,
-		positionCharacterEnd:   10,
+		positionCharacterEnd:   7,
+		positionRangeEnd:       37,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeWith}),
+				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeWith, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".User"}}}}}}),
 			},
 		},
 		expectingError: false,
@@ -117,10 +123,11 @@ var hoverTestCases = []hoverTestCase{
 	{
 		name:                   "Variable hover - index in range loop",
 		documentText:           docText,
-		positionLine:           6,
-		endLine:                6,
+		positionLine:           11,
+		endLine:                11,
 		positionCharacterStart: 5,
 		positionCharacterEnd:   10,
+		positionRangeEnd:       10,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
@@ -136,6 +143,7 @@ var hoverTestCases = []hoverTestCase{
 		endLine:                8,
 		positionCharacterStart: 3,
 		positionCharacterEnd:   6,
+		positionRangeEnd:       6,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
@@ -151,6 +159,7 @@ var hoverTestCases = []hoverTestCase{
 		endLine:                8,
 		positionCharacterStart: 11,
 		positionCharacterEnd:   14,
+		positionRangeEnd:       14,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
@@ -166,6 +175,7 @@ var hoverTestCases = []hoverTestCase{
 		endLine:                8,
 		positionCharacterStart: 16,
 		positionCharacterEnd:   18,
+		positionRangeEnd:       18,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
@@ -218,7 +228,7 @@ func TestHover(t *testing.T) {
 					},
 					End: protocol.Position{
 						Line:      tc.endLine,
-						Character: tc.positionCharacterEnd,
+						Character: tc.positionRangeEnd,
 					},
 				}, hoverResult.Range)
 			}
