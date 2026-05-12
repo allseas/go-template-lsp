@@ -83,6 +83,7 @@ type UndefinedNode struct {
 	Pos
 	tr    *Tree
 	cause string
+	str   string
 }
 
 func (u *UndefinedNode) tree() *Tree {
@@ -90,19 +91,25 @@ func (u *UndefinedNode) tree() *Tree {
 }
 
 func (u *UndefinedNode) String() string {
-	return "undefined at position " + strconv.Itoa(int(u.Pos)) + ": " + u.cause
+	var sb strings.Builder
+	u.writeTo(&sb)
+	return sb.String()
+}
+
+func (u *UndefinedNode) Cause() string {
+	return u.cause
 }
 
 func (u *UndefinedNode) writeTo(sb *strings.Builder) {
-	sb.WriteString(u.String())
+	sb.WriteString(u.str)
 }
 
 func (u *UndefinedNode) Type() NodeType {
 	return NodeUndefined
 }
 
-func (t *Tree) newUndefined(pos Pos, cause string) *UndefinedNode {
-	return &UndefinedNode{NodeType: NodeUndefined, Pos: pos, tr: t, cause: cause}
+func (t *Tree) newUndefined(pos Pos, cause string, str string) *UndefinedNode {
+	return &UndefinedNode{NodeType: NodeUndefined, Pos: pos, tr: t, cause: cause, str: str}
 }
 
 func (u *UndefinedNode) Copy() Node {
@@ -243,6 +250,10 @@ func (p *PipeNode) append(command *CommandNode) {
 }
 
 func (p *PipeNode) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+
 	var sb strings.Builder
 	p.writeTo(&sb)
 	return sb.String()

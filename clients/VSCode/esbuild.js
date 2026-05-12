@@ -14,12 +14,12 @@ const copyBinariesPlugin = {
         build.onEnd(async (result) => {
             if (result.errors.length > 0) return;
 
-            // Copy binaries from dist/server directory to dist/server/bin
-            const srcBinDir = path.join(__dirname, "../../dist/server");
-            const distBinDir = path.join(__dirname, "dist/server/bin");
+            // Copy binaries from ../../out/server directory to out/server/bin
+            const srcBinDir = path.join(__dirname, "../../server_binaries");
+            const outBinDir = path.join(__dirname, "out/server/bin");
 
-            // Ensure dist/server/bin exists
-            fs.mkdirSync(distBinDir, { recursive: true });
+            // Ensure out/server/bin exists
+            fs.mkdirSync(outBinDir, { recursive: true }); //I dont think this works as intended?
 
             const binaries = [
                 "gotmpl-server",
@@ -32,7 +32,7 @@ const copyBinariesPlugin = {
             binaries.forEach((binary) => {
                 const src = path.join(srcBinDir, binary);
                 if (fs.existsSync(src)) {
-                    const dst = path.join(distBinDir, binary);
+                    const dst = path.join(outBinDir, binary);
                     fs.copyFileSync(src, dst);
                     // Make binary executable on Unix
                     if (!binary.endsWith(".exe")) {
@@ -53,7 +53,7 @@ async function main() {
         sourcemap: !production,
         sourcesContent: false,
         platform: "node",
-        outfile: "dist/extension.js",
+        outfile: "out/extension.js",
         external: ["vscode"],
         logLevel: "warning",
         plugins: [

@@ -43,7 +43,7 @@ dependencies {
         bundledPlugin("com.intellij.properties")
         bundledPlugin("com.intellij.modules.json")
         bundledPlugin("org.jetbrains.plugins.textmate")
-        plugin("com.redhat.devtools.lsp4ij", "0.9.0")
+        plugin("com.redhat.devtools.lsp4ij", "0.19.3")
     }
     integrationTestImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
     integrationTestImplementation("org.kodein.di:kodein-di-jvm:7.20.2")
@@ -139,8 +139,7 @@ tasks.register<Copy>("copyServerBin") {
             .resolve("..")
             .resolve("..")
             .resolve("..")
-            .resolve("dist")
-            .resolve("server"),
+            .resolve("server_binaries"),
     )
     include("**")
 

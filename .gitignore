@@ -3,3 +3,7 @@
 node_modules
 dist
 coverage.out
+server_binaries/
+*.vsix
+**/*/*.vsix
+server/handlers/__debug_bin925578420

@@ -19,11 +19,20 @@ class TextTemplateLspServerConnectionProvider(
     private fun getBinary(): File {
         val platform = detectPlatform()
         val binaryName = "gotmpl-server$platform"
-        val resource = javaClass.getResourceAsStream("bin/language-server$binaryName")
+        val resource = javaClass.classLoader.getResourceAsStream("bin/language-server/$binaryName")
         val cacheDir = File(PathManager.getSystemPath(), "go-text-template-lsp").also { it.mkdirs() }
-        val binaryFile = File(cacheDir, binaryName)
 
-        resource.use { Files.copy(it, binaryFile.toPath()) }
+        val binaryFile = File(cacheDir, binaryName)
+        if (!binaryFile.exists()) {
+            resource.use { Files.copy(it, binaryFile.toPath()) }
+        } else {
+            // Check if the existing binary is the same as the resource, if not, replace it
+            val existingBytes = Files.readAllBytes(binaryFile.toPath())
+            val resourceBytes = resource.use { it.readAllBytes() }
+            if (!existingBytes.contentEquals(resourceBytes)) {
+                Files.copy(resourceBytes.inputStream(), binaryFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
         binaryFile.setExecutable(true)
         return binaryFile
     }

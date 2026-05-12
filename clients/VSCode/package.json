@@ -6,6 +6,11 @@
     "engines": {
         "vscode": "^1.116.0"
     },
+    "repository": {
+        "url": "",
+        "directory": "",
+        "type": ""
+    },
     "categories": [
         "Programming Languages"
     ],
@@ -15,14 +20,15 @@
         "check-types": "tsc --noEmit",
         "watch:esbuild": "node esbuild.js --watch",
         "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-        "vscode:prepublish": "npm run package",
-        "package": "npm run check-types && node esbuild.js --production",
+        "deprecated:vscode:prepublish": "npm run package",
+        "deprecated:package": "npm run check-types && node esbuild.js --production",
         "lint:fix": "npx eslint . --fix",
         "lint:check": "npx eslint .",
         "format": "npx prettier --write .",
         "format:check": "npx prettier --check .",
         "test": "npm run compile; vscode-test",
-        "verify": "npm test && npm run lint:check && npm run format:check"
+        "verify": "npm test && npm run lint:check && npm run format:check",
+        "package": "npm run verify && node esbuild.js --production && vsce package && find . | grep '.vsix' | xargs -i mv {} ../../"
     },
     "dependencies": {
         "vscode-languageclient": "^9.0.1"
@@ -33,6 +39,7 @@
         "@types/vscode": "^1.116.0",
         "@vscode/test-cli": "^0.0.12",
         "@vscode/test-electron": "^2.5.2",
+        "@vscode/vsce": "^3.9.1",
         "esbuild": "^0.28.0",
         "eslint": "^10.2.1",
         "typescript": "^6.0.3",

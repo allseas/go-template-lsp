@@ -70,7 +70,7 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
           <server factoryClass="com.example.gotexttemplate.TextTemplateLspServerFactory"
                id="go-text-template-lsp" />
 
-          <fileNamePatternMapping patterns=".tmpl" serverId="go-text-template-lsp" />
+          <fileNamePatternMapping patterns="*.tmpl" serverId="go-text-template-lsp" />
      </extensions>
 
 </idea-plugin>
