@@ -43,8 +43,7 @@
     "contributes": {
         "configurationDefaults": {
             "[gotmpl]": {
-                "editor.snippetSuggestions": "none",
-                "editor.suggest.showSnippets": false
+                "editor.wordBasedSuggestions": "off"
             }
         },
         "iconThemes": [
