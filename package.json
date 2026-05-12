@@ -9,9 +9,10 @@
   "workspaces": ["clients/*", "scripts"],
   "scripts": {
     "build:server": "ts-node --esm scripts/build-server-binaries.ts",
-    "build:vscode": "npm run build:server && (cd clients/VSCode && npm run compile)",
-    "package:vscode": "npm run build:server && (cd clients/VSCode && npm run package)",
-    "watch:vscode": "(ts-node --esm scripts/watch-server-binaries.ts) | (cd clients/VSCode && npm run watch)"
+    "build:vscode": "npm run build:server && (cd clients/VSCode; npm run compile)",
+    "package:vscode": "npm run build:server && npm run package -w clients/VSCode",
+    "watch:vscode": "(ts-node --esm scripts/watch-server-binaries.ts) | (cd clients/VSCode && npm run watch)",
+    "launch:vscode": "npm run package:vscode && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test"
   },
   "keywords": [],
   "author": "",
