@@ -241,6 +241,15 @@ func (s *scopeTracker) visibleVars() []string {
 	return result
 }
 
+func (s *scopeTracker) has(name string) bool {
+	for i := len(s.stack) - 1; i >= 0; i-- {
+		if _, ok := s.stack[i][name]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // hasDecl determines whether a template action string contains a variable declaration operator (:=)
 func hasDecl(action string) bool {
 	return strings.Contains(action, ":=")

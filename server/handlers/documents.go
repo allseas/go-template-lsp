@@ -93,18 +93,21 @@ func (s *documentStore) Remove(uri string) {
 }
 
 // didOpen is an LSP notification handler that registers a new document in the store when it is opened.
-func didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
+func didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 	if !GetConfig().EnableServer {
 		log.Debug().Msg("didOpen received but server is disabled by config")
 		return nil
 	}
 
 	store.Set(params.TextDocument.URI, params.TextDocument.Text)
+	if ctx != nil {
+		publishDiagnostics(ctx, params.TextDocument.URI, params.TextDocument.Text)
+	}
 	return nil
 }
 
 // didChange is an LSP notification handler that updates the stored document content when the user edits the file.
-func didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
+func didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
 	log.Debug().
 		Str("uri", params.TextDocument.URI).
 		Msg("document changed")
@@ -115,8 +118,17 @@ func didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) er
 	}
 
 	for _, change := range params.ContentChanges {
-		if c, ok := change.(protocol.TextDocumentContentChangeEventWhole); ok {
+		switch c := change.(type) {
+		case protocol.TextDocumentContentChangeEventWhole:
 			store.Set(params.TextDocument.URI, c.Text)
+			if ctx != nil {
+				publishDiagnostics(ctx, params.TextDocument.URI, c.Text)
+			}
+		case protocol.TextDocumentContentChangeEvent:
+			store.Set(params.TextDocument.URI, c.Text)
+			if ctx != nil {
+				publishDiagnostics(ctx, params.TextDocument.URI, c.Text)
+			}
 		}
 	}
 	return nil
