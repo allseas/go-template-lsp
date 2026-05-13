@@ -1,9 +1,11 @@
-package com.example.gotexttemplate
+package com.allseas.gotexttemplate
 
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.Project
+import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.panel
+import javax.swing.JList
 
 class ProjectSettingsConfigurable(
     private val project: Project,
@@ -25,9 +27,9 @@ class ProjectSettingsConfigurable(
         }
 }
 
-private class NullableBooleanRenderer : com.intellij.ui.SimpleListCellRenderer<Boolean?>() {
+private class NullableBooleanRenderer : SimpleListCellRenderer<Boolean?>() {
     override fun customize(
-        list: javax.swing.JList<out Boolean?>,
+        list: JList<out Boolean?>,
         value: Boolean?,
         index: Int,
         selected: Boolean,
@@ -42,9 +44,9 @@ private class NullableBooleanRenderer : com.intellij.ui.SimpleListCellRenderer<B
     }
 }
 
-private class NullableTraceLevelRenderer : com.intellij.ui.SimpleListCellRenderer<AppSettings.TraceLevel?>() {
+private class NullableTraceLevelRenderer : SimpleListCellRenderer<AppSettings.TraceLevel?>() {
     override fun customize(
-        list: javax.swing.JList<out AppSettings.TraceLevel?>,
+        list: JList<out AppSettings.TraceLevel?>,
         value: AppSettings.TraceLevel?,
         index: Int,
         selected: Boolean,
