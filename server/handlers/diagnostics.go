@@ -162,7 +162,11 @@ func analyzeList(list *parse.ListNode, text string, seen map[string]bool) []prot
 }
 
 // checkAction inspects a single action node for duplicate variable declarations.
-func checkAction(action *parse.ActionNode, text string, seen map[string]bool) []protocol.Diagnostic {
+func checkAction(
+	action *parse.ActionNode,
+	text string,
+	seen map[string]bool,
+) []protocol.Diagnostic {
 	var diagnostics []protocol.Diagnostic
 
 	if action.Pipe == nil {
@@ -206,7 +210,10 @@ func findErrorRange(text string, err error) protocol.Range {
 				if col := strings.Index(lines[lineIdx], varName); col != -1 {
 					return protocol.Range{
 						Start: protocol.Position{Line: uint32(lineIdx), Character: uint32(col)},
-						End:   protocol.Position{Line: uint32(lineIdx), Character: uint32(col + len(varName))},
+						End: protocol.Position{
+							Line:      uint32(lineIdx),
+							Character: uint32(col + len(varName)),
+						},
 					}
 				}
 			}
