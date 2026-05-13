@@ -35,8 +35,11 @@ var docText = `
 	{{- end -}}
 {{- end -}}
 `
-var docRootNode, err = tryParse(docText)
-var shortDocRootNode, err2 = tryParse(shortDocText)
+
+var (
+	docRootNode, _      = tryParse(docText)
+	shortDocRootNode, _ = tryParse(shortDocText)
+)
 
 var shortDocText = `
 {{range $i, $v := .Items }}
@@ -54,8 +57,11 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       11,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageEnd(docRootNode.Root.Nodes[1], protocol.Position{Line: 1, Character: 3}),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageEnd(
+					docRootNode.Root.Nodes[1],
+					protocol.Position{Line: 1, Character: 3},
+				),
 			},
 		},
 		expectingError: false,
@@ -70,8 +76,11 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       12,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageEnd(docRootNode.Root.Nodes[1].(*parse.WithNode).List.Nodes[6], protocol.Position{Line: 7, Character: 3}),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageEnd(
+					docRootNode.Root.Nodes[1].(*parse.WithNode).List.Nodes[6],
+					protocol.Position{Line: 7, Character: 3},
+				),
 			},
 		},
 		expectingError: false,
@@ -86,8 +95,11 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       9,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageEnd(shortDocRootNode.Root.Nodes[1], protocol.Position{Line: 1, Character: 0}),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageEnd(
+					shortDocRootNode.Root.Nodes[1],
+					protocol.Position{Line: 1, Character: 0},
+				),
 			},
 		},
 		expectingError: false,
@@ -102,8 +114,11 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       11,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageEnd(docRootNode.Root.Nodes[1], protocol.Position{Line: 1, Character: 3}),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageEnd(
+					docRootNode.Root.Nodes[1],
+					protocol.Position{Line: 1, Character: 3},
+				),
 			},
 		},
 		expectingError: false,
@@ -118,8 +133,11 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       11,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageEnd(docRootNode.Root.Nodes[1].(*parse.WithNode).List.Nodes[4], protocol.Position{Line: 4, Character: 3}),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageEnd(
+					docRootNode.Root.Nodes[1].(*parse.WithNode).List.Nodes[4],
+					protocol.Position{Line: 4, Character: 3},
+				),
 			},
 		},
 		expectingError: false,
@@ -215,8 +233,17 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       5,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeIf, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".IsActive"}}}}}}),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageBranch(
+					&parse.BranchNode{
+						NodeType: parse.NodeIf,
+						Pipe: &parse.PipeNode{
+							Cmds: []*parse.CommandNode{
+								{Args: []parse.Node{&parse.IdentifierNode{Ident: ".IsActive"}}},
+							},
+						},
+					},
+				),
 			},
 		},
 		expectingError: false,
@@ -231,8 +258,17 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       5,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeRange, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".Roles"}}}}}}),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageBranch(
+					&parse.BranchNode{
+						NodeType: parse.NodeRange,
+						Pipe: &parse.PipeNode{
+							Cmds: []*parse.CommandNode{
+								{Args: []parse.Node{&parse.IdentifierNode{Ident: ".Roles"}}},
+							},
+						},
+					},
+				),
 			},
 		},
 		expectingError: false,
@@ -247,8 +283,17 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       32,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageBranch(&parse.BranchNode{NodeType: parse.NodeWith, Pipe: &parse.PipeNode{Cmds: []*parse.CommandNode{{Args: []parse.Node{&parse.IdentifierNode{Ident: ".User"}}}}}}),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageBranch(
+					&parse.BranchNode{
+						NodeType: parse.NodeWith,
+						Pipe: &parse.PipeNode{
+							Cmds: []*parse.CommandNode{
+								{Args: []parse.Node{&parse.IdentifierNode{Ident: ".User"}}},
+							},
+						},
+					},
+				),
 			},
 		},
 		expectingError: false,

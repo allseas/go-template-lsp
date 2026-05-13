@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"errors"
+	"math"
 	"regexp"
 	"strings"
 	parse "text-template-parser"
@@ -13,7 +14,6 @@ import (
 )
 
 func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
-
 	// Get document content
 
 	doc, ok := store.Get(params.TextDocument.URI)
@@ -30,7 +30,12 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		return
 	}
 	// Check for end tag hover
-	if branchNode, endRange := endTagHover(target, offset, params.Position, doc.text, doc.tree.Root); branchNode != nil {
+	if branchNode, endRange := endTagHover(
+		target,
+		params.Position,
+		doc.text,
+		doc.tree.Root,
+	); branchNode != nil {
 		log.Debug().Msg("Hover on end tag of BranchNode")
 		hover = &protocol.Hover{
 			Range: &endRange,
@@ -183,26 +188,28 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 }
 
 // endTagHover checks if the hover position is within an end tag and returns the corresponding branch node and range if so.
-func endTagHover(target parse.Node, offset int, pos protocol.Position, text string, root parse.Node) (res_node parse.Node, endRange protocol.Range) {
+func endTagHover(
+	target parse.Node,
+	pos protocol.Position,
+	text string,
+	root parse.Node,
+) (resnode parse.Node, endRange protocol.Range) {
 	lines := strings.Split(text, "\n")
 
 	targetPos := offsetToPosition(text, int(target.Position()))
 
-	if pos.Line >= uint32(len(lines)) {
+	if int(pos.Line) >= len(lines) {
 		return
 	}
-	//TODO: nested end tags have some edge cases that should be tested and handled better
-	// eg no node between the two end tags will always point to the inner end tag,
-	// even if the hover is on the outer end tag
 
-	line := lines[pos.Line]
-	if pos.Character > uint32(len(line)) {
+	line := lines[int(pos.Line)]
+	if int(pos.Character) > len(line) {
 		return
 	}
 	reg := regexp.MustCompile(`{{-?\s*end\s*-?}}`)
 	matches := reg.FindAllStringIndex(line, -1)
 	for _, match := range matches {
-		if pos.Character >= uint32(match[0]) && pos.Character <= uint32(match[1]) {
+		if int(pos.Character) >= match[0] && int(pos.Character) <= match[1] {
 			log.Debug().Msg("Position is within an end tag")
 			// Scan backwards until target node is found to count end tags and find the corresponding branch node
 			cline := int(pos.Line)
@@ -236,15 +243,18 @@ func endTagHover(target parse.Node, offset int, pos protocol.Position, text stri
 						continue
 					}
 					log.Debug().Msgf("Found branch node of type %T for end tag hover", node)
-					res_node = path[i]
+					resnode = path[i]
+					if match[1] < 0 || match[1] > math.MaxUint32 {
+						panic("line length overflows uint32??")
+					}
 					endRange = protocol.Range{
 						Start: protocol.Position{
 							Line:      pos.Line,
-							Character: uint32(match[0]),
+							Character: uint32(match[0]), //nolint:gosec
 						},
 						End: protocol.Position{
 							Line:      pos.Line,
-							Character: uint32(match[1]),
+							Character: uint32(match[1]), //nolint:gosec
 						},
 					}
 					return
@@ -271,7 +281,6 @@ func isIndexVariable(target *parse.VariableNode, root *parse.ListNode) bool {
 	pipe := branchNode.Pipe
 
 	return pipe.Decl[0] == target
-
 }
 
 func wasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
