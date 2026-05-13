@@ -31,16 +31,99 @@ var docText = `
 	{{ $lastLogin := .LastLogin }}
 	{{range $i, $v := .LoginHistory }}
 		{{ $i }}: {{ $v }} - {{ $lastLogin }}
-	{{ end }}
-	{{ end }}
-{{ end }}
+	{{- end -}}
+	{{- end -}}
+{{- end -}}
 `
+var docRootNode, err = tryParse(docText)
+var shortDocRootNode, err2 = tryParse(shortDocText)
+
 var shortDocText = `
 {{range $i, $v := .Items }}
 	{{$i}} - {{ $v }} 
 {{ end }}`
 
 var hoverTestCases = []hoverTestCase{
+	{
+		name:                   "triple end tags",
+		documentText:           docText,
+		positionLine:           15,
+		endLine:                15,
+		positionCharacterStart: 0,
+		positionCharacterEnd:   10,
+		positionRangeEnd:       11,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageEnd(docRootNode.Root.Nodes[1], protocol.Position{Line: 1, Character: 3}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "double end tags",
+		documentText:           docText,
+		positionLine:           14,
+		endLine:                14,
+		positionCharacterStart: 1,
+		positionCharacterEnd:   11,
+		positionRangeEnd:       12,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageEnd(docRootNode.Root.Nodes[1].(*parse.WithNode).List.Nodes[6], protocol.Position{Line: 7, Character: 3}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "end tag :cc",
+		documentText:           shortDocText,
+		positionLine:           3,
+		endLine:                3,
+		positionCharacterStart: 0,
+		positionCharacterEnd:   9,
+		positionRangeEnd:       9,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageEnd(shortDocRootNode.Root.Nodes[1], protocol.Position{Line: 1, Character: 0}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "end tag - hover on end tag of if statement",
+		documentText:           docText,
+		positionLine:           15,
+		endLine:                15,
+		positionCharacterStart: 0,
+		positionCharacterEnd:   8,
+		positionRangeEnd:       11,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageEnd(docRootNode.Root.Nodes[1], protocol.Position{Line: 1, Character: 3}),
+			},
+		},
+		expectingError: false,
+	},
+	{
+		name:                   "end tag - hover on end tag of if statement",
+		documentText:           docText,
+		positionLine:           6,
+		endLine:                6,
+		positionCharacterStart: 1,
+		positionCharacterEnd:   10,
+		positionRangeEnd:       11,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageEnd(docRootNode.Root.Nodes[1].(*parse.WithNode).List.Nodes[4], protocol.Position{Line: 4, Character: 3}),
+			},
+		},
+		expectingError: false,
+	},
 	{
 		name:                   "Index variable hover use - index variable used in range loop body",
 		documentText:           shortDocText,
@@ -128,7 +211,7 @@ var hoverTestCases = []hoverTestCase{
 		positionLine:           7,
 		endLine:                13,
 		positionCharacterStart: 4,
-		positionCharacterEnd:   5,
+		positionCharacterEnd:   1,
 		positionRangeEnd:       5,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
@@ -161,7 +244,7 @@ var hoverTestCases = []hoverTestCase{
 		endLine:                12,
 		positionCharacterStart: 3,
 		positionCharacterEnd:   7,
-		positionRangeEnd:       37,
+		positionRangeEnd:       32,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,

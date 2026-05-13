@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	parse "text-template-parser"
+
+	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 var nodeMessage = map[parse.NodeType]string{
@@ -20,7 +22,7 @@ var nodeMessage = map[parse.NodeType]string{
 	parse.NodeVariable:   "**Variable** - `%s`\n\n",
 	parse.NodeText:       "**Text** - `%.15s`\n\nPlain text content.",
 	parse.NodeTemplate:   "**Template** - `%s`\n\nDefines a template named `%s`.",
-	parse.NodeList:       "***Structure %d*** - \n\n Shouldnt show up like ever",
+	parse.NodeList:       "***Document root*** - \n\n Root node of the parse tree, containing all other nodes.",
 	parse.NodeBool:       "**Boolean literal** - `%v`\n\nA literal value.",
 	parse.NodeNumber:     "**Number literal** - `%s`\n\nA literal numeric value.",
 	parse.NodeString:     "**String literal** - `%s`\n\nA literal string value.",
@@ -34,6 +36,24 @@ var specialMessages = map[string]string{
 	"len":   "**Len Function** - `len`\n\nA built-in function that returns the length of its argument.",
 	"not":   "**Not Function** - `not`\n\nA built-in function that returns the boolean negation of its argument.",
 	"or":    "**Or Function** - `or`\n\nA built-in function that returns the first argument if it is true, and the last argument otherwise.",
+	"end":   "**End Tag** - \n\nMarks the end of %s, which started at line %d.",
+}
+
+// MessageEnd generates a hover message for an end tag of a BranchNode, including the branch type and line number where the branch starts.
+// TODO: should hyperlink the line number to the start tag of the branch
+func MessageEnd(n parse.Node, pos protocol.Position) string {
+	switch node := n.(type) {
+	case *parse.IfNode:
+		return fmt.Sprintf(specialMessages["end"], "if", pos.Line)
+	case *parse.RangeNode:
+		return fmt.Sprintf(specialMessages["end"], "range", pos.Line)
+	case *parse.WithNode:
+		return fmt.Sprintf(specialMessages["end"], "with", pos.Line)
+	case *parse.TemplateNode:
+		return fmt.Sprintf(specialMessages["end"], "template "+node.Name, node.Line)
+	default:
+		return ""
+	}
 }
 
 // MessageAction generates a hover message for an ActionNode, including the full action string.
@@ -145,5 +165,3 @@ func MessageNil(_ *parse.NilNode) string {
 func MessageUndefined(n *parse.UndefinedNode) string {
 	return fmt.Sprintf(nodeMessage[parse.NodeUndefined], n.String())
 }
-
-// GetHoverMessage generates a hover message for a given parse.Node based on its type.

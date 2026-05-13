@@ -3,6 +3,8 @@ package handlers
 
 import (
 	"errors"
+	"regexp"
+	"strings"
 	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
@@ -11,6 +13,7 @@ import (
 )
 
 func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
+
 	// Get document content
 
 	doc, ok := store.Get(params.TextDocument.URI)
@@ -26,6 +29,18 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		err = errors.New("node not found")
 		return
 	}
+	// Check for end tag hover
+	if branchNode, endRange := endTagHover(target, offset, params.Position, doc.text, doc.tree.Root); branchNode != nil {
+		log.Debug().Msg("Hover on end tag of BranchNode")
+		hover = &protocol.Hover{
+			Range: &endRange,
+		}
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageEnd(branchNode, offsetToPosition(doc.text, int(branchNode.Position()))),
+		}
+		return
+	}
 	nodeRange := nodeToRange(target, doc.text)
 
 	hover = &protocol.Hover{
@@ -35,6 +50,8 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		},
 		Range: &nodeRange,
 	}
+
+	// Build hover content based on node type
 
 	switch target := target.(type) {
 	case *parse.ActionNode:
@@ -161,6 +178,81 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 
 	// Analyze position
 	// Build hover content
+
+	return
+}
+
+// endTagHover checks if the hover position is within an end tag and returns the corresponding branch node and range if so.
+func endTagHover(target parse.Node, offset int, pos protocol.Position, text string, root parse.Node) (res_node parse.Node, endRange protocol.Range) {
+	lines := strings.Split(text, "\n")
+
+	targetPos := offsetToPosition(text, int(target.Position()))
+
+	if pos.Line >= uint32(len(lines)) {
+		return
+	}
+	//TODO: nested end tags have some edge cases that should be tested and handled better
+	// eg no node between the two end tags will always point to the inner end tag,
+	// even if the hover is on the outer end tag
+
+	line := lines[pos.Line]
+	if pos.Character > uint32(len(line)) {
+		return
+	}
+	reg := regexp.MustCompile(`{{-?\s*end\s*-?}}`)
+	matches := reg.FindAllStringIndex(line, -1)
+	for _, match := range matches {
+		if pos.Character >= uint32(match[0]) && pos.Character <= uint32(match[1]) {
+			log.Debug().Msg("Position is within an end tag")
+			// Scan backwards until target node is found to count end tags and find the corresponding branch node
+			cline := int(pos.Line)
+			character := int(pos.Character)
+			count := 0
+			for cline > int(targetPos.Line) || (cline == int(targetPos.Line) && character > int(targetPos.Character)) {
+				line := lines[cline]
+				matches := reg.FindAllStringIndex(line, -1)
+				for j := len(matches) - 1; j >= 0; j-- {
+					match := matches[j]
+					if cline == int(pos.Line) && (character >= match[0]) {
+						continue
+					}
+					if cline == int(targetPos.Line) && (match[1] >= int(targetPos.Character)) {
+						continue
+					}
+					count++
+				}
+				cline--
+
+			}
+			// Find the corresponding branch node for this end tag
+			ctx := &Context{Vars: make(map[string]parse.Node)}
+			buildPath(root, target, ctx)
+			path := ctx.Path
+			for i := len(path) - 1; i >= 0; i-- {
+				switch node := path[i].(type) {
+				case *parse.RangeNode, *parse.IfNode, *parse.WithNode, *parse.TemplateNode:
+					if count > 0 {
+						count--
+						continue
+					}
+					log.Debug().Msgf("Found branch node of type %T for end tag hover", node)
+					res_node = path[i]
+					endRange = protocol.Range{
+						Start: protocol.Position{
+							Line:      pos.Line,
+							Character: uint32(match[0]),
+						},
+						End: protocol.Position{
+							Line:      pos.Line,
+							Character: uint32(match[1]),
+						},
+					}
+					return
+				}
+			}
+
+		}
+	}
 
 	return
 }
