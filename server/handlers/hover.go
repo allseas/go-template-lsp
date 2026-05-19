@@ -36,7 +36,7 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		doc.text,
 		doc.tree.Root,
 	); branchNode != nil {
-		log.Debug().Msg("Hover on end tag of BranchNode")
+		// log.Debug().Msg("Hover on end tag of BranchNode")
 		hover = &protocol.Hover{
 			Range: &endRange,
 		}
@@ -46,6 +46,24 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		}
 		return
 	}
+	// Check for else tag hover
+	if branchNode, elseRange := elseNodeHover(
+		target,
+		params.Position,
+		doc.text,
+		doc.tree.Root,
+	); branchNode != nil {
+		log.Debug().Msg("Hover on else tag of BranchNode")
+		hover = &protocol.Hover{
+			Range: &elseRange,
+		}
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageElse(&branchNode, offsetToPosition(doc.text, int(branchNode.Position()))),
+		}
+		return
+	}
+
 	nodeRange := nodeToRange(target, doc.text)
 
 	hover = &protocol.Hover{
@@ -210,7 +228,7 @@ func endTagHover(
 	matches := reg.FindAllStringIndex(line, -1)
 	for _, match := range matches {
 		if int(pos.Character) >= match[0] && int(pos.Character) <= match[1] {
-			log.Debug().Msg("Position is within an end tag")
+			// log.Debug().Msg("Position is within an end tag")
 			// Scan backwards until target node is found to count end tags and find the corresponding branch node
 			cline := int(pos.Line)
 			character := int(pos.Character)
@@ -236,18 +254,99 @@ func endTagHover(
 			buildPath(root, target, ctx)
 			path := ctx.Path
 			for i := len(path) - 1; i >= 0; i-- {
-				switch node := path[i].(type) {
+				switch path[i].(type) {
 				case *parse.RangeNode, *parse.IfNode, *parse.WithNode, *parse.TemplateNode:
 					if count > 0 {
 						count--
 						continue
 					}
-					log.Debug().Msgf("Found branch node of type %T for end tag hover", node)
+					// log.Debug().Msgf("Found branch node of type %T for end tag hover", node)
 					resnode = path[i]
 					if match[1] < 0 || match[1] > math.MaxUint32 {
 						panic("line length overflows uint32??")
 					}
 					endRange = protocol.Range{
+						Start: protocol.Position{
+							Line:      pos.Line,
+							Character: uint32(match[0]), //nolint:gosec
+						},
+						End: protocol.Position{
+							Line:      pos.Line,
+							Character: uint32(match[1]), //nolint:gosec
+						},
+					}
+					return
+				}
+			}
+
+		}
+	}
+
+	return
+}
+
+// elseNodeHover checks if the hover position is within an else tag and returns the corresponding branch node and range if so.
+func elseNodeHover(
+	target parse.Node,
+	pos protocol.Position,
+	text string,
+	root parse.Node,
+) (resnode parse.Node, elseRange protocol.Range) {
+	lines := strings.Split(text, "\n")
+
+	targetPos := offsetToPosition(text, int(target.Position()))
+
+	if int(pos.Line) >= len(lines) {
+		return
+	}
+
+	line := lines[int(pos.Line)]
+	if int(pos.Character) > len(line) {
+		return
+	}
+	reg := regexp.MustCompile(`{{-?\s*else\b`)
+	endReg := regexp.MustCompile(`{{-?\s*end\s*-?}}`)
+	matches := reg.FindAllStringIndex(line, -1)
+	for _, match := range matches {
+		if int(pos.Character) >= match[0] && int(pos.Character) <= match[1] {
+			log.Debug().Msg("Position is within an else tag")
+			// Scan backwards until target node is found to count else tags and find the corresponding branch node
+			cline := int(pos.Line)
+			character := int(pos.Character)
+			count := 0
+			for cline > int(targetPos.Line) || (cline == int(targetPos.Line) && character > int(targetPos.Character)) {
+				line := lines[cline]
+				matches := endReg.FindAllStringIndex(line, -1)
+				for j := len(matches) - 1; j >= 0; j-- {
+					match := matches[j]
+					if cline == int(pos.Line) && (character >= match[0]) {
+						continue
+					}
+					if cline == int(targetPos.Line) && (match[1] >= int(targetPos.Character)) {
+						continue
+					}
+					count++
+				}
+				cline--
+
+			}
+			// Find the corresponding branch node for this else tag
+			ctx := &Context{Vars: make(map[string]parse.Node)}
+			buildPath(root, target, ctx)
+			path := ctx.Path
+			for i := len(path) - 1; i >= 0; i-- {
+				switch path[i].(type) {
+				case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
+					if count > 0 {
+						count--
+						continue
+					}
+					// log.Debug().Msgf("Found branch node of type %T for else tag hover", node)
+					resnode = path[i]
+					if match[1] < 0 || match[1] > math.MaxUint32 {
+						panic("line length overflows uint32??")
+					}
+					elseRange = protocol.Range{
 						Start: protocol.Position{
 							Line:      pos.Line,
 							Character: uint32(match[0]), //nolint:gosec

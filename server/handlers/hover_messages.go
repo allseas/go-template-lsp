@@ -11,7 +11,7 @@ import (
 
 var nodeMessage = map[parse.NodeType]string{
 	parse.NodeAction:     "**Action** - `{{ %s }}`\n\nAction running a command or pipeline.",
-	parse.NodeIf:         "**If Branch** - `{{ if  }}`\n\n",
+	parse.NodeIf:         "**If Branch** - `{{ if %s }}`\n\n Conditional branch executed if %s evaluates to true.",
 	parse.NodeRange:      "**Range Branch** - `{{ range %s }}`\n\nBranch executed for each item in a collection.",
 	parse.NodeWith:       "**With Branch** - `{{ with %s }}`\n\nBranch executed with a new context.",
 	parse.NodeCommand:    "**Command** - `%s`\n\nA command within an action.",
@@ -37,6 +37,21 @@ var specialMessages = map[string]string{
 	"not":   "**Not Function** - `not`\n\nA built-in function that returns the boolean negation of its argument.",
 	"or":    "**Or Function** - `or`\n\nA built-in function that returns the first argument if it is true, and the last argument otherwise.",
 	"end":   "**End Tag** - \n\nMarks the end of %s, which started at line %d.",
+	"else":  "**Else Branch** - \n\nMarks the else branch of conditional %s statement starting at line %d.",
+}
+
+// MessageElse generates a hover message for an else tag of a BranchNode, including the branch type and line number where the if statement starts.
+func MessageElse(n *parse.Node, pos protocol.Position) string {
+	switch (*n).(type) {
+	case *parse.IfNode:
+		return fmt.Sprintf(specialMessages["else"], "if", pos.Line+1)
+	case *parse.RangeNode:
+		return fmt.Sprintf(specialMessages["else"], "range", pos.Line+1)
+	case *parse.WithNode:
+		return fmt.Sprintf(specialMessages["else"], "with", pos.Line+1)
+	default:
+		return "????????????" + (*n).String() + "????????????"
+	}
 }
 
 // MessageEnd generates a hover message for an end tag of a BranchNode, including the branch type and line number where the branch starts.
@@ -44,13 +59,13 @@ var specialMessages = map[string]string{
 func MessageEnd(n parse.Node, pos protocol.Position) string {
 	switch node := n.(type) {
 	case *parse.IfNode:
-		return fmt.Sprintf(specialMessages["end"], "if", pos.Line)
+		return fmt.Sprintf(specialMessages["end"], "if", pos.Line+1)
 	case *parse.RangeNode:
-		return fmt.Sprintf(specialMessages["end"], "range", pos.Line)
+		return fmt.Sprintf(specialMessages["end"], "range", pos.Line+1)
 	case *parse.WithNode:
-		return fmt.Sprintf(specialMessages["end"], "with", pos.Line)
+		return fmt.Sprintf(specialMessages["end"], "with", pos.Line+1)
 	case *parse.TemplateNode:
-		return fmt.Sprintf(specialMessages["end"], "template "+node.Name, node.Line)
+		return fmt.Sprintf(specialMessages["end"], "template "+node.Name, node.Line+1)
 	default:
 		return ""
 	}
@@ -100,6 +115,9 @@ func MessageField(n *parse.FieldNode) string {
 
 // MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name.
 func MessageIdentifier(n *parse.IdentifierNode) string {
+	if msg, ok := specialMessages[string(n.Ident[0])]; ok {
+		return msg
+	}
 	return fmt.Sprintf(nodeMessage[parse.NodeIdentifier], n.Ident)
 }
 

@@ -36,9 +36,23 @@ var docText = `
 {{- end -}}
 `
 
+var docElseText = `
+{{ if . }}
+a
+{{ range .Items }}
+l
+{{ end }}
+{{- else if . }}
+b
+{{- else }}
+c
+{{ end }}
+`
+
 var (
 	docRootNode, _      = tryParse(docText)
 	shortDocRootNode, _ = tryParse(shortDocText)
+	elseRootNode, _     = tryParse(docElseText)
 )
 
 var shortDocText = `
@@ -47,6 +61,42 @@ var shortDocText = `
 {{ end }}`
 
 var hoverTestCases = []hoverTestCase{
+	{
+		name:                   "else if hover",
+		documentText:           docElseText,
+		positionLine:           8,
+		endLine:                8,
+		positionCharacterStart: 0,
+		positionCharacterEnd:   7,
+		positionRangeEnd:       8,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageElse(
+					&elseRootNode.Root.Nodes[1],
+					protocol.Position{Line: 6, Character: 0},
+				),
+			},
+		},
+	},
+	{
+		name:                   "else hover",
+		documentText:           docElseText,
+		positionLine:           8,
+		endLine:                8,
+		positionCharacterStart: 0,
+		positionCharacterEnd:   7,
+		positionRangeEnd:       8,
+		expectedHover: &protocol.Hover{
+			Contents: protocol.MarkupContent{
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageElse(
+					&elseRootNode.Root.Nodes[1],
+					protocol.Position{Line: 6, Character: 0},
+				),
+			},
+		},
+	},
 	{
 		name:                   "triple end tags",
 		documentText:           docText,
