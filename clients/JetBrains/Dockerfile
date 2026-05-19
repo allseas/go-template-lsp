@@ -39,3 +39,13 @@ RUN curl -fsSL https://nodejs.org/dist/latest-v${NODE_MAJOR}.x/SHASUMS256.txt -o
 
 # Ensure /usr/local/bin is in PATH (for node/npm)
 ENV PATH=/usr/local/bin:${GRADLE_HOME}/bin:$PATH
+
+# Pre-warm Gradle dependencies (IntelliJ Platform, plugins, Maven artifacts)
+# This avoids downloading ~1GB+ of dependencies on every CI run
+COPY go-text-template/build.gradle.kts go-text-template/settings.gradle.kts go-text-template/gradle.properties /tmp/gradle-deps/
+COPY go-text-template/gradle /tmp/gradle-deps/gradle
+COPY go-text-template/gradlew /tmp/gradle-deps/
+RUN cd /tmp/gradle-deps && \
+    chmod +x gradlew && \
+    ./gradlew dependencies --no-configuration-cache || true && \
+    rm -rf /tmp/gradle-deps
