@@ -77,6 +77,12 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 
 	// Build hover content based on node type
 
+	buildHoverContent(target, hover, doc)
+
+	return
+}
+
+func buildHoverContent(target parse.Node, hover *protocol.Hover, doc *document) {
 	switch target := target.(type) {
 	case *parse.ActionNode:
 		log.Debug().Msg("Hover on ActionNode")
@@ -199,8 +205,6 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 	default:
 		log.Debug().Msgf("Hover on unknown node type: %T", target)
 	}
-
-	return
 }
 
 // endTagHover checks if the hover position is within an end tag and returns the corresponding branch node and range if so.

@@ -250,6 +250,8 @@ func (p *PipeNode) append(command *CommandNode) {
 }
 
 func (p *PipeNode) String() string {
+	// For some reason this was called with p == nil
+	// Hardcoded null check to avoid panicking
 	if p == nil {
 		return "<nil>"
 	}
