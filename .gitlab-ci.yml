@@ -65,7 +65,7 @@ release-build:
     - export PATH="/usr/local/go/bin:$PATH"
     - npm install
   script:
-    - npm run package:vscode
+    - npm run build:server && npm run package:no-verify -w clients/VSCode
   artifacts:
     paths:
       - "*.vsix"
