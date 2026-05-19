@@ -12,25 +12,21 @@ default:
 
 linting:
     stage: lint
-    image: alpine:3.22.4
+    image: node:24-alpine
     before_script:
-        - apk add --update npm
-        - cd clients/VSCode
         - npm install
     script:
         - echo "Running TSESLint"
-        - npm run lint:check
+        - npm run lint:check -w clients/VSCode
 
 formatting:
     stage: lint
-    image: alpine:3.22.4
+    image: node:24-alpine
     before_script:
-        - apk add --update npm
-        - cd clients/VSCode
         - npm install
     script:
         - echo "Running Prettier"
-        - npm run format:check
+        - npm run format:check -w clients/VSCode
 
 testing:
     stage: test
@@ -45,8 +41,6 @@ testing:
         - nvm install 24
         - npm install npm -g
         - npm install
-        - cd clients/VSCode
-        - npm install
     script:
         - echo "running tests"
-        - xvfb-run --server-args="-screen 0 1920x1080x24" npm test
+        - xvfb-run --server-args="-screen 0 1920x1080x24" npm test -w clients/VSCode

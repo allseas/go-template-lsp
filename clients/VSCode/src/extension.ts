@@ -1,4 +1,6 @@
+import * as fs from "fs";
 import * as path from "path";
+import * as vscode from "vscode";
 import {
     workspace,
     ExtensionContext,
@@ -36,14 +38,13 @@ export async function activate(context: ExtensionContext) {
             process.arch === "arm64" ? "gotmpl-server-arm64" : "gotmpl-server";
     }
 
-    const isDebug =
-        process.env.VSCODE_DEBUG === "true" ||
-        process.env.NODE_ENV !== "production";
-    const buildFolder = isDebug ? "out" : "dist";
-    const serverModule = context.asAbsolutePath(
-        path.join(buildFolder, "server", "bin", binaryName),
+    const distPath = context.asAbsolutePath(
+        path.join("dist", "server", "bin", binaryName),
     );
-    console.log("Extension build folder:", buildFolder);
+    const outPath = context.asAbsolutePath(
+        path.join("out", "server", "bin", binaryName),
+    );
+    const serverModule = fs.existsSync(distPath) ? distPath : outPath;
 
     const serverOptions: ServerOptions = {
         command: serverModule,
@@ -98,6 +99,20 @@ export async function activate(context: ExtensionContext) {
         console.log("Language client started");
     } catch (err) {
         console.error("Language client failed:", err);
+    }
+
+    const versionKey = "goTmplSupport.version";
+
+    const previousVersion = context.globalState.get<string>(versionKey);
+    const currentVersion = context.extension.packageJSON.version;
+
+    if (previousVersion === undefined || previousVersion !== currentVersion) {
+        const welcomeFilePath = vscode.Uri.file(
+            path.join(context.extensionPath, "welcome.md"),
+        );
+
+        vscode.commands.executeCommand("markdown.showPreview", welcomeFilePath);
+        context.globalState.update(versionKey, currentVersion);
     }
 }
 
