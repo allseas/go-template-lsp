@@ -228,12 +228,20 @@ func suggest(
 	sChar uint8,
 	isInvoked bool,
 	wordRange protocol.Range,
+	lt *LoadedType,
 ) []protocol.CompletionItem {
 	if sChar == '$' {
 		return varsToItems(ctx, wordRange)
 	}
 
 	if sChar == '.' {
+		if lt != nil && (len(lt.Fields) > 0 || len(lt.Methods) > 0) {
+			// Could group by fields and functions, currently sorts alphabetically
+			items := make([]protocol.CompletionItem, 0, len(lt.Fields)+len(lt.Methods))
+			items = append(items, typeFieldItems(lt.Fields)...)
+			items = append(items, typeMethodItems(lt.Methods)...)
+			return items
+		}
 		return dotItem(wordRange)
 	}
 
@@ -289,9 +297,12 @@ func varsToItems(ctx *Context, wordRange protocol.Range) []protocol.CompletionIt
 	kind := protocol.CompletionItemKindVariable
 	for name := range ctx.Vars {
 		label := name
+		if delSign {
+			label = name[1:]
+		}
 		items = append(items, protocol.CompletionItem{
-			Label:    label,
-			Kind:     &kind,
+			Label: label,
+			Kind:  &kind,
 			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: name},
 		})
 	}

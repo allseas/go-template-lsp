@@ -31,7 +31,7 @@ func suggestAt(t *testing.T, src string, offset int, isInvoked bool) []string {
 	}
 
 	sChar := src[offset]
-	items := suggest(cur, parent, ctx, sChar, isInvoked, protocol.Range{})
+	items := suggest(cur, parent, ctx, sChar, isInvoked, nil, protocol.Range{})
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Label
