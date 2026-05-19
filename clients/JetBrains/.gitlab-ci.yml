@@ -8,7 +8,10 @@ stages:
   - test
 
 default:
-  interruptible: true 
+  interruptible: true
+
+variables:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
 build-image:
   stage: build
