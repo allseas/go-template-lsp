@@ -82,8 +82,8 @@ type UndefinedNode struct {
 	NodeType
 	Pos
 	tr    *Tree
-	cause string
-	str   string
+	cause string // A description of the error that caused this node to be created.
+	str   string // Raw string which caused the error
 }
 
 func (u *UndefinedNode) tree() *Tree {

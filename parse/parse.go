@@ -362,7 +362,9 @@ func (t *Tree) parseDefinition() {
 		if t.Mode&IgnoreErrors == 0 {
 			t.errorf("unexpected EOF in %s", context)
 		} else {
-			t.Root.append(t.newUndefined(t.peek().pos, "unexpected EOF in "+context, "unexpected EOF in "+context))
+			t.backup()
+			lastToken := t.next()
+			t.Root.append(t.newUndefined(lastToken.pos, "unexpected EOF in "+context, lastToken.String()))
 			t.add()
 			t.stopParse()
 			return
@@ -401,7 +403,7 @@ func (t *Tree) itemList() (list *ListNode, next Node) {
 		t.errorf("unexpected EOF")
 		return
 	}
-	n := t.newUndefined(t.peek().pos, "unexpected EOF", "unexpected EOF")
+	n := t.newUndefined(t.peek().pos, "unexpected EOF", "")
 	list.append(n)
 	return list, n
 }
