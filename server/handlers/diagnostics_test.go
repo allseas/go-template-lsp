@@ -37,8 +37,8 @@ func TestCollectDiagnosticsSyntaxErrorUnderlineBlock(t *testing.T) {
 
 	diags := collectDiagnostics(src, uri)
 	require.Len(t, diags, 1)
-	assert.Equal(t, uint32(0), diags[0].Range.Start.Character)
-	assert.Equal(t, uint32(len(src)), diags[0].Range.End.Character)
+	assert.Equal(t, u32(0), diags[0].Range.Start.Character)
+	assert.Equal(t, u32(len(src)), diags[0].Range.End.Character)
 }
 
 func TestCollectDiagnosticsDuplicateVariable(t *testing.T) {
@@ -115,6 +115,6 @@ func TestCollectDiagnosticsUndefinedVariableError(t *testing.T) {
 	diags := collectDiagnostics(src, uri)
 	require.Len(t, diags, 1)
 	assert.Equal(t, protocol.DiagnosticSeverityError, *diags[0].Severity)
-	assert.Equal(t, uint32(0), diags[0].Range.Start.Character)
-	assert.Equal(t, uint32(len(src)), diags[0].Range.End.Character)
+	assert.Equal(t, u32(0), diags[0].Range.Start.Character)
+	assert.Equal(t, u32(len(src)), diags[0].Range.End.Character)
 }

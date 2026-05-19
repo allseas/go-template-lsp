@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -209,10 +210,10 @@ func findErrorRange(text string, err error) protocol.Range {
 			if lineIdx >= 0 && lineIdx < len(lines) {
 				if col := strings.Index(lines[lineIdx], varName); col != -1 {
 					return protocol.Range{
-						Start: protocol.Position{Line: uint32(lineIdx), Character: uint32(col)},
+						Start: protocol.Position{Line: u32(lineIdx), Character: u32(col)},
 						End: protocol.Position{
-							Line:      uint32(lineIdx),
-							Character: uint32(col + len(varName)),
+							Line:      u32(lineIdx),
+							Character: u32(col + len(varName)),
 						},
 					}
 				}
@@ -236,9 +237,20 @@ func findErrorRange(text string, err error) protocol.Range {
 
 	col, length := findBlockRange(lines[lineIdx])
 	return protocol.Range{
-		Start: protocol.Position{Line: uint32(lineIdx), Character: uint32(col)},
-		End:   protocol.Position{Line: uint32(lineIdx), Character: uint32(col + length)},
+		Start: protocol.Position{Line: u32(lineIdx), Character: u32(col)},
+		End:   protocol.Position{Line: u32(lineIdx), Character: u32(col + length)},
 	}
+}
+
+// u32 is a helper that safely turns integers into unsigned integers
+func u32(v int) uint32 {
+	if v > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	if v >= 0 {
+		return uint32(v)
+	}
+	return 0
 }
 
 // findBlockRange returns the column and length of the action block on a given line, spanning from {{ to }} inclusive.
