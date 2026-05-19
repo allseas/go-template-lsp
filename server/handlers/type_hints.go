@@ -1,0 +1,222 @@
+package handlers
+
+import (
+	"bufio"
+	"bytes"
+	"fmt"
+	"go/types"
+	"golang.org/x/tools/go/packages"
+	"io"
+	"regexp"
+	"strings"
+)
+
+type TypeHintFile struct {
+	Path      string
+	TypeHints []TypeHint
+}
+
+// TypeHint represents a `gotype:` type hint found in a template file.
+type TypeHint struct {
+	Line int
+	Type string
+}
+
+func ParseTypeHints(f io.Reader) []TypeHint {
+
+	// Regex to capture a gotype hint inside a Go template comment.
+	// Supports optional trimming dashes and whitespace around delimiters, e.g.:
+	// {{/*gotype: Type*/}}, {{- /* gotype: pkg.Type */ -}}, {{/*gotype: path/to/pkg.Type*/}} etc.
+	// Notes:
+	// - Allow package paths with "/" before the final ".Type" segment.
+	// - Still capture the entire token so we can later reduce to the final type name.
+	re := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
+	var hints []TypeHint
+
+	scanner := bufio.NewScanner(f)
+	lineNo := 0
+	gotypeBytes := []byte("gotype:")
+	for scanner.Scan() {
+		lineNo++
+		line := scanner.Bytes()
+		if !bytes.Contains(line, gotypeBytes) {
+			continue
+		}
+		matches := re.FindAllSubmatch(line, -1)
+		for _, m := range matches {
+			if len(m) >= 2 {
+				hints = append(hints, TypeHint{Line: lineNo, Type: string(m[1])})
+			}
+		}
+	}
+	return hints
+}
+
+// TypeField is a resolved field from a struct type.
+type TypeField struct {
+	Name     string
+	TypeName string
+	Type     types.Type // actual type object
+	Embedded bool
+}
+
+// FieldKind categorises a TypeField's underlying type for use in completions.
+type FieldKind int
+
+const (
+	FieldKindString FieldKind = iota
+	FieldKindBool
+	FieldKindInt
+	FieldKindFloat
+	FieldKindSlice
+	FieldKindMap
+	FieldKindStruct
+	FieldKindOther
+)
+
+// Kind returns the FieldKind for this field, useful for classification
+func (f TypeField) Kind() FieldKind {
+	switch u := f.Type.Underlying().(type) {
+	case *types.Basic:
+		switch {
+		case u.Info()&types.IsBoolean != 0:
+			return FieldKindBool
+		case u.Info()&types.IsString != 0:
+			return FieldKindString
+		case u.Info()&types.IsInteger != 0:
+			return FieldKindInt
+		case u.Info()&types.IsFloat != 0:
+			return FieldKindFloat
+		}
+	case *types.Slice:
+		return FieldKindSlice
+	case *types.Map:
+		return FieldKindMap
+	case *types.Struct:
+		return FieldKindStruct
+	}
+	return FieldKindOther
+}
+
+// MethodType is the struct for the functions in the model.
+type MethodType struct {
+	Func       *types.Func
+	Name       string
+	ReturnName string
+	ReturnType types.Type
+}
+
+// LoadedType is the result of resolving a type hint against a real Go package.
+type LoadedType struct {
+	Pkg     *packages.Package
+	Named   *types.Named
+	Fields  []TypeField
+	Methods []MethodType
+}
+
+// LoadTypeFromHint loads the Go package identified by the hint and returns the
+// named type together with its struct fields (if any).
+func LoadTypeFromHint(hint, workspaceRoot string) (*LoadedType, error) {
+	importPath, typeName := splitTypeHint(hint)
+
+	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
+	cfg := &packages.Config{
+		Mode: packages.NeedTypes,
+		Dir:  workspaceRoot,
+	}
+
+	pkgs, err := packages.Load(cfg, importPath)
+	if err != nil {
+		return nil, fmt.Errorf("packages.Load(%q): %w", importPath, err)
+	}
+	if len(pkgs) == 0 {
+		return nil, fmt.Errorf("no packages found for import path %q", importPath)
+	}
+
+	pkg := pkgs[0]
+	if len(pkg.Errors) > 0 {
+		return nil, fmt.Errorf("package %q has errors: %v", importPath, pkg.Errors[0])
+	}
+
+	obj := pkg.Types.Scope().Lookup(typeName)
+	if obj == nil {
+		return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
+	}
+
+	named, ok := obj.Type().(*types.Named)
+	if !ok {
+		return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
+	}
+
+	return &LoadedType{
+		Pkg:     pkg,
+		Named:   named,
+		Fields:  structFields(named),
+		Methods: namedMethods(named),
+	}, nil
+}
+
+// splitTypeHint splits a raw gotype hint into (importPath, typeName).
+func splitTypeHint(hint string) (importPath, typeName string) {
+	for i := len(hint) - 1; i >= 0; i-- {
+		if hint[i] == '.' {
+			after := hint[i+1:]
+			if !strings.Contains(after, "/") {
+				return hint[:i], after
+			}
+		}
+	}
+	return ".", hint
+}
+
+// namedMethods extracts the methods from the model
+func namedMethods(named *types.Named) []MethodType {
+	var methods []MethodType
+	for i := range named.NumMethods() {
+		fn := named.Method(i)
+		if !fn.Exported() {
+			continue
+		}
+
+		sig := fn.Signature()
+		results := sig.Results()
+
+		if results.Len() == 0 || results.Len() > 2 {
+			continue
+		}
+
+		ret := results.At(0)
+		methods = append(methods, MethodType{
+			Func:       fn,
+			Name:       fn.Name(),
+			ReturnType: ret.Type(),
+			ReturnName: types.TypeString(ret.Type(), nil),
+		})
+	}
+	return methods
+}
+
+// structFields returns the exported fields of the struct
+func structFields(named *types.Named) []TypeField {
+	// Underlying returns structs fields and types
+	st, ok := named.Underlying().(*types.Struct)
+	if !ok {
+		return nil
+	}
+
+	fields := make([]TypeField, 0, st.NumFields())
+	for i := range st.NumFields() {
+		f := st.Field(i)
+		// we can't access unexported fields
+		if !f.Exported() {
+			continue
+		}
+		fields = append(fields, TypeField{
+			Name:     f.Name(),
+			TypeName: types.TypeString(f.Type(), nil),
+			Type:     f.Type(),
+			Embedded: f.Embedded(),
+		})
+	}
+	return fields
+}
