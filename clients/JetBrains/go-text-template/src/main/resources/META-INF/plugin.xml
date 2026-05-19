@@ -3,12 +3,12 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
      <!-- Unique identifier of the plugin. It should be FQN, cannot be changed between the plugin
      versions. -->
-     <id>com.allseas.go-text-template</id>
+     <id>com.example.go-text-template</id>
 
      <!-- Public plugin name should be written in Title Case.
          Guidelines:
      https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
-     <name>Go-Text-Template</name>
+     <name>Go-text-template</name>
 
      <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
 
@@ -33,41 +33,41 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
      <extensions defaultExtensionNs="com.intellij">
           <toolWindow id="MyToolWindow"
-               factoryClass="com.allseas.gotexttemplate.MyToolWindowFactory"
+               factoryClass="com.example.gotexttemplate.MyToolWindowFactory"
                icon="AllIcons.Toolwindows.ToolWindowPalette" />
           <textmate.bundleProvider
-               implementation="com.allseas.gotexttemplate.TemplateTextMateBundleProvider" />
+               implementation="com.example.gotexttemplate.TemplateTextMateBundleProvider" />
 
           <defaultLiveTemplates file="liveTemplates/GoTemplate.xml" />
           <liveTemplateContext
                contextId="GOTMPL"
-               implementation="com.allseas.gotexttemplate.GoTextTemplateContext" />
+               implementation="com.example.gotexttemplate.GoTextTemplateContext" />
 
           <fileType
                name="Go Template"
-               implementationClass="com.allseas.gotexttemplate.TmplFileType"
+               implementationClass="com.example.gotexttemplate.TmplFileType"
                fieldName="INSTANCE"
                language="GoTemplate"
                extensions="tmpl" />
 
           <applicationService
-               serviceImplementation="com.allseas.gotexttemplate.AppSettings" />
+               serviceImplementation="com.example.gotexttemplate.AppSettings" />
           <projectService
-               serviceImplementation="com.allseas.gotexttemplate.ProjectSettings" />
+               serviceImplementation="com.example.gotexttemplate.ProjectSettings" />
           <applicationConfigurable
                parentId="tools"
-               instance="com.allseas.gotexttemplate.AppSettingsConfigurable"
-               id="com.allseas.gotexttemplate.AppSettingsConfigurable"
+               instance="com.example.gotexttemplate.AppSettingsConfigurable"
+               id="com.example.gotexttemplate.AppSettingsConfigurable"
                displayName="Go Text Template Support" />
           <projectConfigurable
-               parentId="com.allseas.gotexttemplate.AppSettingsConfigurable"
-               instance="com.allseas.gotexttemplate.ProjectSettingsConfigurable"
-               id="com.allseas.gotexttemplate.ProjectSettingsConfigurable"
+               parentId="com.example.gotexttemplate.AppSettingsConfigurable"
+               instance="com.example.gotexttemplate.ProjectSettingsConfigurable"
+               id="com.example.gotexttemplate.ProjectSettingsConfigurable"
                displayName="Project Settings" />
      </extensions>
 
      <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
-          <server factoryClass="com.allseas.gotexttemplate.TextTemplateLspServerFactory"
+          <server factoryClass="com.example.gotexttemplate.TextTemplateLspServerFactory"
                id="go-text-template-lsp" />
 
           <fileNamePatternMapping patterns=".tmpl" serverId="go-text-template-lsp" />

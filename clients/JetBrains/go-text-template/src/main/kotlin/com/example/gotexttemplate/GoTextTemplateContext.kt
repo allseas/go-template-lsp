@@ -1,4 +1,4 @@
-package com.allseas.gotexttemplate
+package com.example.gotexttemplate
 
 import com.intellij.codeInsight.template.TemplateContextType
 import com.intellij.psi.PsiFile

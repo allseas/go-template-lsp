@@ -118,16 +118,10 @@ tasks {
         from("src/main/resources/textmate/go-text-template") {
             into(pluginName.map { "$it/textmate/go-text-template" })
         }
-        from("src/main/server") {
-            into(pluginName.map { "$it/server" })
-        }
     }
     prepareTestSandbox {
         from("src/main/resources/textmate/go-text-template") {
             into(pluginName.map { "$it/textmate/go-text-template" })
-        }
-        from("src/main/server") {
-            into(pluginName.map { "$it/server" })
         }
     }
 }
@@ -135,7 +129,6 @@ tasks {
 tasks.register<Exec>("compileServer") {
     workingDir = rootDir.resolve("..").resolve("..")
     val npmCommand = if (System.getProperty("os.name").lowercase().contains("windows")) "npm.cmd" else "npm"
-    commandLine(npmCommand, "install")
     commandLine(npmCommand, "run", "build:server")
 }
 
@@ -155,7 +148,9 @@ tasks.register<Copy>("copyServerBin") {
         rootDir
             .resolve("src")
             .resolve("main")
-            .resolve("server"),
+            .resolve("resources")
+            .resolve("bin")
+            .resolve("language-server"),
     )
 }
 

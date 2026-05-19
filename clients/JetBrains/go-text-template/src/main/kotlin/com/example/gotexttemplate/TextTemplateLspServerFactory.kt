@@ -1,4 +1,4 @@
-package com.allseas.gotexttemplate
+package com.example.gotexttemplate
 
 import com.intellij.openapi.project.Project
 import com.redhat.devtools.lsp4ij.LanguageServerFactory

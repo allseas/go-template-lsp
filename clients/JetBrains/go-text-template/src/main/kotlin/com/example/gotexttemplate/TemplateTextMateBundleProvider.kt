@@ -1,4 +1,4 @@
-package com.allseas.gotexttemplate
+package com.example.gotexttemplate
 
 import com.intellij.openapi.application.PluginPathManager
 import com.intellij.openapi.diagnostic.thisLogger

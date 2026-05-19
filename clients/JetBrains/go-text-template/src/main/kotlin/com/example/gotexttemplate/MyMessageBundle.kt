@@ -1,4 +1,4 @@
-package com.allseas.gotexttemplate
+package com.example.gotexttemplate
 
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.Nls

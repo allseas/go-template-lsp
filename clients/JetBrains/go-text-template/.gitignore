@@ -27,8 +27,8 @@ out/
 .springBeans
 .sts4-cache
 bin/
-/src/main/server/
-/src/test/server/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
 
 ### NetBeans ###
 /nbproject/private/

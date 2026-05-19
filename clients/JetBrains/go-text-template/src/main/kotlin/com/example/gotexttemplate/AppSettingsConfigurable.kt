@@ -1,4 +1,4 @@
-package com.allseas.gotexttemplate
+package com.example.gotexttemplate
 
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.ui.dsl.builder.bindItem
