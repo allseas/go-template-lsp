@@ -3,11 +3,29 @@ workflow:
     - when : always
 
 stages:
+  - build
   - lint
   - test
 
 default:
   interruptible: true 
+
+build-image:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    IMAGE_TAG: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $IMAGE_TAG clients/JetBrains/
+    - docker push $IMAGE_TAG
+  rules:
+    - changes:
+        - clients/JetBrains/Dockerfile
+    - when: manual
+      allow_failure: true
 
 linting:
   stage: lint
