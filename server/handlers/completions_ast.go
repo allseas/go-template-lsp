@@ -376,6 +376,9 @@ func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 
 	case *parse.PipeNode:
 		for _, v := range n.Decl {
+			if v == target {
+				return true
+			}
 			ctx.Vars[v.Ident[0]] = n
 		}
 		prevPipe := ctx.Pipe
