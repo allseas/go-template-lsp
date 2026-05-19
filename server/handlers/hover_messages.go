@@ -50,7 +50,7 @@ func MessageElse(n *parse.Node, pos protocol.Position) string {
 	case *parse.WithNode:
 		return fmt.Sprintf(specialMessages["else"], "with", pos.Line+1)
 	default:
-		return "????????????" + (*n).String() + "????????????"
+		return "Couldn't find the branch statement"
 	}
 }
 
