@@ -18,8 +18,8 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !ok || doc.tree == nil {
-		log.Debug().Msg("doc or tree is nil")
 		err = errors.New("document not found or failed to parse")
+		log.Debug().Err(err)
 		return
 	}
 
@@ -27,6 +27,7 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 	target := nodeFind(doc.tree.Root, parse.Pos(offset))
 	if target == nil {
 		err = errors.New("node not found")
+		log.Debug().Err(err)
 		return
 	}
 	// Check for end tag hover
@@ -198,9 +199,6 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 	default:
 		log.Debug().Msgf("Hover on unknown node type: %T", target)
 	}
-
-	// Analyze position
-	// Build hover content
 
 	return
 }
