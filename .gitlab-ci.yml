@@ -63,7 +63,6 @@ release-build:
     - apk add --no-cache curl
     - curl -fsSL "https://go.dev/dl/go1.26.2.linux-amd64.tar.gz" | tar -xz -C /usr/local
     - export PATH="/usr/local/go/bin:$PATH"
-    - curl -fsSL "https://gitlab.com/gitlab-org/cli/-/releases/permalink/latest/downloads/glab_linux_amd64.tar.gz" | tar -xz --strip-components=1 -C /usr/local/bin bin/glab
     - npm install
   script:
     - npm run package:vscode
