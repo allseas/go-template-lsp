@@ -1,12 +1,8 @@
 package handlers
 
 import (
-	"math"
 	"regexp"
-	"strconv"
 	"strings"
-	"unicode"
-
 	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
@@ -15,259 +11,276 @@ import (
 )
 
 var (
-	templateLineRe = regexp.MustCompile(`template: [^:]*:(\d+):`)
-	undefinedVarRe = regexp.MustCompile(`undefined variable "?(\$[a-zA-Z_][a-zA-Z0-9_]*)"?`)
+	templateBlockRegex      = regexp.MustCompile(`\{\{-?\s*(.*?)\s*-?`)
+	errorCleanPositionRegex = regexp.MustCompile(`\s*at position \d+`)
 )
 
-// publishDiagnostics sends diagnostics to the LSP client.
-func publishDiagnostics(ctx *glsp.Context, uri string, text string) {
+// publishDiagnostics runs a diagnostics analysis and notifies the client with any discovered warnings or errors.
+func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	if ctx == nil {
 		return
 	}
-
 	diagnostics := collectDiagnostics(text, uri)
 	if diagnostics == nil {
 		diagnostics = []protocol.Diagnostic{}
 	}
-
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, &protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
 	})
 }
 
-// collectDiagnostics runs strict syntax checking and semantic analysis on the template, returning all errors and warnings found.
-func collectDiagnostics(text string, uri string) []protocol.Diagnostic {
-	var diagnostics []protocol.Diagnostic
-
-	doc, ok := store.Get(uri)
-	if !ok || doc.tree == nil {
-		log.Debug().Msg("doc or tree is nil")
-		return diagnostics
+// collectDiagnostics builds the list of issues by combining tree analysis with regex-based text parsing rules to catch raw token anomalies.
+func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
+	if doc, ok := store.Get(uri); ok && doc.tree != nil && doc.tree.Root != nil {
+		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+		diagnostics = walkAndAnalyze(doc.tree.Root, text, ctx, map[parse.Node]bool{})
+	} else {
+		log.Debug().Msg("doc, tree, or root is nil")
 	}
-
-	knownFunctions := buildKnownFunctions()
-	masked := text
-
-	for {
-		t := parse.New("t")
-		t.Mode = 0
-
-		treeSet := map[string]*parse.Tree{}
-		_, err := t.Parse(masked, "{{", "}}", treeSet, knownFunctions)
-		if err == nil {
-			break
+	for _, match := range templateBlockRegex.FindAllStringSubmatchIndex(text, -1) {
+		if len(match) < 4 || match[2] < 0 || match[3] > len(text) || match[2] > match[3] {
+			continue
 		}
-
-		diagnostics = append(diagnostics, protocol.Diagnostic{
-			Range:    findErrorRange(text, err),
-			Message:  err.Error(),
-			Severity: new(protocol.DiagnosticSeverityError),
-		})
-
-		newMasked := maskLine(masked, err)
-		if newMasked == masked {
-			break
+		inner := strings.TrimSpace(text[match[2]:match[3]])
+		if inner == "" || strings.HasPrefix(inner, "/*") || inner == "end" || inner == "else" ||
+			hasExactDiagnosticAtRange(diagnostics, match[0], match[1], text) {
+			continue
 		}
-		masked = newMasked
+		if isUnparsedText(inner) || strings.ContainsAny(inner, "[]") {
+			diagnostics = append(diagnostics, protocol.Diagnostic{
+				Range: protocol.Range{
+					Start: offsetToPosition(text, match[0]),
+					End:   offsetToPosition(text, match[1]),
+				},
+				Message:  "syntax error: unexpected token or unparseable action '" + inner + "'",
+				Severity: new(protocol.DiagnosticSeverityError),
+			})
+		}
 	}
-
-	seen := map[string]bool{}
-	for _, node := range doc.tree.Root.Nodes {
-		diagnostics = append(diagnostics, analyzeNode(node, text, seen)...)
-	}
-
 	return diagnostics
 }
 
-func buildKnownFunctions() map[string]any {
-	knownFunctions := make(map[string]any)
-
-	for _, fn := range globalFunctions {
-		knownFunctions[fn] = func() {}
+// isUnparsedText checks if a text block contains invalid or unparseable template syntax
+func isUnparsedText(content string) bool {
+	if strings.ContainsAny(content, `$.":|`+"`") || strings.Contains(content, ":=") {
+		return false
 	}
-	for _, kw := range templateKeywords {
-		knownFunctions[kw] = func() {}
-	}
-
-	return knownFunctions
+	return strings.Trim(content, "0123456789 ") != ""
 }
 
-// maskLine replaces the line containing the parse error with spaces so the next parse iteration can find subsequent errors without re-reporting the same one.
-func maskLine(text string, err error) string {
-	lineIdx, ok := errorLineIndex(err)
-	if !ok {
-		return text
+// hasExactDiagnosticAtRange returns true if an existing diagnostic problem has already been reported within the exact range or line context specified.
+func hasExactDiagnosticAtRange(
+	diagnostics []protocol.Diagnostic,
+	start, end int,
+	text string,
+) bool {
+	pStart, pEnd := offsetToPosition(text, start), offsetToPosition(text, end)
+	for _, d := range diagnostics {
+		if d.Range.Start.Line == pStart.Line && d.Range.Start.Character >= pStart.Character &&
+			d.Range.End.Character <= pEnd.Character {
+			return true
+		}
 	}
-
-	lines := strings.Split(text, "\n")
-	if lineIdx >= 0 && lineIdx < len(lines) {
-		lines[lineIdx] = strings.Repeat(" ", len(lines[lineIdx]))
-	}
-
-	return strings.Join(lines, "\n")
+	return false
 }
 
-func errorLineIndex(err error) (int, bool) {
-	m := templateLineRe.FindStringSubmatch(err.Error())
-	if m == nil {
-		return 0, false
-	}
-
-	lineIdx, err := strconv.Atoi(m[1])
-	if err != nil {
-		return 0, false
-	}
-
-	return max(0, lineIdx-1), true
-}
-
-// analyzeNode recursively walks the AST and collects semantic warnings, passing the variable scope down into child nodes.
-func analyzeNode(node parse.Node, text string, seen map[string]bool) []protocol.Diagnostic {
-	var diagnostics []protocol.Diagnostic
-
-	switch n := node.(type) {
-	case *parse.ActionNode:
-		diagnostics = append(diagnostics, checkAction(n, text, seen)...)
-
-	case *parse.IfNode:
-		diagnostics = append(diagnostics, analyzeList(n.List, text, seen)...)
-		diagnostics = append(diagnostics, analyzeList(n.ElseList, text, seen)...)
-
-	case *parse.RangeNode:
-		freshScope := map[string]bool{}
-		diagnostics = append(diagnostics, analyzeList(n.List, text, freshScope)...)
-		diagnostics = append(diagnostics, analyzeList(n.ElseList, text, freshScope)...)
-
-	case *parse.WithNode:
-		diagnostics = append(diagnostics, analyzeList(n.List, text, seen)...)
-		diagnostics = append(diagnostics, analyzeList(n.ElseList, text, seen)...)
-
-	case *parse.ListNode:
-		diagnostics = append(diagnostics, analyzeList(n, text, seen)...)
-	}
-
-	return diagnostics
-}
-
-func analyzeList(list *parse.ListNode, text string, seen map[string]bool) []protocol.Diagnostic {
-	if list == nil {
+// walkAndAnalyze recursively walks down the tree, keeping track of the scope context to run validation rules
+func walkAndAnalyze(
+	node parse.Node,
+	text string,
+	ctx *Context,
+	visited map[parse.Node]bool,
+) (diagnostics []protocol.Diagnostic) {
+	if node == nil || visited[node] {
 		return nil
 	}
-
-	var diagnostics []protocol.Diagnostic
-	for _, child := range list.Nodes {
-		diagnostics = append(diagnostics, analyzeNode(child, text, seen)...)
-	}
-	return diagnostics
-}
-
-// checkAction inspects a single action node for duplicate variable declarations.
-func checkAction(
-	action *parse.ActionNode,
-	text string,
-	seen map[string]bool,
-) []protocol.Diagnostic {
-	var diagnostics []protocol.Diagnostic
-
-	if action.Pipe == nil {
-		return diagnostics
-	}
-
-	for _, decl := range action.Pipe.Decl {
-		for _, ident := range decl.Ident {
-			name := strings.TrimPrefix(ident, "$")
-			if name == "" {
-				continue
-			}
-
-			if seen[name] {
-				diagnostics = append(diagnostics, protocol.Diagnostic{
-					Range:    nodeToRange(decl, text),
-					Message:  "duplicate variable declaration: $" + name,
-					Severity: new(protocol.DiagnosticSeverityWarning),
-				})
-				continue
-			}
-
-			seen[name] = true
+	visited[node] = true
+	defer delete(visited, node)
+	if unode, ok := node.(*parse.UndefinedNode); ok {
+		return []protocol.Diagnostic{
+			{
+				Range: expandToFullBracketsFromOffset(int(unode.Position()), text),
+				Message: strings.TrimSpace(
+					errorCleanPositionRegex.ReplaceAllString(unode.String(), ""),
+				),
+				Severity: new(protocol.DiagnosticSeverityError),
+			},
 		}
 	}
-
-	return diagnostics
-}
-
-// findErrorRange extracts the range to underline from a parse error message.
-// For undefined variable errors it underlines just the variable name; for all other errors it underlines the entire action block on the affected line.
-func findErrorRange(text string, err error) protocol.Range {
-	msg := err.Error()
-	log.Debug().Str("err", msg).Msg("findErrorRange")
-
-	if m := undefinedVarRe.FindStringSubmatch(msg); m != nil {
-		varName := m[1]
-		if lineIdx, ok := errorLineIndex(err); ok {
-			lines := strings.Split(text, "\n")
-			if lineIdx >= 0 && lineIdx < len(lines) {
-				if col := strings.Index(lines[lineIdx], varName); col != -1 {
-					return protocol.Range{
-						Start: protocol.Position{Line: u32(lineIdx), Character: u32(col)},
-						End: protocol.Position{
-							Line:      u32(lineIdx),
-							Character: u32(col + len(varName)),
+	switch n := node.(type) {
+	case *parse.ListNode:
+		for _, child := range n.Nodes {
+			diagnostics = append(diagnostics, walkAndAnalyze(child, text, ctx, visited)...)
+		}
+	case *parse.ActionNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, walkAndAnalyze(n.Pipe, text, ctx, visited)...)
+		}
+	case *parse.PipeNode:
+		for _, v := range n.Decl {
+			if len(v.Ident) > 0 {
+				ctx.Vars[v.Ident[0]] = n
+			}
+		}
+		prevPipe := ctx.Pipe
+		ctx.Pipe = n
+		for _, cmd := range n.Cmds {
+			diagnostics = append(diagnostics, walkAndAnalyze(cmd, text, ctx, visited)...)
+		}
+		ctx.Pipe = prevPipe
+	case *parse.CommandNode:
+		if len(n.Args) > 0 {
+			if identNode, ok := n.Args[0].(*parse.IdentifierNode); ok {
+				funcName := identNode.Ident
+				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
+				if _, exists := builtinOutput[funcName]; !exists {
+					diagnostics = append(
+						diagnostics,
+						protocol.Diagnostic{
+							Range:    rng,
+							Message:  "unsupported function or unregistered command: " + funcName,
+							Severity: new(protocol.DiagnosticSeverityError),
 						},
+					)
+				} else if currentKind := pipeOutputKind(ctx, false); currentKind != outputAny && currentKind != outputUntyped {
+					isMatch := false
+					for _, allowed := range functionsAccepting[currentKind] {
+						if allowed == funcName {
+							isMatch = true
+							break
+						}
+					}
+					if !isMatch {
+						diagnostics = append(
+							diagnostics,
+							protocol.Diagnostic{
+								Range:    rng,
+								Message:  "type mismatch: function '" + funcName + "' does not accept piped data of this output kind",
+								Severity: new(protocol.DiagnosticSeverityError),
+							},
+						)
 					}
 				}
 			}
 		}
+		for _, arg := range n.Args {
+			diagnostics = append(diagnostics, walkAndAnalyze(arg, text, ctx, visited)...)
+		}
+	case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
+		pipe, list, elseList := extractBranchNodes(n)
+		snapshot := snapshotVars(ctx.Vars)
+		if _, isWith := n.(*parse.WithNode); !isWith && pipe != nil {
+			diagnostics = append(diagnostics, collectDeclarations(pipe, text, ctx)...)
+		}
+		if pipe != nil {
+			diagnostics = append(diagnostics, checkPipeUsage(pipe, text, ctx)...)
+			diagnostics = append(diagnostics, walkAndAnalyze(pipe, text, ctx, visited)...)
+		}
+		diagnostics = append(diagnostics, walkAndAnalyze(list, text, ctx, visited)...)
+		ctx.Vars = snapshot
+		diagnostics = append(diagnostics, walkAndAnalyze(elseList, text, ctx, visited)...)
+		ctx.Vars = snapshot
 	}
 
-	lineIdx, ok := errorLineIndex(err)
-	if !ok {
-		return protocol.Range{}
-	}
-
-	lines := strings.Split(text, "\n")
-	if len(lines) == 0 {
-		return protocol.Range{}
-	}
-
-	if lineIdx >= len(lines) {
-		lineIdx = len(lines) - 1
-	}
-
-	col, length := findBlockRange(lines[lineIdx])
-	return protocol.Range{
-		Start: protocol.Position{Line: u32(lineIdx), Character: u32(col)},
-		End:   protocol.Position{Line: u32(lineIdx), Character: u32(col + length)},
-	}
+	return diagnostics
 }
 
-// u32 is a helper that safely turns integers into unsigned integers
-func u32(v int) uint32 {
-	if v > math.MaxUint32 {
-		return math.MaxUint32
+// collectDeclarations registers new template variables in the current scope context, flagging if a variable is illegally re-declared.
+func collectDeclarations(
+	pipe *parse.PipeNode,
+	text string,
+	ctx *Context,
+) (diagnostics []protocol.Diagnostic) {
+	if pipe == nil {
+		return nil
 	}
-	if v >= 0 {
-		return uint32(v)
+	for _, decl := range pipe.Decl {
+		if decl == nil {
+			continue
+		}
+		for _, ident := range decl.Ident {
+			if name := strings.TrimPrefix(ident, "$"); name == "" {
+				continue
+			}
+			if ctx.Vars[ident] != nil && !pipe.IsAssign {
+				diagnostics = append(diagnostics, protocol.Diagnostic{
+					Range:    nodeToRange(decl, text),
+					Message:  "duplicate variable declaration: " + ident,
+					Severity: new(protocol.DiagnosticSeverityWarning),
+				})
+				continue
+			}
+			ctx.Vars[ident] = pipe
+		}
 	}
-	return 0
+	return diagnostics
 }
 
-// findBlockRange returns the column and length of the action block on a given line, spanning from {{ to }} inclusive.
-func findBlockRange(lineText string) (col, length int) {
-	start := strings.Index(lineText, "{{")
-	if start == -1 {
-		for i, r := range lineText {
-			if !unicode.IsSpace(r) {
-				return i, 1
+// checkPipeUsage scans through values to ensure that any references to custom variables have been explicitly defined beforehand
+func checkPipeUsage(
+	pipe *parse.PipeNode,
+	text string,
+	ctx *Context,
+) (diagnostics []protocol.Diagnostic) {
+	if pipe == nil {
+		return nil
+	}
+	for _, cmd := range pipe.Cmds {
+		if cmd == nil {
+			continue
+		}
+		for _, arg := range cmd.Args {
+			if vnode, ok := arg.(*parse.VariableNode); ok && len(vnode.Ident) > 0 {
+				if name := vnode.Ident[0]; name != "" && name != "$" && ctx.Vars[name] == nil {
+					diagnostics = append(diagnostics, protocol.Diagnostic{
+						Range:    nodeToRange(vnode, text),
+						Message:  "undefined variable: " + name,
+						Severity: new(protocol.DiagnosticSeverityError),
+					})
+				}
 			}
 		}
-		return 0, 1
 	}
-	end := strings.Index(lineText[start:], "}}")
-	if end == -1 {
-		return start, len(lineText) - start
-	}
+	return diagnostics
+}
 
-	return start, end + 2
+// expandToFullBracketsFromOffset computes a Range including the {{ and }}
+func expandToFullBracketsFromOffset(pos int, text string) protocol.Range {
+	startOffset, endOffset := pos, pos
+	if pos < len(text) {
+		if openIdx := strings.LastIndex(text[:pos], "{{"); openIdx != -1 {
+			startOffset = openIdx
+		}
+		if closeIdx := strings.Index(text[pos:], "}}"); closeIdx != -1 {
+			endOffset = pos + closeIdx + 2
+		} else if nextLine := strings.IndexByte(text[pos:], '\n'); nextLine != -1 {
+			endOffset = pos + nextLine
+		} else {
+			endOffset = len(text)
+		}
+	}
+	if startOffset >= endOffset {
+		endOffset = startOffset + 1
+	}
+	return protocol.Range{
+		Start: offsetToPosition(text, startOffset),
+		End:   offsetToPosition(text, endOffset),
+	}
+}
+
+// extractBranchNodes unifies access to child properties for branch structural entities including Range, If, and With statement blocks
+func extractBranchNodes(node parse.Node) (*parse.PipeNode, *parse.ListNode, *parse.ListNode) {
+	switch n := node.(type) {
+	case *parse.IfNode:
+		return n.Pipe, n.List, n.ElseList
+	case *parse.RangeNode:
+		return n.Pipe, n.List, n.ElseList
+	case *parse.WithNode:
+		return n.Pipe, n.List, n.ElseList
+	default:
+		return nil, nil, nil
+	}
 }
