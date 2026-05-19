@@ -5,13 +5,28 @@ import (
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/tliron/glsp/server"
+	"net/url"
+	"runtime"
 )
 
 var (
-	handler protocol.Handler
-	version string
-	lsName  string
+	handler       protocol.Handler
+	version       string
+	lsName        string
+	workspaceRoot string
 )
+
+func uriToPath(uri string) string {
+	u, err := url.Parse(uri)
+	if err != nil {
+		return uri
+	}
+	path := u.Path
+	if runtime.GOOS == "windows" && len(path) > 2 && path[0] == '/' && path[2] == ':' {
+		path = path[1:]
+	}
+	return path
+}
 
 // setupHandlers initializes the handler configuration with the given language server name and version. This is separated from server startup to enable testing.
 func setupHandlers(langServerName string, langServerVersion string) {
@@ -49,7 +64,13 @@ func Init(langServerName string, langServerVersion string) error {
 	return nil
 }
 
-func initialize(_ *glsp.Context, _ *protocol.InitializeParams) (any, error) {
+func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
+	// use RootURI as it is more modern and RootPath is deprecated
+	if params.RootURI != nil {
+		workspaceRoot = uriToPath(string(*params.RootURI))
+	} else if params.RootPath != nil {
+		workspaceRoot = *params.RootPath
+	}
 	capabilities := handler.CreateServerCapabilities()
 
 	openClose := true
