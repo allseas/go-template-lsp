@@ -29,7 +29,7 @@ build-image:
 
 linting:
   stage: lint
-  image: gradle:9.0.0-jdk21-alpine
+  image: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
   script:
     - echo "running ktlint..."
     - cd clients/JetBrains/go-text-template
@@ -37,17 +37,8 @@ linting:
 
 testing:
   stage: test
-#  image: gradle:9.0.0-jdk21-alpine
-  image: golang:tip-trixie
+  image: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
   before_script:
-    - apt -q --yes update
-    - apt -q --yes upgrade
-    - apt -q --yes install openjdk-21-jdk
-    - apt -q --yes install e2fsprogs e2fslibs-dev
-    - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash #NVM https://nodejs.org/en/download
-    - \. "$HOME/.nvm/nvm.sh"
-    - nvm install 24
-    - npm install npm -g
     - npm install
   script:
     - echo "running tests"
