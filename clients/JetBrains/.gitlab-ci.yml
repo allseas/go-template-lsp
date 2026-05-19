@@ -31,7 +31,6 @@ linting:
   stage: lint
   image:
     name: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
-    pull_policy: always
   script:
     - echo "running ktlint..."
     - cd clients/JetBrains/go-text-template
@@ -41,7 +40,6 @@ testing:
   stage: test
   image:
     name: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
-    pull_policy: always
   before_script:
     - npm install
   script:
