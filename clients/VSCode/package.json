@@ -33,12 +33,13 @@
         "@types/vscode": "^1.116.0",
         "@vscode/test-cli": "^0.0.12",
         "@vscode/test-electron": "^2.5.2",
+        "@vscode/vsce": "^3.9.1",
         "esbuild": "^0.28.0",
         "eslint": "^10.2.1",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.59.1"
     },
-    "main": "out/extension.js",
+    "main": "./dist/extension.js",
     "activationEvents": [],
     "contributes": {
         "configurationDefaults": {
@@ -46,13 +47,6 @@
                 "editor.wordBasedSuggestions": "off"
             }
         },
-        "iconThemes": [
-            {
-                "id": "text-tmpl-icons",
-                "label": "Text Template Icons",
-                "path": "./icons/tmpl-icon-theme.json"
-            }
-        ],
         "languages": [
             {
                 "id": "gotmpl",
@@ -63,6 +57,10 @@
                 "extensions": [
                     ".tmpl"
                 ],
+                "icon": {
+                    "light": "./icons/icon.svg",
+                    "dark": "./icons/icon.svg"
+                },
                 "configuration": "./language-configuration.json"
             }
         ],
