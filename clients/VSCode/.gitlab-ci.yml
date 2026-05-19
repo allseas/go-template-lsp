@@ -12,9 +12,8 @@ default:
 
 linting:
     stage: lint
-    image: alpine:3.22.4
+    image: node:24-alpine
     before_script:
-        - apk add --update npm
         - npm install
     script:
         - echo "Running TSESLint"
@@ -22,9 +21,8 @@ linting:
 
 formatting:
     stage: lint
-    image: alpine:3.22.4
+    image: node:24-alpine
     before_script:
-        - apk add --update npm
         - npm install
     script:
         - echo "Running Prettier"
