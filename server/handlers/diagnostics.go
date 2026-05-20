@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	templateBlockRegex      = regexp.MustCompile(`\{\{-?\s*(.*?)\s*-?`)
+	templateBlockRegex      = regexp.MustCompile(`\{\{-?\s*(.*?)\s*-?\}\}`)
 	errorCleanPositionRegex = regexp.MustCompile(`\s*at position \d+`)
 )
 
@@ -23,6 +23,11 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	diagnostics := collectDiagnostics(text, uri)
 	if diagnostics == nil {
 		diagnostics = []protocol.Diagnostic{}
+	}
+	for i := range diagnostics {
+		if strings.TrimSpace(diagnostics[i].Message) == "" {
+			diagnostics[i].Message = "unknown diagnostic"
+		}
 	}
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, &protocol.PublishDiagnosticsParams{
 		URI:         uri,
@@ -38,20 +43,36 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	} else {
 		log.Debug().Msg("doc, tree, or root is nil")
 	}
-	for _, match := range templateBlockRegex.FindAllStringSubmatchIndex(text, -1) {
-		if len(match) < 4 || match[2] < 0 || match[3] > len(text) || match[2] > match[3] {
+	for _, match := range templateBlockRegex.FindAllStringIndex(text, -1) {
+		if len(match) < 2 {
 			continue
 		}
-		inner := strings.TrimSpace(text[match[2]:match[3]])
+		start, end := match[0], match[1]
+		if start < 0 || end > len(text) || start >= end {
+			continue
+		}
+		inner := strings.TrimSpace(
+			strings.TrimSuffix(
+				strings.TrimPrefix(strings.TrimSpace(text[start:end]), "{{-"),
+				"-}}",
+			),
+		)
+
+		inner = strings.TrimSpace(
+			strings.TrimSuffix(
+				strings.TrimPrefix(inner, "{{"),
+				"}}",
+			),
+		)
 		if inner == "" || strings.HasPrefix(inner, "/*") || inner == "end" || inner == "else" ||
-			hasExactDiagnosticAtRange(diagnostics, match[0], match[1], text) {
+			hasExactDiagnosticAtRange(diagnostics, start, end, text) {
 			continue
 		}
 		if isUnparsedText(inner) || strings.ContainsAny(inner, "[]") {
 			diagnostics = append(diagnostics, protocol.Diagnostic{
 				Range: protocol.Range{
-					Start: offsetToPosition(text, match[0]),
-					End:   offsetToPosition(text, match[1]),
+					Start: offsetToPosition(text, start),
+					End:   offsetToPosition(text, end),
 				},
 				Message:  "syntax error: unexpected token or unparseable action '" + inner + "'",
 				Severity: new(protocol.DiagnosticSeverityError),
@@ -61,7 +82,7 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	return diagnostics
 }
 
-// isUnparsedText checks if a text block contains invalid or unparseable template syntax
+// isUnparsedText checks if a text block contains invalid or unparseable template syntax.
 func isUnparsedText(content string) bool {
 	if strings.ContainsAny(content, `$.":|`+"`") || strings.Contains(content, ":=") {
 		return false
@@ -85,7 +106,7 @@ func hasExactDiagnosticAtRange(
 	return false
 }
 
-// walkAndAnalyze recursively walks down the tree, keeping track of the scope context to run validation rules
+// walkAndAnalyze recursively walks down the tree, keeping track of the scope context to run validation rules.
 func walkAndAnalyze(
 	node parse.Node,
 	text string,
@@ -98,12 +119,16 @@ func walkAndAnalyze(
 	visited[node] = true
 	defer delete(visited, node)
 	if unode, ok := node.(*parse.UndefinedNode); ok {
+		msg := strings.TrimSpace(
+			errorCleanPositionRegex.ReplaceAllString(unode.String(), ""),
+		)
+		if msg == "" {
+			msg = "undefined node"
+		}
 		return []protocol.Diagnostic{
 			{
-				Range: expandToFullBracketsFromOffset(int(unode.Position()), text),
-				Message: strings.TrimSpace(
-					errorCleanPositionRegex.ReplaceAllString(unode.String(), ""),
-				),
+				Range:    expandToFullBracketsFromOffset(int(unode.Position()), text),
+				Message:  msg,
 				Severity: new(protocol.DiagnosticSeverityError),
 			},
 		}
@@ -137,14 +162,11 @@ func walkAndAnalyze(
 				funcName := identNode.Ident
 				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
 				if _, exists := builtinOutput[funcName]; !exists {
-					diagnostics = append(
-						diagnostics,
-						protocol.Diagnostic{
-							Range:    rng,
-							Message:  "unsupported function or unregistered command: " + funcName,
-							Severity: new(protocol.DiagnosticSeverityError),
-						},
-					)
+					diagnostics = append(diagnostics, protocol.Diagnostic{
+						Range:    rng,
+						Message:  "unsupported function or unregistered command: " + funcName,
+						Severity: new(protocol.DiagnosticSeverityError),
+					})
 				} else if currentKind := pipeOutputKind(ctx, false); currentKind != outputAny && currentKind != outputUntyped {
 					isMatch := false
 					for _, allowed := range functionsAccepting[currentKind] {
@@ -154,14 +176,11 @@ func walkAndAnalyze(
 						}
 					}
 					if !isMatch {
-						diagnostics = append(
-							diagnostics,
-							protocol.Diagnostic{
-								Range:    rng,
-								Message:  "type mismatch: function '" + funcName + "' does not accept piped data of this output kind",
-								Severity: new(protocol.DiagnosticSeverityError),
-							},
-						)
+						diagnostics = append(diagnostics, protocol.Diagnostic{
+							Range:    rng,
+							Message:  "type mismatch: function '" + funcName + "' does not accept piped data of this output kind",
+							Severity: new(protocol.DiagnosticSeverityError),
+						})
 					}
 				}
 			}
@@ -219,7 +238,7 @@ func collectDeclarations(
 	return diagnostics
 }
 
-// checkPipeUsage scans through values to ensure that any references to custom variables have been explicitly defined beforehand
+// checkPipeUsage scans through values to ensure that any references to custom variables have been explicitly defined beforehand.
 func checkPipeUsage(
 	pipe *parse.PipeNode,
 	text string,
@@ -247,7 +266,7 @@ func checkPipeUsage(
 	return diagnostics
 }
 
-// expandToFullBracketsFromOffset computes a Range including the {{ and }}
+// expandToFullBracketsFromOffset computes a Range including the {{ and }}.
 func expandToFullBracketsFromOffset(pos int, text string) protocol.Range {
 	startOffset, endOffset := pos, pos
 	if pos < len(text) {
@@ -271,7 +290,7 @@ func expandToFullBracketsFromOffset(pos int, text string) protocol.Range {
 	}
 }
 
-// extractBranchNodes unifies access to child properties for branch structural entities including Range, If, and With statement blocks
+// extractBranchNodes unifies access to child properties for branch structural entities including Range, If, and With statement blocks.
 func extractBranchNodes(node parse.Node) (*parse.PipeNode, *parse.ListNode, *parse.ListNode) {
 	switch n := node.(type) {
 	case *parse.IfNode:
