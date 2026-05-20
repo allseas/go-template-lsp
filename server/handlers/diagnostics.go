@@ -15,7 +15,9 @@ var (
 	errorCleanPositionRegex = regexp.MustCompile(`\s*at position \d+`)
 )
 
-// publishDiagnostics runs a diagnostics analysis and notifies the client with any discovered warnings or errors.
+const undefinedVariableMessage = "undefined variable: "
+
+// publishDiagnostics analyzes the document and sends diagnostics to the client.
 func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	if ctx == nil {
 		return
@@ -35,11 +37,11 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	})
 }
 
-// collectDiagnostics builds the list of issues by combining tree analysis with regex-based text parsing rules to catch raw token anomalies.
+// collectDiagnostics returns diagnostics from tree analysis and regex-based token checks.
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	if doc, ok := store.Get(uri); ok && doc.tree != nil && doc.tree.Root != nil {
 		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-		diagnostics = walkAndAnalyze(doc.tree.Root, text, ctx, map[parse.Node]bool{})
+		diagnostics = walkAndAnalyze(doc.tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)
 	} else {
 		log.Debug().Msg("doc, tree, or root is nil")
 	}
@@ -57,7 +59,6 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 				"-}}",
 			),
 		)
-
 		inner = strings.TrimSpace(
 			strings.TrimSuffix(
 				strings.TrimPrefix(inner, "{{"),
@@ -82,80 +83,45 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	return diagnostics
 }
 
-// isUnparsedText checks if a text block contains invalid or unparseable template syntax.
-func isUnparsedText(content string) bool {
-	if strings.ContainsAny(content, `$.":|`+"`") || strings.Contains(content, ":=") {
-		return false
-	}
-	return strings.Trim(content, "0123456789 ") != ""
-}
+// analyzeNode is the visitor passed to walkAndAnalyze; it declares variables then validates the node.
+func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
+	diagnostics = append(diagnostics, declareNode(node, text, ctx)...)
 
-// hasExactDiagnosticAtRange returns true if an existing diagnostic problem has already been reported within the exact range or line context specified.
-func hasExactDiagnosticAtRange(
-	diagnostics []protocol.Diagnostic,
-	start, end int,
-	text string,
-) bool {
-	pStart, pEnd := offsetToPosition(text, start), offsetToPosition(text, end)
-	for _, d := range diagnostics {
-		if d.Range.Start.Line == pStart.Line && d.Range.Start.Character >= pStart.Character &&
-			d.Range.End.Character <= pEnd.Character {
-			return true
-		}
-	}
-	return false
-}
-
-// walkAndAnalyze recursively walks down the tree, keeping track of the scope context to run validation rules.
-func walkAndAnalyze(
-	node parse.Node,
-	text string,
-	ctx *Context,
-	visited map[parse.Node]bool,
-) (diagnostics []protocol.Diagnostic) {
-	if node == nil || visited[node] {
-		return nil
-	}
-	visited[node] = true
-	defer delete(visited, node)
-	if unode, ok := node.(*parse.UndefinedNode); ok {
-		msg := strings.TrimSpace(
-			errorCleanPositionRegex.ReplaceAllString(unode.String(), ""),
+	switch n := node.(type) {
+	case *parse.UndefinedNode:
+		name := strings.TrimSpace(
+			errorCleanPositionRegex.ReplaceAllString(n.String(), ""),
 		)
-		if msg == "" {
+		msg := undefinedVariableMessage + name
+		if name == "" {
 			msg = "undefined node"
 		}
-		return []protocol.Diagnostic{
-			{
-				Range:    expandToFullBracketsFromOffset(int(unode.Position()), text),
-				Message:  msg,
-				Severity: new(protocol.DiagnosticSeverityError),
-			},
-		}
-	}
-	switch n := node.(type) {
-	case *parse.ListNode:
-		for _, child := range n.Nodes {
-			diagnostics = append(diagnostics, walkAndAnalyze(child, text, ctx, visited)...)
-		}
+		diagnostics = append(diagnostics, protocol.Diagnostic{
+			Range:    expandToFullBracketsFromOffset(int(n.Position()), text),
+			Message:  msg,
+			Severity: new(protocol.DiagnosticSeverityError),
+		})
+
 	case *parse.ActionNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
 			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
-			diagnostics = append(diagnostics, walkAndAnalyze(n.Pipe, text, ctx, visited)...)
 		}
-	case *parse.PipeNode:
-		for _, v := range n.Decl {
-			if len(v.Ident) > 0 {
-				ctx.Vars[v.Ident[0]] = n
-			}
+
+	case *parse.RangeNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
 		}
-		prevPipe := ctx.Pipe
-		ctx.Pipe = n
-		for _, cmd := range n.Cmds {
-			diagnostics = append(diagnostics, walkAndAnalyze(cmd, text, ctx, visited)...)
+
+	case *parse.IfNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
 		}
-		ctx.Pipe = prevPipe
+
+	case *parse.WithNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+		}
+
 	case *parse.CommandNode:
 		if len(n.Args) > 0 {
 			if identNode, ok := n.Args[0].(*parse.IdentifierNode); ok {
@@ -185,29 +151,31 @@ func walkAndAnalyze(
 				}
 			}
 		}
-		for _, arg := range n.Args {
-			diagnostics = append(diagnostics, walkAndAnalyze(arg, text, ctx, visited)...)
-		}
-	case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
-		pipe, list, elseList := extractBranchNodes(n)
-		snapshot := snapshotVars(ctx.Vars)
-		if _, isWith := n.(*parse.WithNode); !isWith && pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(pipe, text, ctx)...)
-		}
-		if pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(pipe, text, ctx)...)
-			diagnostics = append(diagnostics, walkAndAnalyze(pipe, text, ctx, visited)...)
-		}
-		diagnostics = append(diagnostics, walkAndAnalyze(list, text, ctx, visited)...)
-		ctx.Vars = snapshot
-		diagnostics = append(diagnostics, walkAndAnalyze(elseList, text, ctx, visited)...)
-		ctx.Vars = snapshot
 	}
 
 	return diagnostics
 }
 
-// collectDeclarations registers new template variables in the current scope context, flagging if a variable is illegally re-declared.
+// declareNode registers variable declarations into ctx.Vars before validation runs.
+func declareNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
+	switch n := node.(type) {
+	case *parse.ActionNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
+		}
+	case *parse.RangeNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
+		}
+	case *parse.IfNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
+		}
+	}
+	return diagnostics
+}
+
+// collectDeclarations registers variables into ctx.Vars and flags duplicate := declarations.
 func collectDeclarations(
 	pipe *parse.PipeNode,
 	text string,
@@ -238,7 +206,7 @@ func collectDeclarations(
 	return diagnostics
 }
 
-// checkPipeUsage scans through values to ensure that any references to custom variables have been explicitly defined beforehand.
+// checkPipeUsage flags any variable references in the pipe that were not previously declared.
 func checkPipeUsage(
 	pipe *parse.PipeNode,
 	text string,
@@ -256,7 +224,7 @@ func checkPipeUsage(
 				if name := vnode.Ident[0]; name != "" && name != "$" && ctx.Vars[name] == nil {
 					diagnostics = append(diagnostics, protocol.Diagnostic{
 						Range:    nodeToRange(vnode, text),
-						Message:  "undefined variable: " + name,
+						Message:  undefinedVariableMessage + name,
 						Severity: new(protocol.DiagnosticSeverityError),
 					})
 				}
@@ -266,7 +234,7 @@ func checkPipeUsage(
 	return diagnostics
 }
 
-// expandToFullBracketsFromOffset computes a Range including the {{ and }}.
+// expandToFullBracketsFromOffset returns a Range that includes the surrounding {{ and }}.
 func expandToFullBracketsFromOffset(pos int, text string) protocol.Range {
 	startOffset, endOffset := pos, pos
 	if pos < len(text) {
@@ -290,7 +258,7 @@ func expandToFullBracketsFromOffset(pos int, text string) protocol.Range {
 	}
 }
 
-// extractBranchNodes unifies access to child properties for branch structural entities including Range, If, and With statement blocks.
+// extractBranchNodes returns the pipe, list, and else-list for if/range/with nodes.
 func extractBranchNodes(node parse.Node) (*parse.PipeNode, *parse.ListNode, *parse.ListNode) {
 	switch n := node.(type) {
 	case *parse.IfNode:
@@ -302,4 +270,28 @@ func extractBranchNodes(node parse.Node) (*parse.PipeNode, *parse.ListNode, *par
 	default:
 		return nil, nil, nil
 	}
+}
+
+// isUnparsedText reports whether the content contains invalid template syntax.
+func isUnparsedText(content string) bool {
+	if strings.ContainsAny(content, `$.":|`+"`") || strings.Contains(content, ":=") {
+		return false
+	}
+	return strings.Trim(content, "0123456789 ") != ""
+}
+
+// hasExactDiagnosticAtRange reports whether a diagnostic already exists at the given range.
+func hasExactDiagnosticAtRange(
+	diagnostics []protocol.Diagnostic,
+	start, end int,
+	text string,
+) bool {
+	pStart, pEnd := offsetToPosition(text, start), offsetToPosition(text, end)
+	for _, d := range diagnostics {
+		if d.Range.Start.Line == pStart.Line && d.Range.Start.Character >= pStart.Character &&
+			d.Range.End.Character <= pEnd.Character {
+			return true
+		}
+	}
+	return false
 }

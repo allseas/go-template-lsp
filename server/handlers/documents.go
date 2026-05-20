@@ -205,3 +205,59 @@ func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 	walk(root)
 	return best
 }
+
+// walkAndAnalyze recursively walks the node tree, maintaining scope context, and calls fn on every node.
+func walkAndAnalyze(
+	node parse.Node,
+	text string,
+	ctx *Context,
+	visited map[parse.Node]bool,
+	fn func(parse.Node, string, *Context) []protocol.Diagnostic,
+) (diagnostics []protocol.Diagnostic) {
+	if node == nil || visited[node] {
+		return nil
+	}
+	visited[node] = true
+	defer delete(visited, node)
+
+	diagnostics = append(diagnostics, fn(node, text, ctx)...)
+
+	switch n := node.(type) {
+	case *parse.ListNode:
+		for _, child := range n.Nodes {
+			diagnostics = append(diagnostics, walkAndAnalyze(child, text, ctx, visited, fn)...)
+		}
+	case *parse.ActionNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, walkAndAnalyze(n.Pipe, text, ctx, visited, fn)...)
+		}
+	case *parse.PipeNode:
+		for _, v := range n.Decl {
+			if len(v.Ident) > 0 {
+				ctx.Vars[v.Ident[0]] = n
+			}
+		}
+		prevPipe := ctx.Pipe
+		ctx.Pipe = n
+		for _, cmd := range n.Cmds {
+			diagnostics = append(diagnostics, walkAndAnalyze(cmd, text, ctx, visited, fn)...)
+		}
+		ctx.Pipe = prevPipe
+	case *parse.CommandNode:
+		for _, arg := range n.Args {
+			diagnostics = append(diagnostics, walkAndAnalyze(arg, text, ctx, visited, fn)...)
+		}
+	case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
+		pipe, list, elseList := extractBranchNodes(n)
+		snapshot := snapshotVars(ctx.Vars)
+		if pipe != nil {
+			diagnostics = append(diagnostics, walkAndAnalyze(pipe, text, ctx, visited, fn)...)
+		}
+		diagnostics = append(diagnostics, walkAndAnalyze(list, text, ctx, visited, fn)...)
+		ctx.Vars = snapshot
+		diagnostics = append(diagnostics, walkAndAnalyze(elseList, text, ctx, visited, fn)...)
+		ctx.Vars = snapshot
+	}
+
+	return diagnostics
+}
