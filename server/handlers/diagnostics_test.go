@@ -19,7 +19,10 @@ func diagMessages(diags []protocol.Diagnostic) []string {
 	return msgs
 }
 
-func findDiagnosticContaining(diags []protocol.Diagnostic, substr string) (*protocol.Diagnostic, bool) {
+func findDiagnosticContaining(
+	diags []protocol.Diagnostic,
+	substr string,
+) (*protocol.Diagnostic, bool) {
 	for i := range diags {
 		if strings.Contains(diags[i].Message, substr) {
 			return &diags[i], true
@@ -28,7 +31,12 @@ func findDiagnosticContaining(diags []protocol.Diagnostic, substr string) (*prot
 	return nil, false
 }
 
-func assertDiagnosticCoversTextRange(t *testing.T, diag protocol.Diagnostic, text string, startOffset, endOffset int) {
+func assertDiagnosticCoversTextRange(
+	t *testing.T,
+	diag protocol.Diagnostic,
+	text string,
+	startOffset, endOffset int,
+) {
 	t.Helper()
 
 	wantStart := offsetToPosition(text, startOffset)
@@ -176,7 +184,13 @@ func TestCollectDiagnostics_ValidTemplateBlocks(t *testing.T) {
 				syntaxErrors++
 			}
 		}
-		assert.Zero(t, syntaxErrors, "unexpected syntax error in: %s\ndiags: %v", tc.text, diagMessages(diags))
+		assert.Zero(
+			t,
+			syntaxErrors,
+			"unexpected syntax error in: %s\ndiags: %v",
+			tc.text,
+			diagMessages(diags),
+		)
 	}
 }
 
