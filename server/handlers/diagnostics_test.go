@@ -416,6 +416,7 @@ func TestAnalyzeNode_CommandNode(t *testing.T) {
 	require.Len(t, diags, 1)
 	assert.Contains(t, diags[0].Message, "unsupported function or unregistered command")
 }
+
 func TestPublishDiagnostics_SendsDiagnostics(t *testing.T) {
 	var notified bool
 	var notifyMethod string
@@ -441,11 +442,10 @@ func TestPublishDiagnostics_SendsDiagnostics(t *testing.T) {
 }
 
 func TestPublishDiagnostics_UnknownDiagnosticFallback(t *testing.T) {
-
 	var notifyParams *protocol.PublishDiagnosticsParams
 
 	ctx := &glsp.Context{
-		Notify: func(method string, params any) {
+		Notify: func(_ string, params any) {
 			if p, ok := params.(*protocol.PublishDiagnosticsParams); ok {
 				notifyParams = p
 			}
