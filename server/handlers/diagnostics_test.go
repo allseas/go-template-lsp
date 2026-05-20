@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	parse "text-template-parser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -147,13 +148,6 @@ func TestHasExactDiagnosticAtRange(t *testing.T) {
 	assert.False(t, found)
 }
 
-func TestExtractBranchNodes(t *testing.T) {
-	pipe, list, elseList := extractBranchNodes(nil)
-	assert.Nil(t, pipe)
-	assert.Nil(t, list)
-	assert.Nil(t, elseList)
-}
-
 func TestCollectDiagnostics_EmptyAndTrivial(t *testing.T) {
 	diags := collectDiagnostics("", "file:///test.tmpl")
 	assert.Empty(t, diags)
@@ -240,4 +234,184 @@ func TestPublishDiagnostics_NilContext(t *testing.T) {
 	assert.NotPanics(t, func() {
 		publishDiagnostics(nil, "file:///test.tmpl", "{{ .Name }}")
 	})
+}
+
+// ai generated below
+func TestExtractBranchNodes(t *testing.T) {
+	ifPipe, ifList, ifElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
+	p, l, e := extractBranchNodes(&parse.IfNode{
+		BranchNode: parse.BranchNode{
+			Pipe:     ifPipe,
+			List:     ifList,
+			ElseList: ifElse,
+		},
+	})
+	assert.Equal(t, ifPipe, p)
+	assert.Equal(t, ifList, l)
+	assert.Equal(t, ifElse, e)
+
+	rangePipe, rangeList, rangeElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
+	p, l, e = extractBranchNodes(&parse.RangeNode{
+		BranchNode: parse.BranchNode{
+			Pipe:     rangePipe,
+			List:     rangeList,
+			ElseList: rangeElse,
+		},
+	})
+	assert.Equal(t, rangePipe, p)
+	assert.Equal(t, rangeList, l)
+	assert.Equal(t, rangeElse, e)
+
+	withPipe, withList, withElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
+	p, l, e = extractBranchNodes(&parse.WithNode{
+		BranchNode: parse.BranchNode{
+			Pipe:     withPipe,
+			List:     withList,
+			ElseList: withElse,
+		},
+	})
+	assert.Equal(t, withPipe, p)
+	assert.Equal(t, withList, l)
+	assert.Equal(t, withElse, e)
+
+	p, l, e = extractBranchNodes(&parse.TextNode{})
+	assert.Nil(t, p)
+	assert.Nil(t, l)
+	assert.Nil(t, e)
+}
+
+func TestCollectDeclarations(t *testing.T) {
+	ctx := &Context{Vars: map[string]parse.Node{}}
+	assert.Nil(t, collectDeclarations(nil, "", ctx))
+
+	pipeWithNil := &parse.PipeNode{Decl: []*parse.VariableNode{nil}}
+	assert.Empty(t, collectDeclarations(pipeWithNil, "", ctx))
+
+	text := "{{ $newVar := . }}"
+	declVar := &parse.VariableNode{Ident: []string{"$newVar"}}
+	pipe := &parse.PipeNode{Decl: []*parse.VariableNode{declVar}}
+
+	diags := collectDeclarations(pipe, text, ctx)
+	assert.Empty(t, diags)
+	assert.NotNil(t, ctx.Vars["$newVar"])
+
+	diags = collectDeclarations(pipe, text, ctx)
+	require.Len(t, diags, 1)
+	assert.Contains(t, diags[0].Message, "duplicate variable declaration: $newVar")
+	assert.Equal(t, protocol.DiagnosticSeverityWarning, *diags[0].Severity)
+}
+
+func TestCheckPipeUsage(t *testing.T) {
+	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	assert.Nil(t, checkPipeUsage(nil, "", ctx))
+
+	ctx.Vars["$defined"] = &parse.PipeNode{}
+	vnode := &parse.VariableNode{Ident: []string{"$defined"}}
+	cmd := &parse.CommandNode{Args: []parse.Node{vnode}}
+	pipe := &parse.PipeNode{Cmds: []*parse.CommandNode{cmd}}
+	assert.Empty(t, checkPipeUsage(pipe, "{{ $defined }}", ctx))
+
+	vnodeUndef := &parse.VariableNode{Ident: []string{"$undef"}}
+	cmdUndef := &parse.CommandNode{Args: []parse.Node{vnodeUndef}}
+	pipeUndef := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdUndef}}
+	diags := checkPipeUsage(pipeUndef, "{{ $undef }}", ctx)
+	require.Len(t, diags, 1)
+	assert.Contains(t, diags[0].Message, "undefined variable: $undef")
+}
+
+func TestDeclareNode(t *testing.T) {
+	actVar := &parse.VariableNode{Ident: []string{"$act"}}
+	rngVar := &parse.VariableNode{Ident: []string{"$rng"}}
+	ifVar := &parse.VariableNode{Ident: []string{"$if"}}
+
+	tests := []struct {
+		name    string
+		node    parse.Node
+		text    string
+		varName string
+	}{
+		{
+			name:    "action node",
+			node:    &parse.ActionNode{Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{actVar}}},
+			text:    "{{ $act := . }}",
+			varName: "$act",
+		},
+		{
+			name: "range node",
+			node: &parse.RangeNode{
+				BranchNode: parse.BranchNode{
+					Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{rngVar}},
+				},
+			},
+			text:    "{{ range $rng := . }}",
+			varName: "$rng",
+		},
+		{
+			name: "if node",
+			node: &parse.IfNode{
+				BranchNode: parse.BranchNode{
+					Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{ifVar}},
+				},
+			},
+			text:    "{{ if $if := . }}",
+			varName: "$if",
+		},
+	}
+
+	for _, tc := range tests {
+		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+		diags := declareNode(tc.node, tc.text, ctx)
+		assert.Empty(t, diags, tc.name)
+		assert.NotNil(t, ctx.Vars[tc.varName], tc.name)
+	}
+}
+
+func TestAnalyzeNode_PipeWrappers(t *testing.T) {
+	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	vnode := &parse.VariableNode{Ident: []string{"$undef"}}
+	cmd := &parse.CommandNode{Args: []parse.Node{vnode}}
+	pipe := &parse.PipeNode{Cmds: []*parse.CommandNode{cmd}}
+
+	tests := []struct {
+		name string
+		node parse.Node
+		text string
+	}{
+		{
+			name: "action block",
+			node: &parse.ActionNode{Pipe: pipe},
+			text: "{{ $undef }}",
+		},
+		{
+			name: "range block",
+			node: &parse.RangeNode{BranchNode: parse.BranchNode{Pipe: pipe}},
+			text: "{{ range $undef }}",
+		},
+		{
+			name: "if block",
+			node: &parse.IfNode{BranchNode: parse.BranchNode{Pipe: pipe}},
+			text: "{{ if $undef }}",
+		},
+		{
+			name: "with block",
+			node: &parse.WithNode{BranchNode: parse.BranchNode{Pipe: pipe}},
+			text: "{{ with $undef }}",
+		},
+	}
+
+	for _, tc := range tests {
+		diags := analyzeNode(tc.node, tc.text, ctx)
+		require.Len(t, diags, 1, tc.name)
+		assert.Contains(t, diags[0].Message, "undefined variable: $undef", tc.name)
+	}
+}
+
+func TestAnalyzeNode_CommandNode(t *testing.T) {
+	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	ident := &parse.IdentifierNode{Ident: "unregisteredCommand"}
+	cmd := &parse.CommandNode{Args: []parse.Node{ident}}
+
+	diags := analyzeNode(cmd, "{{ unregisteredCommand }}", ctx)
+	require.Len(t, diags, 1)
+	assert.Contains(t, diags[0].Message, "unsupported function or unregistered command")
 }
