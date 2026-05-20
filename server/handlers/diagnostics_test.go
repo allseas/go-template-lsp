@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
@@ -414,4 +415,90 @@ func TestAnalyzeNode_CommandNode(t *testing.T) {
 	diags := analyzeNode(cmd, "{{ unregisteredCommand }}", ctx)
 	require.Len(t, diags, 1)
 	assert.Contains(t, diags[0].Message, "unsupported function or unregistered command")
+}
+func TestPublishDiagnostics_SendsDiagnostics(t *testing.T) {
+	var notified bool
+	var notifyMethod string
+	var notifyParams *protocol.PublishDiagnosticsParams
+
+	ctx := &glsp.Context{
+		Notify: func(method string, params any) {
+			notified = true
+			notifyMethod = method
+			if p, ok := params.(*protocol.PublishDiagnosticsParams); ok {
+				notifyParams = p
+			}
+		},
+	}
+
+	publishDiagnostics(ctx, "file:///test.tmpl", "{{ random }}")
+
+	assert.True(t, notified)
+	assert.Equal(t, protocol.ServerTextDocumentPublishDiagnostics, notifyMethod)
+	require.NotNil(t, notifyParams)
+	assert.Equal(t, "file:///test.tmpl", notifyParams.URI)
+	assert.NotEmpty(t, notifyParams.Diagnostics)
+}
+
+func TestPublishDiagnostics_UnknownDiagnosticFallback(t *testing.T) {
+
+	var notifyParams *protocol.PublishDiagnosticsParams
+
+	ctx := &glsp.Context{
+		Notify: func(method string, params any) {
+			if p, ok := params.(*protocol.PublishDiagnosticsParams); ok {
+				notifyParams = p
+			}
+		},
+	}
+
+	publishDiagnostics(ctx, "file:///test.tmpl", "")
+	if notifyParams != nil && len(notifyParams.Diagnostics) > 0 {
+		for _, d := range notifyParams.Diagnostics {
+			if d.Message == "" {
+				assert.Equal(t, "unknown diagnostic", d.Message)
+			}
+		}
+	}
+}
+
+func TestCollectDeclarations_RootIdent(t *testing.T) {
+	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	declVar := &parse.VariableNode{Ident: []string{"$"}}
+	pipe := &parse.PipeNode{Decl: []*parse.VariableNode{declVar}}
+
+	diags := collectDeclarations(pipe, "{{ $ := . }}", ctx)
+	assert.Empty(t, diags)
+}
+
+func TestCollectDeclarations_Assignment(t *testing.T) {
+	ctx := &Context{Vars: map[string]parse.Node{"$": nil, "$x": &parse.PipeNode{}}}
+	declVar := &parse.VariableNode{Ident: []string{"$x"}}
+	pipe := &parse.PipeNode{
+		Decl:     []*parse.VariableNode{declVar},
+		IsAssign: true,
+	}
+	diags := collectDeclarations(pipe, "{{ $x = . }}", ctx)
+	assert.Empty(t, diags)
+	assert.Equal(t, pipe, ctx.Vars["$x"])
+}
+
+func TestCheckPipeUsage_SpecialVariables(t *testing.T) {
+	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	vnodeRoot := &parse.VariableNode{Ident: []string{"$"}}
+	cmdRoot := &parse.CommandNode{Args: []parse.Node{vnodeRoot}}
+	pipeRoot := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdRoot}}
+	assert.Empty(t, checkPipeUsage(pipeRoot, "{{ $ }}", ctx))
+	vnodeEmpty := &parse.VariableNode{Ident: []string{""}}
+	cmdEmpty := &parse.CommandNode{Args: []parse.Node{vnodeEmpty}}
+	pipeEmpty := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdEmpty}}
+	assert.Empty(t, checkPipeUsage(pipeEmpty, "{{}}", ctx))
+}
+
+func TestAnalyzeNode_UndefinedNodeEmptyName(t *testing.T) {
+	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	undefNode := &parse.UndefinedNode{}
+	diags := analyzeNode(undefNode, "{{ }}", ctx)
+	require.Len(t, diags, 1)
+	assert.Equal(t, "undefined node", diags[0].Message)
 }
