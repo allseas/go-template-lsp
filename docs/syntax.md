@@ -1,5 +1,11 @@
 # TextMate Grammar Generator
 
+**Choice of Haskell** - the language was chosen for this due to having types as first class members, making it possible to specify the grammar as a typed object, and then iterate over all the types defined. This allows step by step verification for:
+- Grammar definition
+- Regex generation for each element
+- Serialization into the proper format
+In place of verifying a manually written json file all at once.
+
 ## Module Structure
 
 ```
