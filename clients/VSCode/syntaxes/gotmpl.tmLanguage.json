@@ -1,82 +1,172 @@
 {
     "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-    "name": "Go text/template",
-    "patterns": [
-        {
-            "include": "#comment"
-        },
-        {
-            "include": "#control"
-        }
-    ],
+    "scopeName": "source.gotmpl",
+    "fileTypes": ["tmpl", "gotmpl"],
+    "patterns": [{ "include": "#comment" }, { "include": "#action" }],
     "repository": {
         "comment": {
+            "name": "comment.block.gotmpl",
+            "begin": "\\{\\{\\-?\\s*/\\*",
+            "end": "\\*/\\s*\\-?\\}\\}",
+            "beginCaptures": {
+                "0": { "name": "punctuation.definition.comment.begin.gotmpl" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.definition.comment.end.gotmpl" }
+            },
+            "patterns": []
+        },
+        "action": {
+            "name": "meta.action.gotmpl",
+            "begin": "\\{\\{\\-?",
+            "end": "\\-?\\}\\}",
+            "beginCaptures": {
+                "0": { "name": "punctuation.definition.action.begin.gotmpl" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.definition.action.end.gotmpl" }
+            },
             "patterns": [
-                {
-                    "name": "comment.block",
-                    "begin": "{{-?\\s*\\/\\*",
-                    "end": "\\*\\/\\s*-?}}"
-                }
+                { "include": "#keyword" },
+                { "include": "#pipe" },
+                { "include": "#comma" },
+                { "include": "#template-name" },
+                { "include": "#variable-declaration" },
+                { "include": "#variable-assignment" },
+                { "include": "#boolean" },
+                { "include": "#number" },
+                { "include": "#string-double" },
+                { "include": "#string-raw" },
+                { "include": "#char" },
+                { "include": "#nil" },
+                { "include": "#dot" },
+                { "include": "#field" },
+                { "include": "#parentheses" },
+                { "include": "#variable" },
+                { "include": "#builtin" }
             ]
         },
-        "control": {
-            "name": "meta.tag",
-            "begin": "{{-|{{",
-            "end": "-}}|}}",
-            "patterns": [
-                {
-                    "include": "#keywords"
-                },
-                {
-                    "include": "#strings"
-                },
-                {
-                    "include": "#fields"
-                },
-                {
-                    "include": "#variables"
-                }
-            ]
+        "keyword": {
+            "name": "keyword.control.gotmpl",
+            "match": "\\b(if|else|end|range|with|template|block|define|break|continue)\\b"
         },
-        "keywords": {
-            "patterns": [
-                {
-                    "name": "keyword.control.gotmpl",
-                    "match": "\\b(if|end|with|else|range|break|continue|template)\\b"
-                },
-                {
-                    "name": "keyword.operator",
-                    "match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery)\\b"
-                }
-            ]
+        "pipe": {
+            "name": "keyword.operator.pipe.gotmpl",
+            "match": "\\|"
         },
-        "fields": {
-            "patterns": [
-                {
-                    "name": "variable.language",
-                    "match": "\\b\\.\\w*"
-                }
-            ]
+        "comma": {
+            "name": "punctuation.separator.comma.gotmpl",
+            "match": ","
         },
-        "variables": {
-            "patterns": [
-                {
-                    "name": "variable.parameter",
-                    "match": "$\\w*"
-                }
-            ]
+        "template-name": {
+            "match": "(?<=template|block|define)\\s+(\"[^\"]*\")",
+            "captures": {
+                "1": { "name": "entity.name.function.gotmpl" }
+            }
         },
-        "strings": {
+        "variable-declaration": {
+            "match": "(\\$[a-zA-Z_]\\w*)\\s*(:=)",
+            "captures": {
+                "1": { "name": "variable.other.gotmpl" },
+                "2": { "name": "keyword.operator.assignment.gotmpl" }
+            }
+        },
+        "variable-assignment": {
+            "match": "(\\$[a-zA-Z_]\\w*)\\s*(=)(?!=)",
+            "captures": {
+                "1": { "name": "variable.other.gotmpl" },
+                "2": { "name": "keyword.operator.assignment.gotmpl" }
+            }
+        },
+        "boolean": {
+            "name": "constant.language.boolean.gotmpl",
+            "match": "\\b(true|false)\\b"
+        },
+        "number": {
+            "name": "constant.numeric.gotmpl",
+            "match": "\\b(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|[0-9][0-9_]*(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)i?\\b"
+        },
+        "string-double": {
             "name": "string.quoted.double.gotmpl",
             "begin": "\"",
             "end": "\"",
+            "beginCaptures": {
+                "0": { "name": "punctuation.definition.string.begin.gotmpl" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.definition.string.end.gotmpl" }
+            },
             "patterns": [
                 {
                     "name": "constant.character.escape.gotmpl",
                     "match": "\\\\."
                 }
             ]
+        },
+        "string-raw": {
+            "name": "string.quoted.other.raw.gotmpl",
+            "begin": "`",
+            "end": "`",
+            "beginCaptures": {
+                "0": { "name": "punctuation.definition.string.begin.gotmpl" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.definition.string.end.gotmpl" }
+            },
+            "patterns": []
+        },
+        "char": {
+            "name": "string.quoted.single.gotmpl",
+            "match": "'(?:\\\\.|[^'])'"
+        },
+        "nil": {
+            "name": "constant.language.nil.gotmpl",
+            "match": "\\bnil\\b"
+        },
+        "dot": {
+            "name": "variable.language.dot.gotmpl",
+            "match": "(?<![a-zA-Z_\\w])\\.(?![a-zA-Z_\\w])"
+        },
+        "field": {
+            "name": "variable.other.member.gotmpl",
+            "match": "\\.[a-zA-Z_]\\w*"
+        },
+        "parentheses": {
+            "begin": "\\(",
+            "end": "\\)",
+            "beginCaptures": {
+                "0": { "name": "punctuation.section.parens.begin.gotmpl" }
+            },
+            "endCaptures": {
+                "0": { "name": "punctuation.section.parens.end.gotmpl" }
+            },
+            "patterns": [
+                { "include": "#keyword" },
+                { "include": "#pipe" },
+                { "include": "#comma" },
+                { "include": "#template-name" },
+                { "include": "#variable-declaration" },
+                { "include": "#variable-assignment" },
+                { "include": "#boolean" },
+                { "include": "#number" },
+                { "include": "#string-double" },
+                { "include": "#string-raw" },
+                { "include": "#char" },
+                { "include": "#nil" },
+                { "include": "#dot" },
+                { "include": "#field" },
+                { "include": "#parentheses" },
+                { "include": "#variable" },
+                { "include": "#builtin" }
+            ]
+        },
+        "variable": {
+            "name": "variable.other.gotmpl",
+            "match": "\\$[a-zA-Z_]\\w*|\\$"
+        },
+        "builtin": {
+            "name": "support.function.gotmpl",
+            "match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery|eq|ne|lt|le|gt|ge)\\b"
         }
-    },
-    "scopeName": "source.gotmpl"
+    }
 }
