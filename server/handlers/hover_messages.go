@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"strings"
 	parse "text-template-parser"
+
+	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 var nodeMessage = map[parse.NodeType]string{
 	parse.NodeAction:     "**Action** - `{{ %s }}`\n\nAction running a command or pipeline.",
-	parse.NodeIf:         "**If Branch** - `{{ if  }}`\n\n",
+	parse.NodeIf:         "**If Branch** - `{{ if %s }}`\n\n Conditional branch executed if %s evaluates to true.",
 	parse.NodeRange:      "**Range Branch** - `{{ range %s }}`\n\nBranch executed for each item in a collection.",
 	parse.NodeWith:       "**With Branch** - `{{ with %s }}`\n\nBranch executed with a new context.",
 	parse.NodeCommand:    "**Command** - `%s`\n\nA command within an action.",
@@ -20,7 +22,7 @@ var nodeMessage = map[parse.NodeType]string{
 	parse.NodeVariable:   "**Variable** - `%s`\n\n",
 	parse.NodeText:       "**Text** - `%.15s`\n\nPlain text content.",
 	parse.NodeTemplate:   "**Template** - `%s`\n\nDefines a template named `%s`.",
-	parse.NodeList:       "***Structure %d*** - \n\n Shouldnt show up like ever",
+	parse.NodeList:       "***Document root*** - \n\n Root node of the parse tree, containing all other nodes.",
 	parse.NodeBool:       "**Boolean literal** - `%v`\n\nA literal value.",
 	parse.NodeNumber:     "**Number literal** - `%s`\n\nA literal numeric value.",
 	parse.NodeString:     "**String literal** - `%s`\n\nA literal string value.",
@@ -34,6 +36,39 @@ var specialMessages = map[string]string{
 	"len":   "**Len Function** - `len`\n\nA built-in function that returns the length of its argument.",
 	"not":   "**Not Function** - `not`\n\nA built-in function that returns the boolean negation of its argument.",
 	"or":    "**Or Function** - `or`\n\nA built-in function that returns the first argument if it is true, and the last argument otherwise.",
+	"end":   "**End Tag** - \n\nMarks the end of %s, which started at line %d.",
+	"else":  "**Else Branch** - \n\nMarks the else branch of conditional %s statement starting at line %d.",
+}
+
+// MessageElse generates a hover message for an else tag of a BranchNode, including the branch type and line number where the if statement starts.
+func MessageElse(n *parse.Node, pos protocol.Position) string {
+	switch (*n).(type) {
+	case *parse.IfNode:
+		return fmt.Sprintf(specialMessages["else"], "if", pos.Line+1)
+	case *parse.RangeNode:
+		return fmt.Sprintf(specialMessages["else"], "range", pos.Line+1)
+	case *parse.WithNode:
+		return fmt.Sprintf(specialMessages["else"], "with", pos.Line+1)
+	default:
+		return "Couldn't find the branch statement"
+	}
+}
+
+// MessageEnd generates a hover message for an end tag of a BranchNode, including the branch type and line number where the branch starts.
+// TODO: should hyperlink the line number to the start tag of the branch
+func MessageEnd(n parse.Node, pos protocol.Position) string {
+	switch node := n.(type) {
+	case *parse.IfNode:
+		return fmt.Sprintf(specialMessages["end"], "if", pos.Line+1)
+	case *parse.RangeNode:
+		return fmt.Sprintf(specialMessages["end"], "range", pos.Line+1)
+	case *parse.WithNode:
+		return fmt.Sprintf(specialMessages["end"], "with", pos.Line+1)
+	case *parse.TemplateNode:
+		return fmt.Sprintf(specialMessages["end"], "template "+node.Name, node.Line+1)
+	default:
+		return ""
+	}
 }
 
 // MessageAction generates a hover message for an ActionNode, including the full action string.
@@ -80,6 +115,9 @@ func MessageField(n *parse.FieldNode) string {
 
 // MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name.
 func MessageIdentifier(n *parse.IdentifierNode) string {
+	if msg, ok := specialMessages[string(n.Ident[0])]; ok {
+		return msg
+	}
 	return fmt.Sprintf(nodeMessage[parse.NodeIdentifier], n.Ident)
 }
 
@@ -145,5 +183,3 @@ func MessageNil(_ *parse.NilNode) string {
 func MessageUndefined(n *parse.UndefinedNode) string {
 	return fmt.Sprintf(nodeMessage[parse.NodeUndefined], n.String())
 }
-
-// GetHoverMessage generates a hover message for a given parse.Node based on its type.

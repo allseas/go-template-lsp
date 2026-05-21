@@ -3,6 +3,9 @@ package handlers
 
 import (
 	"errors"
+	"math"
+	"regexp"
+	"strings"
 	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
@@ -15,8 +18,8 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !ok || doc.tree == nil {
-		log.Debug().Msg("doc or tree is nil")
 		err = errors.New("document not found or failed to parse")
+		log.Debug().Err(err)
 		return
 	}
 
@@ -24,8 +27,44 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 	target := nodeFind(doc.tree.Root, parse.Pos(offset))
 	if target == nil {
 		err = errors.New("node not found")
+		log.Debug().Err(err)
 		return
 	}
+	// Check for end tag hover
+	if branchNode, endRange := endTagHover(
+		target,
+		params.Position,
+		doc.text,
+		doc.tree.Root,
+	); branchNode != nil {
+		// log.Debug().Msg("Hover on end tag of BranchNode")
+		hover = &protocol.Hover{
+			Range: &endRange,
+		}
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageEnd(branchNode, offsetToPosition(doc.text, int(branchNode.Position()))),
+		}
+		return
+	}
+	// Check for else tag hover
+	if branchNode, elseRange := elseNodeHover(
+		target,
+		params.Position,
+		doc.text,
+		doc.tree.Root,
+	); branchNode != nil {
+		log.Debug().Msg("Hover on else tag of BranchNode")
+		hover = &protocol.Hover{
+			Range: &elseRange,
+		}
+		hover.Contents = protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: MessageElse(&branchNode, offsetToPosition(doc.text, int(branchNode.Position()))),
+		}
+		return
+	}
+
 	nodeRange := nodeToRange(target, doc.text)
 
 	hover = &protocol.Hover{
@@ -36,6 +75,14 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		Range: &nodeRange,
 	}
 
+	// Build hover content based on node type
+
+	buildHoverContent(target, hover, doc)
+
+	return
+}
+
+func buildHoverContent(target parse.Node, hover *protocol.Hover, doc *document) {
 	switch target := target.(type) {
 	case *parse.ActionNode:
 		log.Debug().Msg("Hover on ActionNode")
@@ -83,9 +130,17 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		}
 	case *parse.VariableNode:
 		log.Debug().Msg("Hover on VariableNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageVariable(target),
+
+		if isIndexVariable(target, doc.tree.Root) {
+			hover.Contents = protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageIndexVariable(target),
+			}
+		} else {
+			hover.Contents = protocol.MarkupContent{
+				Kind:  protocol.MarkupKindMarkdown,
+				Value: MessageVariable(target),
+			}
 		}
 	case *parse.TextNode:
 		log.Debug().Msg("Hover on TextNode")
@@ -150,9 +205,204 @@ func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 	default:
 		log.Debug().Msgf("Hover on unknown node type: %T", target)
 	}
+}
 
-	// Analyze position
-	// Build hover content
+// endTagHover checks if the hover position is within an end tag and returns the corresponding branch node and range if so.
+func endTagHover(
+	target parse.Node,
+	pos protocol.Position,
+	text string,
+	root parse.Node,
+) (resnode parse.Node, endRange protocol.Range) {
+	lines := strings.Split(text, "\n")
+
+	targetPos := offsetToPosition(text, int(target.Position()))
+
+	if int(pos.Line) >= len(lines) {
+		return
+	}
+
+	line := lines[int(pos.Line)]
+	if int(pos.Character) > len(line) {
+		return
+	}
+	reg := regexp.MustCompile(`{{-?\s*end\s*-?}}`)
+	matches := reg.FindAllStringIndex(line, -1)
+	for _, match := range matches {
+		if int(pos.Character) >= match[0] && int(pos.Character) <= match[1] {
+			// log.Debug().Msg("Position is within an end tag")
+			// Scan backwards until target node is found to count end tags and find the corresponding branch node
+			cline := int(pos.Line)
+			character := int(pos.Character)
+			count := 0
+			for cline > int(targetPos.Line) || (cline == int(targetPos.Line) && character > int(targetPos.Character)) {
+				line := lines[cline]
+				matches := reg.FindAllStringIndex(line, -1)
+				for j := len(matches) - 1; j >= 0; j-- {
+					match := matches[j]
+					if cline == int(pos.Line) && (character >= match[0]) {
+						continue
+					}
+					if cline == int(targetPos.Line) && (match[1] >= int(targetPos.Character)) {
+						continue
+					}
+					count++
+				}
+				cline--
+
+			}
+			// Find the corresponding branch node for this end tag
+			ctx := &Context{Vars: make(map[string]parse.Node)}
+			buildPath(root, target, ctx)
+			path := ctx.Path
+			for i := len(path) - 1; i >= 0; i-- {
+				switch path[i].(type) {
+				case *parse.RangeNode, *parse.IfNode, *parse.WithNode, *parse.TemplateNode:
+					if count > 0 {
+						count--
+						continue
+					}
+					// log.Debug().Msgf("Found branch node of type %T for end tag hover", node)
+					resnode = path[i]
+					if match[1] < 0 || match[1] > math.MaxUint32 {
+						panic("line length overflows uint32??")
+					}
+					endRange = protocol.Range{
+						Start: protocol.Position{
+							Line:      pos.Line,
+							Character: uint32(match[0]), //nolint:gosec
+						},
+						End: protocol.Position{
+							Line:      pos.Line,
+							Character: uint32(match[1]), //nolint:gosec
+						},
+					}
+					return
+				}
+			}
+
+		}
+	}
 
 	return
+}
+
+// elseNodeHover checks if the hover position is within an else tag and returns the corresponding branch node and range if so.
+func elseNodeHover(
+	target parse.Node,
+	pos protocol.Position,
+	text string,
+	root parse.Node,
+) (resnode parse.Node, elseRange protocol.Range) {
+	lines := strings.Split(text, "\n")
+
+	targetPos := offsetToPosition(text, int(target.Position()))
+
+	if int(pos.Line) >= len(lines) {
+		return
+	}
+
+	line := lines[int(pos.Line)]
+	if int(pos.Character) > len(line) {
+		return
+	}
+	reg := regexp.MustCompile(`{{-?\s*else\b`)
+	endReg := regexp.MustCompile(`{{-?\s*end\s*-?}}`)
+	matches := reg.FindAllStringIndex(line, -1)
+	for _, match := range matches {
+		if int(pos.Character) >= match[0] && int(pos.Character) <= match[1] {
+			log.Debug().Msg("Position is within an else tag")
+			// Scan backwards until target node is found to count else tags and find the corresponding branch node
+			cline := int(pos.Line)
+			character := int(pos.Character)
+			count := 0
+			for cline > int(targetPos.Line) || (cline == int(targetPos.Line) && character > int(targetPos.Character)) {
+				line := lines[cline]
+				matches := endReg.FindAllStringIndex(line, -1)
+				for j := len(matches) - 1; j >= 0; j-- {
+					match := matches[j]
+					if cline == int(pos.Line) && (character >= match[0]) {
+						continue
+					}
+					if cline == int(targetPos.Line) && (match[1] >= int(targetPos.Character)) {
+						continue
+					}
+					count++
+				}
+				cline--
+
+			}
+			// Find the corresponding branch node for this else tag
+			ctx := &Context{Vars: make(map[string]parse.Node)}
+			buildPath(root, target, ctx)
+			path := ctx.Path
+			for i := len(path) - 1; i >= 0; i-- {
+				switch path[i].(type) {
+				case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
+					if count > 0 {
+						count--
+						continue
+					}
+					// log.Debug().Msgf("Found branch node of type %T for else tag hover", node)
+					resnode = path[i]
+					if match[1] < 0 || match[1] > math.MaxUint32 {
+						panic("line length overflows uint32??")
+					}
+					elseRange = protocol.Range{
+						Start: protocol.Position{
+							Line:      pos.Line,
+							Character: uint32(match[0]), //nolint:gosec
+						},
+						End: protocol.Position{
+							Line:      pos.Line,
+							Character: uint32(match[1]), //nolint:gosec
+						},
+					}
+					return
+				}
+			}
+
+		}
+	}
+
+	return
+}
+
+func isIndexVariable(target *parse.VariableNode, root *parse.ListNode) bool {
+	ctx := &Context{Vars: make(map[string]parse.Node)}
+	buildPath(root, target, ctx)
+
+	path := ctx.Path
+	branch := path[len(path)-2] // branch is the second to last element in the path
+	if _, ok := branch.(*parse.RangeNode); !ok {
+		return wasDeclaredAsIndex(target, ctx)
+	}
+	branchNode := branch.(*parse.RangeNode)
+
+	pipe := branchNode.Pipe
+
+	return pipe.Decl[0] == target
+}
+
+func wasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
+	for ident, pipe := range ctx.Vars {
+		if ident != target.Ident[0] {
+			continue
+		}
+		if pipe.(*parse.PipeNode).Decl[0].Ident[0] != target.Ident[0] {
+			return false
+		}
+		for _, node := range ctx.Path {
+			if _, ok := node.(*parse.RangeNode); !ok {
+				continue
+			}
+			rangeNode := node.(*parse.RangeNode)
+
+			if rangeNode.Pipe != pipe {
+				continue
+			}
+			return true
+		}
+	}
+	return false
 }

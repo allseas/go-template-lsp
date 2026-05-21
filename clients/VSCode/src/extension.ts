@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import {
@@ -37,11 +38,13 @@ export async function activate(context: ExtensionContext) {
             process.arch === "arm64" ? "gotmpl-server-arm64" : "gotmpl-server";
     }
 
-    const buildFolder = "out";
-    const serverModule = context.asAbsolutePath(
-        path.join(buildFolder, "server", "bin", binaryName),
+    const distPath = context.asAbsolutePath(
+        path.join("dist", "server", "bin", binaryName),
     );
-    console.log("Extension build folder:", buildFolder);
+    const outPath = context.asAbsolutePath(
+        path.join("out", "server", "bin", binaryName),
+    );
+    const serverModule = fs.existsSync(distPath) ? distPath : outPath;
 
     const serverOptions: ServerOptions = {
         command: serverModule,

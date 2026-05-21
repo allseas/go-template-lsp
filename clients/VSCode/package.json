@@ -24,10 +24,10 @@
         "lint:check": "npx eslint .",
         "format:fix": "npx prettier --write .",
         "format:check": "npx prettier --check .",
-        "test": "npm run compile; vscode-test",
+        "test": "npm run compile && vscode-test",
         "verify": "npm run lint:check && npm run format:check && npm test",
-        "package": "npm run verify && node esbuild.js --production && vsce package --no-dependencies && find . | grep '.vsix' | xargs -i mv {} ../../",
-        "package:no-verify": "node esbuild.js --production && vsce package --no-dependencies && find . | grep '.vsix' | xargs -i mv {} ../../"
+        "package": "npm run verify && node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../",
+        "package:no-verify": "node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../"
     },
     "dependencies": {
         "vscode-languageclient": "^9.0.1"
@@ -41,22 +41,18 @@
         "@vscode/vsce": "^3.9.1",
         "esbuild": "^0.28.0",
         "eslint": "^10.2.1",
+        "shx": "^0.4.0",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.59.1"
     },
-    "main": "out/extension.js",
+    "main": "./dist/extension.js",
     "activationEvents": [],
     "contributes": {
         "configurationDefaults": {
-            "[gotmpl]": {}
-        },
-        "iconThemes": [
-            {
-                "id": "text-tmpl-icons",
-                "label": "Text Template Icons",
-                "path": "./icons/tmpl-icon-theme.json"
+            "[gotmpl]": {
+                "editor.wordBasedSuggestions": "off"
             }
-        ],
+        },
         "languages": [
             {
                 "id": "gotmpl",
@@ -67,6 +63,10 @@
                 "extensions": [
                     ".tmpl"
                 ],
+                "icon": {
+                    "light": "./icons/icon.svg",
+                    "dark": "./icons/icon.svg"
+                },
                 "configuration": "./language-configuration.json"
             }
         ],

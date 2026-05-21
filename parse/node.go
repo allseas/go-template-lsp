@@ -82,8 +82,8 @@ type UndefinedNode struct {
 	NodeType
 	Pos
 	tr    *Tree
-	cause string
-	str   string
+	cause string // A description of the error that caused this node to be created.
+	str   string // Raw string which caused the error
 }
 
 func (u *UndefinedNode) tree() *Tree {
@@ -250,6 +250,8 @@ func (p *PipeNode) append(command *CommandNode) {
 }
 
 func (p *PipeNode) String() string {
+	// For some reason this was called with p == nil
+	// Hardcoded null check to avoid panicking
 	if p == nil {
 		return "<nil>"
 	}
