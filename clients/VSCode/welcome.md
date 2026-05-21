@@ -1,6 +1,6 @@
 # Go Text Template Support
 
-You are running version **0.0.1**!
+You are running version **0.1.0**!
 
 Features currently supported:
 
