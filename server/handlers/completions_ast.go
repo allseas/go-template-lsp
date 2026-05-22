@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"fmt"
+	"go/types"
 	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
@@ -18,6 +19,8 @@ type Context struct {
 	Vars map[string]parse.Node
 	// used for the previous functions in the pipe to extract the context using Pipe.Cmds
 	Pipe *parse.PipeNode
+	// DotType is the resolved Go type of the current dot (.) object.
+	DotType *LoadedType
 }
 
 type outputKind int
@@ -83,7 +86,10 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	text := doc.text
 	tree := doc.tree
 
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	ctx := &Context{
+		Vars:    map[string]parse.Node{"$": nil},
+		DotType: doc.loadedType,
+	}
 
 	offset := positionToOffset(text, params.Position)
 
@@ -235,6 +241,7 @@ func suggest(
 	}
 
 	if sChar == '.' {
+		lt := ctx.DotType
 		if lt != nil && (len(lt.Fields) > 0 || len(lt.Methods) > 0) {
 			// Could group by fields and functions, currently sorts alphabetically
 			items := make([]protocol.CompletionItem, 0, len(lt.Fields)+len(lt.Methods))
@@ -393,6 +400,62 @@ func buildPathBranch(
 	return found
 }
 
+// resolvePipeDotType derives the dot type for the body of a range or with block.
+func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *LoadedType {
+	if ctx.DotType == nil || pipe == nil || len(pipe.Cmds) != 1 {
+		return ctx.DotType
+	}
+	cmd := pipe.Cmds[0]
+	if len(cmd.Args) != 1 {
+		return ctx.DotType
+	}
+	field, ok := cmd.Args[0].(*parse.FieldNode)
+	if !ok || len(field.Ident) != 1 {
+		return ctx.DotType
+	}
+	fieldName := field.Ident[0]
+	var fieldType types.Type
+	for _, f := range ctx.DotType.Fields {
+		if f.Name == fieldName {
+			fieldType = f.Type
+			break
+		}
+	}
+	if fieldType == nil {
+		return ctx.DotType
+	}
+	t := fieldType
+	if unwrapSlice {
+		sl, ok := t.Underlying().(*types.Slice)
+		if !ok {
+			// probably trying to iterate over a struct, not a slice
+			return nil
+		}
+		t = sl.Elem()
+	} else {
+		if _, ok := t.Underlying().(*types.Slice); ok {
+			return nil
+		}
+	}
+	named, ok := t.(*types.Named)
+	if !ok {
+		if ptr, ok2 := t.(*types.Pointer); ok2 {
+			named, ok = ptr.Elem().(*types.Named)
+			if !ok {
+				return ctx.DotType
+			}
+		} else {
+			return ctx.DotType
+		}
+	}
+	return &LoadedType{
+		Pkg:     ctx.DotType.Pkg,
+		Named:   named,
+		Fields:  structFields(named),
+		Methods: namedMethods(named),
+	}
+}
+
 // main traversal logic
 func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 	if isLeafNode(n) {
@@ -431,10 +494,22 @@ func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
 
 	case *parse.RangeNode:
-		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+		prevDot := ctx.DotType
+		ctx.DotType = resolvePipeDotType(n.Pipe, true, ctx)
+		found := buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+		if !found {
+			ctx.DotType = prevDot
+		}
+		return found
 
 	case *parse.WithNode:
-		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+		prevDot := ctx.DotType
+		ctx.DotType = resolvePipeDotType(n.Pipe, false, ctx)
+		found := buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+		if !found {
+			ctx.DotType = prevDot
+		}
+		return found
 
 	case *parse.CommandNode:
 		for _, arg := range n.Args {
