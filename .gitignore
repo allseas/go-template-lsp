@@ -4,3 +4,4 @@ node_modules
 dist
 coverage.out
 server/handlers/__debug*
+server_binaries/
