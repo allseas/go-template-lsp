@@ -55,6 +55,11 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 			{Line: 1, Type: "B"},
 		},
 	},
+	{
+		name:      "contains gotype marker but no valid type token",
+		input:     "{{/*gotype: 123*/}}",
+		wantHints: nil,
+	},
 }
 
 // ── splitTypeHint test cases ─────────────────────────────────────────────────
@@ -137,6 +142,12 @@ var loadTypeHintTestCases = []loadTypeHintTestCase{
 	{
 		name:    "returns error when type not found in package",
 		hint:    "text-template-server/src/model.NonExistent",
+		root:    "",
+		wantErr: true,
+	},
+	{
+		name:    "returns error when symbol is not a named type",
+		hint:    "fmt.Println",
 		root:    "",
 		wantErr: true,
 	},

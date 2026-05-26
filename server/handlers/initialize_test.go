@@ -31,6 +31,45 @@ func TestInitializeHandler(t *testing.T) {
 	assert.NotNil(t, initResult.ServerInfo.Version, "server version should be set")
 }
 
+func TestInitializeSetsWorkspaceRootAndCapabilities(t *testing.T) {
+	setupHandlers("goTmpl", "0.0.1")
+	workspaceRoot = ""
+	rootURI := "file:///tmp/project"
+
+	result, err := initialize(nil, &protocol.InitializeParams{RootURI: &rootURI})
+	assert.NoError(t, err)
+
+	initResult, ok := result.(protocol.InitializeResult)
+	assert.True(t, ok)
+	assert.Equal(t, "/tmp/project", workspaceRoot)
+
+	requireCaps := initResult.Capabilities
+	assert.NotNil(t, requireCaps.TextDocumentSync)
+	assert.NotNil(t, requireCaps.CompletionProvider)
+	assert.Equal(t, []string{"$", "."}, requireCaps.CompletionProvider.TriggerCharacters)
+	assert.NotNil(t, requireCaps.CompletionProvider.ResolveProvider)
+	assert.False(t, *requireCaps.CompletionProvider.ResolveProvider)
+	syncOpts, ok := requireCaps.TextDocumentSync.(*protocol.TextDocumentSyncOptions)
+	assert.True(t, ok)
+	assert.NotNil(t, syncOpts.OpenClose)
+	assert.True(t, *syncOpts.OpenClose)
+}
+
+func TestInitializeUsesRootPathWhenRootURIMissing(t *testing.T) {
+	setupHandlers("goTmpl", "0.0.1")
+	workspaceRoot = ""
+	rootPath := "C:/repo/server"
+
+	_, err := initialize(nil, &protocol.InitializeParams{RootPath: &rootPath})
+	assert.NoError(t, err)
+	assert.Equal(t, rootPath, workspaceRoot)
+}
+
+func TestURIToPathInvalidURI(t *testing.T) {
+	badURI := "%zzzz"
+	assert.Equal(t, badURI, uriToPath(badURI))
+}
+
 func TestShutdown(t *testing.T) {
 	setupHandlers("goTmpl", "0.0.1")
 	err := shutdown(nil)
