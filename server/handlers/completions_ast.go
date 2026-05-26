@@ -124,9 +124,6 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	}
 
 	if !isInsideTemplate(text, offset) {
-		log.Debug().
-			Int("offset new ", offset).
-			Msg("completion: cursor is not inside a template block, skipping")
 		return nil
 	}
 
@@ -155,7 +152,6 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 var functionsAccepting = map[outputKind][]string{
 	outputInt: {
 		"eq", "ne", "lt", "le", "gt", "ge",
-		"not",
 		"print", "printf", "println",
 	},
 	outputBool: {
@@ -177,7 +173,6 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	}
 	cmds := ctx.Pipe.Cmds
 	precedingIdx := len(cmds) - 2
-
 	if isInvoked {
 		precedingIdx = len(cmds) - 1
 	}
@@ -212,12 +207,10 @@ func pipeFilteredItems(
 	}
 
 	fnKind := protocol.CompletionItemKindFunction
-	items := make([]protocol.CompletionItem, 0, len(names)+1+len(ctx.Vars))
 
 	items = append(items, dotItem(wordRange)...)
 	items = append(items, varsToItems(ctx, wordRange)...)
 	for _, name := range names {
-		n := name
 		items = append(items, protocol.CompletionItem{
 			Label:    n,
 			Kind:     &fnKind,
@@ -260,6 +253,7 @@ func suggest(
 			append(dotItem(wordRange), varsToItems(ctx, wordRange)...),
 			builtinItems(wordRange)...)
 	}
+
 	dotAndVars := func() []protocol.CompletionItem {
 		return append(dotItem(wordRange), varsToItems(ctx, wordRange)...)
 	}
