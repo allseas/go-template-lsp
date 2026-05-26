@@ -291,7 +291,7 @@ Read [jetbrains-config.md](jetbrains-configuration.md) for documentation about c
 
 ## Testing
 
-Read [jetbrains-testing.md](jetbrains) for a guide on testing the JetBrains plugin.
+Read [jetbrains-testing.md](jetbrains-testing.md) for a guide on testing the JetBrains plugin.
 
 ## Building and Packaging
 
