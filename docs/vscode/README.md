@@ -257,7 +257,7 @@ Read [vscode-testing.md](vscode-testing.md) for a guide on testing the VS Code e
 
 ## Building and Packaging
 
-Read the main [README](./../README.md) section about how to run and build the extension.
+Read the main [README](../../README.md) section about how to run and build the extension.
 
 ## Resources
 

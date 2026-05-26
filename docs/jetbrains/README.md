@@ -295,7 +295,7 @@ Read [jetbrains-testing.md](jetbrains-testing.md) for a guide on testing the Jet
 
 ## Building and Packaging
 
-Read the main [README](./../README.md) section about how to run and build the extension.
+Read the main [README](../../README.md) section about how to run and build the extension.
 
 ## Resources
 

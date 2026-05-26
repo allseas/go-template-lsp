@@ -1,6 +1,6 @@
 # JetBrains Plugin Configuration
 
-See [Configuration](configuration.md) for the general configuration overview and option descriptions. This document covers JetBrains-specific implementation details.
+See [Configuration](../configuration.md) for the general configuration overview and option descriptions. This document covers JetBrains-specific implementation details.
 
 ## Architecture
 

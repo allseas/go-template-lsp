@@ -315,7 +315,7 @@ go test ./handlers -v
 
 ### Integration Testing
 
-The VS Code extension and JetBrains plugin both include integration tests that exercise the server end-to-end. See [vscode-testing.md](vscode-testing.md) and [jetbrains-testing.md](jetbrains-testing.md).
+The VS Code extension and JetBrains plugin both include integration tests that exercise the server end-to-end. See [vscode-testing.md](vscode/vscode-testing.md) and [jetbrains-testing.md](jetbrains/jetbrains-testing.md).
 
 ## Resources
 
