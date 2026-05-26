@@ -1,3 +1,4 @@
+// Package model contains the data structures for the text-template-server demo.
 package model
 
 import "fmt"
@@ -94,16 +95,25 @@ func (o Order) Format(currency string) string {
 	return currency + fmt.Sprintf("%.2f", o.TotalAmount)
 }
 
+// Oper returns the input value. Used for testing exported methods with parameters.
 func (o Order) Oper(valu int) int {
 	return valu
 }
 
 // badReturn has three return values — filtered out by the template contract check.
+// (unexported, unused)
 func (o Order) badReturn() (string, int, error) {
 	return "", 0, nil
 }
 
 // wrongSecond has a non-error second return — also filtered out.
+// (unexported, unused)
 func (o Order) wrongSecond() (string, int) {
 	return "", 0
 }
+
+// needed for the linter
+var (
+	_ = Order.badReturn
+	_ = Order.wrongSecond
+)

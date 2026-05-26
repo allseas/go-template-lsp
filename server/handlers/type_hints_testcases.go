@@ -117,8 +117,16 @@ var loadTypeHintTestCases = []loadTypeHintTestCase{
 		hint:         "text-template-server/src/model.Order",
 		root:         "",
 		wantTypeName: "Order",
-		wantFields:   []string{"ID", "CustomerName", "Email", "Address", "Items", "TotalAmount", "Paid"},
-		wantMethods:  []string{"DisplayName", "Summary", "ItemCount", "IsLargeOrder", "Format"},
+		wantFields: []string{
+			"ID",
+			"CustomerName",
+			"Email",
+			"Address",
+			"Items",
+			"TotalAmount",
+			"Paid",
+		},
+		wantMethods: []string{"DisplayName", "Summary", "ItemCount", "IsLargeOrder", "Format"},
 	},
 	{
 		name:    "returns error for invalid import path",

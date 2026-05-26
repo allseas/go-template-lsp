@@ -284,6 +284,92 @@ func suggest(
 	}
 }
 
+// dotItem returns the list of items that should be suggested on dot
+func dotItem(
+	ctx Context,
+	delSign bool,
+	inputType types.Type,
+	pipeKind outputKind,
+) []protocol.CompletionItem {
+	items := []protocol.CompletionItem{}
+	inPipe := inputType != nil || (pipeKind != outputAny && pipeKind != outputUntyped)
+	if inPipe {
+		return items
+	}
+	prefix := ""
+	if !delSign {
+		kind := protocol.CompletionItemKindVariable
+		items = append(items, protocol.CompletionItem{Label: ".", Kind: &kind})
+		prefix = "."
+	}
+	if lt := ctx.DotType; lt != nil {
+		items = append(items, fieldCompletionItems(lt.Fields, prefix)...)
+		items = append(items, methodCompletionItems(lt.Methods, inputType, pipeKind, prefix)...)
+	}
+	return items
+}
+
+// fieldCompletionItems returns the list of fields with or without the dot
+func fieldCompletionItems(fields []TypeField, prefix string) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindField
+	items := make([]protocol.CompletionItem, 0, len(fields))
+	for _, f := range fields {
+		detail := f.TypeName
+		items = append(items, protocol.CompletionItem{
+			Label:  prefix + f.Name,
+			Kind:   &kind,
+			Detail: &detail,
+		})
+	}
+	return items
+}
+
+// methodAcceptsInput checks whether the function can accept the input
+func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind) bool {
+	if inputType != nil {
+		for _, p := range m.Params {
+			if types.Identical(p.Type, inputType) {
+				return true
+			}
+		}
+		return false
+	}
+	if pipeKind != outputAny && pipeKind != outputUntyped {
+		for _, p := range m.Params {
+			if basicTypeMatchesKind(p.Type, pipeKind) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+// methodCompletionItems builds the function completion list with or without the dot
+func methodCompletionItems(
+	methods []MethodType,
+	inputType types.Type,
+	pipeKind outputKind,
+	prefix string,
+) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindMethod
+	items := make([]protocol.CompletionItem, 0, len(methods))
+	for _, m := range methods {
+		if !methodIsUsable(m) || !methodAcceptsInput(m, inputType, pipeKind) {
+			continue
+		}
+		detail := m.ReturnName
+		items = append(items, protocol.CompletionItem{
+			Label:  prefix + m.Name,
+			Kind:   &kind,
+			Detail: &detail,
+		})
+	}
+	return items
+}
+
+// varsToItems returns the list of variables
+func varsToItems(ctx *Context, delSign bool) []protocol.CompletionItem {
 func dotItem(wordRange protocol.Range) []protocol.CompletionItem {
 	kind := protocol.CompletionItemKindVariable
 	return []protocol.CompletionItem{{

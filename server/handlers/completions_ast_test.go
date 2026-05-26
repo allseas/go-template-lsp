@@ -19,8 +19,24 @@ func suggestAt(t *testing.T, src string, offset int) []string {
 	root := trees["test"].Root
 	ctx := &Context{Vars: map[string]parse.Node{}}
 
+<<<<<<< HEAD
 	pos := parse.Pos(offset)
 	cur := nodeFind(root, pos)
+=======
+func suggestAtWithType(
+	t *testing.T,
+	src string,
+	offset int,
+	isInvoked bool,
+	lt *LoadedType,
+) []string {
+	t.Helper()
+	trees, err := parse.Parse("test", src, "", "", builtins())
+	require.NoError(t, err)
+	root := trees["test"].Root
+	ctx := &Context{Vars: map[string]parse.Node{}, DotType: lt}
+	cur := nodeFind(root, parse.Pos(offset))
+>>>>>>> b3820fd (fix: fix for the linter)
 	ok := buildPath(root, cur, ctx)
 	require.True(t, ok, "target node must be found in tree")
 
