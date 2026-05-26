@@ -1,9 +1,9 @@
 //https://github.com/microsoft/vscode-extension-samples/blob/main/helloworld-test-sample/src/test/suite/extension.test.ts
 import * as assert from "assert";
 import { after, before } from "mocha";
-import * as path from "path";
 
 import * as vscode from "vscode";
+import { cleanupDocument, createDocument } from "./utils";
 // import * as myExtension from '../extension';
 
 suite("Snippets Test Suite", () => {
@@ -16,17 +16,10 @@ suite("Snippets Test Suite", () => {
     });
 
     test("Snippets should be available in .tmpl files", async () => {
-        // Create a temporary .tmpl file
-        const tmplUri = vscode.Uri.file(
-            path.join(__dirname, "../../test/resources/snippets-test.tmpl"),
+        const { tmplUri, document } = await createDocument(
+            "snippets-test.tmpl",
+            "if",
         );
-        const edit = new vscode.WorkspaceEdit();
-        edit.createFile(tmplUri, { overwrite: true });
-        edit.insert(tmplUri, new vscode.Position(0, 0), "if");
-        await vscode.workspace.applyEdit(edit);
-
-        const document = await vscode.workspace.openTextDocument(tmplUri);
-        await vscode.window.showTextDocument(document);
 
         try {
             assert.strictEqual(
@@ -86,27 +79,15 @@ suite("Snippets Test Suite", () => {
                     .join(", ")}`,
             );
         } finally {
-            await vscode.commands.executeCommand(
-                "workbench.action.closeActiveEditor",
-            );
-            const deleteEdit = new vscode.WorkspaceEdit();
-            deleteEdit.deleteFile(tmplUri);
-            await vscode.workspace.applyEdit(deleteEdit);
+            cleanupDocument(tmplUri);
         }
     });
 
     test("Snippets should NOT be available in non-.tmpl files", async () => {
-        // Create a temporary .txt file
-        const txtUri = vscode.Uri.file(
-            path.join(__dirname, "../../test/resources/snippets-test.txt"),
+        const { tmplUri, document } = await createDocument(
+            "snippets-test.txt",
+            "if",
         );
-        const edit = new vscode.WorkspaceEdit();
-        edit.createFile(txtUri, { overwrite: true });
-        edit.insert(txtUri, new vscode.Position(0, 0), "if");
-        await vscode.workspace.applyEdit(edit);
-
-        const document = await vscode.workspace.openTextDocument(txtUri);
-        await vscode.window.showTextDocument(document);
 
         try {
             assert.notStrictEqual(
@@ -117,7 +98,7 @@ suite("Snippets Test Suite", () => {
 
             const result = await vscode.commands.executeCommand(
                 "vscode.executeCompletionItemProvider",
-                txtUri,
+                tmplUri,
                 new vscode.Position(0, 0),
             );
 
@@ -156,12 +137,7 @@ suite("Snippets Test Suite", () => {
                 `Template snippets should NOT be available in non-.tmpl files. Got ${templateSnippets.length} snippets: ${templateSnippets.map((s: any) => (typeof s.label === "string" ? s.label : s.label?.label)).join(", ")}`,
             );
         } finally {
-            await vscode.commands.executeCommand(
-                "workbench.action.closeActiveEditor",
-            );
-            const deleteEdit = new vscode.WorkspaceEdit();
-            deleteEdit.deleteFile(txtUri);
-            await vscode.workspace.applyEdit(deleteEdit);
+            cleanupDocument(tmplUri);
         }
     });
 });
