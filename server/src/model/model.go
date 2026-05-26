@@ -1,3 +1,4 @@
+// Package model defines the domain types used in template rendering tests.
 package model
 
 import "fmt"
@@ -10,12 +11,47 @@ type Address struct {
 	Zip     string
 }
 
+// Line returns a single-line formatted address.
+func (a Address) Line() string {
+	return a.Street + ", " + a.City
+}
+
+// IsLocal reports whether the address is in the US.
+func (a Address) IsLocal() bool {
+	return a.Country == "US"
+}
+
+// ZipCode returns the postal code.
+func (a Address) ZipCode() string {
+	return a.Zip
+}
+
 // Item is one line in an order.
 type Item struct {
 	SKU       string
 	Name      string
 	Qty       int
 	UnitPrice float64
+}
+
+// Label returns a short display label for the item.
+func (i Item) Label() string {
+	return fmt.Sprintf("%s x%d", i.Name, i.Qty)
+}
+
+// Total returns the line total (quantity × unit price).
+func (i Item) Total() float64 {
+	return float64(i.Qty) * i.UnitPrice
+}
+
+// IsExpensive reports whether the unit price exceeds 100.
+func (i Item) IsExpensive() bool {
+	return i.UnitPrice > 100
+}
+
+// Describe returns a human-readable summary of the item.
+func (i Item) Describe() string {
+	return fmt.Sprintf("%s: %d @ %.2f", i.Name, i.Qty, i.UnitPrice)
 }
 
 // Order is the top-level model.
@@ -57,14 +93,4 @@ func (o Order) IsLargeOrder() bool {
 // Format formats the total with a given currency symbol — takes an arg, filtered by TakesArgs.
 func (o Order) Format(currency string) string {
 	return currency + fmt.Sprintf("%.2f", o.TotalAmount)
-}
-
-// badReturn has three return values — filtered out by the template contract check.
-func (o Order) badReturn() (string, int, error) {
-	return "", 0, nil
-}
-
-// wrongSecond has a non-error second return — also filtered out.
-func (o Order) wrongSecond() (string, int) {
-	return "", 0
 }
