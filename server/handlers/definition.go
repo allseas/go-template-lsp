@@ -29,28 +29,53 @@ func definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		target := node.(*parse.VariableNode)
 		varName := target.Ident[0]
 
+		var results []protocol.Location
+		inspect(doc.tree.Root, func(n parse.Node) bool {
+			pipe, ok := n.(*parse.PipeNode)
+			if !ok {
+				return true
+			}
+			for _, decl := range pipe.Decl {
+				if decl.Ident[0] == varName {
+					results = append(results, protocol.Location{
+						URI:   uri,
+						Range: nodeToRange(decl, doc.text),
+					})
+				}
+			}
+			return true
+		})
+
+		if len(results) == 0 {
+			return nil, nil
+		}
+		return results, nil
+	}
+
+	if node.Type() == parse.NodeDot {
+		// TODO: is that the correct behaviour to go to the previous range/with?
 		ctx := &Context{Vars: make(map[string]parse.Node)}
 		buildPath(doc.tree.Root, node, ctx)
 
-		declPipe, ok := ctx.Vars[varName]
-		if !ok {
-			// target is the declaration, return itself so the IDE shows references
-			return protocol.Location{
-				URI:   uri,
-				Range: nodeToRange(target, doc.text),
-			}, nil
-		}
-
-		pipe := declPipe.(*parse.PipeNode)
-		for _, decl := range pipe.Decl {
-			if decl.Ident[0] == varName {
+		for i := len(ctx.Path) - 1; i >= 0; i-- {
+			switch branch := ctx.Path[i].(type) {
+			case *parse.RangeNode:
 				return protocol.Location{
 					URI:   uri,
-					Range: nodeToRange(decl, doc.text),
+					Range: nodeToRange(branch.Pipe, doc.text),
+				}, nil
+			case *parse.WithNode:
+				return protocol.Location{
+					URI:   uri,
+					Range: nodeToRange(branch.Pipe, doc.text),
 				}, nil
 			}
 		}
+		return nil, nil
+	}
 
+	if node.Type() == parse.NodeField {
+		// TODO: go to the definition in the go files
 		return nil, nil
 	}
 
