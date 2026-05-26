@@ -10,7 +10,7 @@ const root = join(__dirname, "..");
 const syntaxesDir = join(root, "syntax", "syntaxes");
 
 console.log("Generating syntax grammar...");
-execSync("runghc Generate.hs", { stdio: "inherit", cwd: join(root, "syntax") });
+execSync("cabal run", { stdio: "inherit", cwd: join(root, "syntax") });
 
 // lint the generated syntax file
 execSync(`npx prettier --write --config ${join(root, "clients", "VSCode", "package.json")} ${join(syntaxesDir, "gotemplate.tmLanguage.json")}`, {
