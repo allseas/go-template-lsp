@@ -11,14 +11,17 @@ const __dirname = dirname(__filename);
 
 const serverDirectory = join(__dirname, '..', 'server');
 
-// const distDir = join(__dirname, '..', 'dist');
-// const binariesDir = join(distDir, 'server');
+const buildForVSCode = process.argv.includes('--vscode');
 
-// if (!existsSync(distDir)) {
-//     mkdirSync(distDir, { recursive: true });
-// }
+let serverBinariesDirectory: string;
 
-const serverBinariesDirectory = join(__dirname, '..', 'server_binaries')
+if (buildForVSCode) {
+    serverBinariesDirectory = join(__dirname, '..', 'clients', 'VSCode', 'dist', 'server', 'bin');
+    console.log('Building for VSCode extension (output to clients/VSCode/dist/server/bin)');
+} else {
+    serverBinariesDirectory = join(__dirname, '..', 'server_binaries');
+    console.log('Building to server_binaries directory');
+}
 
 if (!existsSync(serverBinariesDirectory)){
     mkdirSync(serverBinariesDirectory, {recursive: true});
