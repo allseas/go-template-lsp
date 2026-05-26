@@ -28,6 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wrap selection in a tag block.
 - Snippets for tags.
 - User/project configuration.
-- Hover definitons.
+- Hover definitions.
 - File type icon.
-- [VS Code] Welcome message on install.
+- [VS Code] Welcome message on first install.

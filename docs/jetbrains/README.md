@@ -287,15 +287,15 @@ Register in `plugin.xml`:
 
 ## Configuration
 
-Read [jetbrains-config.md](jetbrains-config.md) for documentation about config in the JetBrains plugin.
+Read [jetbrains-config.md](jetbrains-configuration.md) for documentation about config in the JetBrains plugin.
 
 ## Testing
 
-Read [jetbrains-testing.md](jetbrains) for a guide on testing the JetBrains plugin.
+Read [jetbrains-testing.md](jetbrains-testing.md) for a guide on testing the JetBrains plugin.
 
 ## Building and Packaging
 
-Read the main [README](./../README.md) section about how to run and build the extension.
+Read the main [README](../../README.md) section about how to run and build the extension.
 
 ## Resources
 
