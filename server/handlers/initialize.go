@@ -26,6 +26,7 @@ func setupHandlers(langServerName string, langServerVersion string) {
 		TextDocumentDidOpen:             didOpen,
 		TextDocumentDidChange:           didChange,
 		TextDocumentDidClose:            didClose,
+		TextDocumentDefinition:          definition,
 		SetTrace:                        SetTrace,
 		WorkspaceDidChangeConfiguration: ConfigChanged,
 		TextDocumentReferences:          references,
