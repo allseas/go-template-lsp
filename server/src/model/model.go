@@ -1,4 +1,3 @@
-// Package model defines the domain types used in template rendering tests.
 package model
 
 import "fmt"
@@ -93,4 +92,18 @@ func (o Order) IsLargeOrder() bool {
 // Format formats the total with a given currency symbol — takes an arg, filtered by TakesArgs.
 func (o Order) Format(currency string) string {
 	return currency + fmt.Sprintf("%.2f", o.TotalAmount)
+}
+
+func (o Order) Oper(valu int) int {
+	return valu
+}
+
+// badReturn has three return values — filtered out by the template contract check.
+func (o Order) badReturn() (string, int, error) {
+	return "", 0, nil
+}
+
+// wrongSecond has a non-error second return — also filtered out.
+func (o Order) wrongSecond() (string, int) {
+	return "", 0
 }
