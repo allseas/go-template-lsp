@@ -12,14 +12,10 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// suggestAt parses src, finds the node at offset, builds the path/context,
-// and returns the suggestion labels. It is the core helper for all AST tests.
 func suggestAt(t *testing.T, src string, offset int) []string {
 	t.Helper()
-
 	trees, err := parse.Parse("test", src, "", "", builtins())
-	require.NoError(t, err, "template must parse without error")
-
+	require.NoError(t, err)
 	root := trees["test"].Root
 	ctx := &Context{Vars: map[string]parse.Node{}}
 
@@ -42,25 +38,16 @@ func suggestAt(t *testing.T, src string, offset int) []string {
 	return labels
 }
 
-// builtins returns the minimum map required by parse.Parse
 func builtins() map[string]any {
 	return map[string]any{
 		"and": true, "call": true, "html": true, "index": true,
 		"slice": true, "js": true, "len": true, "not": true, "or": true,
 		"print": true, "printf": true, "println": true, "urlquery": true,
 		"eq": true, "ne": true, "lt": true, "le": true, "gt": true, "ge": true,
-		"DisplayName":  true,
-		"Summary":      true,
-		"ItemCount":    true,
-		"IsLargeOrder": true,
-		"Format":       true,
-		"Label":        true,
-		"Total":        true,
-		"IsExpensive":  true,
-		"Describe":     true,
-		"Line":         true,
-		"IsLocal":      true,
-		"ZipCode":      true,
+		"DisplayName": true, "Summary": true, "ItemCount": true,
+		"IsLargeOrder": true, "Format": true, "Label": true, "Total": true,
+		"IsExpensive": true, "Describe": true, "Line": true, "IsLocal": true,
+		"ZipCode": true,
 	}
 }
 
@@ -79,22 +66,15 @@ func offsetOf(t *testing.T, s, substr string, n int) int {
 	return -1
 }
 
-// helpers — build a LoadedType for Order so tests can inject it into Context.
-
 func orderLoadedType(t *testing.T) *LoadedType {
 	t.Helper()
-
-	cfg := &packages.Config{
-		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax,
-	}
+	cfg := &packages.Config{Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax}
 	pkgs, err := packages.Load(cfg, "text-template-server/src/model")
 	require.NoError(t, err)
 	require.Len(t, pkgs, 1)
-
 	pkg := pkgs[0]
 	obj := pkg.Types.Scope().Lookup("Order")
-	require.NotNil(t, obj, "Order type must exist in package")
-
+	require.NotNil(t, obj)
 	named := obj.Type().(*types.Named)
 	return &LoadedType{
 		Pkg:     pkg,
@@ -104,48 +84,7 @@ func orderLoadedType(t *testing.T) *LoadedType {
 	}
 }
 
-// suggestAtWithType is like suggestAt but injects a LoadedType into the context.
-func suggestAtWithType(
-	t *testing.T,
-	src string,
-	offset int,
-	isInvoked bool,
-	lt *LoadedType,
-) []string {
-	t.Helper()
-
-	trees, err := parse.Parse("test", src, "", "", builtins())
-	require.NoError(t, err, "template must parse without error")
-
-	root := trees["test"].Root
-	ctx := &Context{
-		Vars:    map[string]parse.Node{},
-		DotType: lt,
-	}
-
-	pos := parse.Pos(offset)
-	cur := nodeFind(root, pos)
-	ok := buildPath(root, cur, ctx)
-	require.True(t, ok, "target node must be found in tree")
-
-	var parent parse.Node
-	if len(ctx.Path) >= 2 {
-		parent = ctx.Path[len(ctx.Path)-2]
-	}
-
-	sChar := src[offset]
-	items := suggest(cur, parent, ctx, sChar, isInvoked)
-
-	labels := make([]string, len(items))
-	for i, item := range items {
-		labels[i] = item.Label
-	}
-	return labels
-}
-
-// dot field completion
-
-func TestDotFieldCompletion(t *testing.T) {
+func TestCompletionSuggestions(t *testing.T) {
 	lt := orderLoadedType(t)
 
 	t.Run("dot triggers field completions", func(t *testing.T) {
@@ -815,163 +754,73 @@ func TestNodeFind(t *testing.T) {
 	})
 }
 
-// buildPath correctness check
-
 func TestBuildPathScope(t *testing.T) {
-	t.Run("vars reset after if branch not taken", func(t *testing.T) {
-		// $inner is declared inside the if-else; cursor is after {{end}},
-		// so buildPath should NOT leave $inner in ctx.Vars.
-		src := `{{if .}}{{$inner := .}}{{end}}{{.}}`
-		trees, err := parse.Parse("test", src, "", "", builtins())
-		require.NoError(t, err)
-		root := trees["test"].Root
-
-		ctx := &Context{Vars: map[string]parse.Node{}}
-		pos := parse.Pos(offsetOf(t, src, ".", 2))
-		cur := nodeFind(root, pos)
-		buildPath(root, cur, ctx)
-
-		_, hasInner := ctx.Vars["$inner"]
-		assert.False(t, hasInner, "$inner should not leak out of if block")
-	})
-
-	t.Run("outer var always in scope", func(t *testing.T) {
-		src := `{{$outer := .}}{{if .}}{{end}}{{.}}`
-		trees, err := parse.Parse("test", src, "", "", builtins())
-		require.NoError(t, err)
-		root := trees["test"].Root
-
-		ctx := &Context{Vars: map[string]parse.Node{}}
-		pos := parse.Pos(offsetOf(t, src, ".", 2))
-		cur := nodeFind(root, pos)
-		buildPath(root, cur, ctx)
-
-		_, hasOuter := ctx.Vars["$outer"]
-		assert.True(t, hasOuter, "$outer must survive if block")
-	})
+	for _, tc := range buildPathScopeTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			trees, err := parse.Parse("test", tc.src, "", "", builtins())
+			require.NoError(t, err)
+			root := trees["test"].Root
+			ctx := &Context{Vars: map[string]parse.Node{}}
+			pos := parse.Pos(offsetOf(t, tc.src, ".", tc.dotOccur))
+			buildPath(root, nodeFind(root, pos), ctx)
+			_, present := ctx.Vars[tc.varName]
+			assert.Equal(t, tc.wantPresent, present)
+		})
+	}
 }
 
-// full completion tests
-
 func TestCompletionAst(t *testing.T) {
-	t.Run("returns nil when server disabled", func(t *testing.T) {
-		original := GetConfig()
-		setConfig(Config{EnableServer: false})
-		t.Cleanup(func() { setConfig(original) })
-
-		uri := "file:///disabled.tmpl"
-		store.Set(uri, "{{.}}")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
+	for _, tc := range completionAstTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.serverDisabled {
+				original := GetConfig()
+				setConfig(Config{EnableServer: false})
+				t.Cleanup(func() { setConfig(original) })
+			} else {
+				enableServer(t)
+			}
+			if !tc.skipStore {
+				store.Set(tc.uri, tc.content)
+				t.Cleanup(func() { store.Remove(tc.uri) })
+			}
+			result := completionAst(nil, &protocol.CompletionParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: tc.uri},
+					Position:     protocol.Position{Line: tc.line, Character: tc.character},
+				},
+			})
+			if tc.wantNil {
+				assert.Nil(t, result)
+				return
+			}
+			require.NotNil(t, result)
+			if len(tc.wantLabels) > 0 {
+				list, ok := result.(protocol.CompletionList)
+				require.True(t, ok)
+				assert.False(t, list.IsIncomplete)
+				assert.Contains(t, labelsFrom(t, result), tc.wantLabels[0])
+			}
 		})
-		assert.Nil(t, result)
-	})
-
-	t.Run("returns nil when document not in store", func(t *testing.T) {
-		enableServer(t)
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: "file:///missing.tmpl"},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
-		})
-		assert.Nil(t, result)
-	})
-
-	t.Run("returns nil when tree is nil", func(t *testing.T) {
-		enableServer(t)
-		uri := "file:///notree.tmpl"
-		// Set a document with no parsed tree by storing broken template
-		store.Set(uri, "{{invalid template {{{{")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
-		})
-		// with the new parser, the tree is not nil in the wrong code case
-		assert.NotNil(t, result)
-	})
-
-	t.Run("returns nil when cursor outside template block", func(t *testing.T) {
-		enableServer(t)
-		uri := "file:///outside.tmpl"
-		store.Set(uri, "{{.}}\nplain text")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 1, Character: 2},
-			},
-		})
-		assert.Nil(t, result)
-	})
-
-	t.Run("returns CompletionList for valid template and position", func(t *testing.T) {
-		enableServer(t)
-		uri := "file:///valid.tmpl"
-		store.Set(uri, "{{.}}")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
-		})
-		require.NotNil(t, result)
-		list, ok := result.(protocol.CompletionList)
-		require.True(t, ok)
-		assert.False(t, list.IsIncomplete)
-
-		labels := make([]string, len(list.Items))
-		for i, item := range list.Items {
-			labels[i] = item.Label
-		}
-		assert.Contains(t, labels, ".")
-	})
+	}
 }
 
 func TestCompletionWithFallback(t *testing.T) {
-	t.Run("returns ast result when ast succeeds", func(t *testing.T) {
-		enableServer(t)
-		uri := "file:///fallback-ok.tmpl"
-		store.Set(uri, "{{.}}")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		resp, err := completionWithFallback(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
+	for _, tc := range completionFallbackTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			enableServer(t)
+			store.Set(tc.uri, tc.content)
+			t.Cleanup(func() { store.Remove(tc.uri) })
+			resp, err := completionWithFallback(nil, &protocol.CompletionParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: tc.uri},
+					Position:     protocol.Position{Line: tc.line, Character: tc.character},
+				},
+			})
+			require.NoError(t, err)
+			if tc.wantList {
+				_, ok := resp.(protocol.CompletionList)
+				assert.True(t, ok, "expected CompletionList")
+			}
 		})
-		require.NoError(t, err)
-		_, ok := resp.(protocol.CompletionList)
-		assert.True(t, ok, "expected CompletionList from ast path")
-	})
-
-	t.Run("falls back to regex when ast returns nil", func(t *testing.T) {
-		enableServer(t)
-		// cursor outside template — ast returns nil, fallback should run
-		uri := "file:///fallback-nil.tmpl"
-		store.Set(uri, "{{$x := .}}\nplain")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		resp, err := completionWithFallback(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 1, Character: 2},
-			},
-		})
-		require.NoError(t, err)
-		_ = resp
-	})
+	}
 }
