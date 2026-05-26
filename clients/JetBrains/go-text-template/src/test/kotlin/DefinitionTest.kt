@@ -1,39 +1,84 @@
-/**
- * Tests for Go to Definition functionality provided by the LSP server.
- *
- * Note: These tests verify the IDE integration side. The actual definition logic
- * is tested in the server-side Go tests (server/handlers/definition_test.go).
- * These tests require the LSP server to be running to pass in a full integration environment.
- */
+import com.intellij.codeInsight.navigation.actions.GotoDeclarationAction
+import com.intellij.psi.PsiElement
+
 class DefinitionTest : CustomPlatformTestCase() {
-    fun testVariableDefinitionFileRecognized() {
-        // Verify .tmpl files are recognized correctly for definition support
-        val file =
-            myFixture.configureByText(
-                "test.txt.tmpl",
-                "{{ \$test := 0 }}\n{{ \$test }}",
+    fun testVariableDefinitionJumpsToDeclaration() {
+        myFixture.configureByText(
+            "test.txt.tmpl",
+            "{{ \$test := 0 }}\n{{ \$te<caret>st }}",
+        )
+
+        val targets: Array<PsiElement>? =
+            GotoDeclarationAction.findAllTargetElements(
+                project,
+                myFixture.editor,
+                myFixture.caretOffset,
             )
-        assertNotNull(file)
-        assertEquals("Go Template", file.virtualFile.fileType.name)
+
+        assertNotNull("Definition targets should not be null", targets)
+        assertTrue(
+            "Expected at least 1 definition target, got ${targets?.size ?: 0}",
+            targets != null && targets.isNotEmpty(),
+        )
     }
 
-    fun testRedeclaredVariableFileRecognized() {
-        val file =
-            myFixture.configureByText(
-                "test-redecl.txt.tmpl",
-                "{{ \$test := 0 }}\n{{ \$test }}\n{{ \$test := 1 }}\n{{ \$test }}",
+    fun testRedeclaredVariableShowsMultipleDefinitions() {
+        myFixture.configureByText(
+            "test-redecl.txt.tmpl",
+            "{{ \$test := 0 }}\n{{ \$test }}\n{{ \$test := 1 }}\n{{ \$te<caret>st }}",
+        )
+
+        val targets: Array<PsiElement>? =
+            GotoDeclarationAction.findAllTargetElements(
+                project,
+                myFixture.editor,
+                myFixture.caretOffset,
             )
-        assertNotNull(file)
-        assertEquals("Go Template", file.virtualFile.fileType.name)
+
+        assertNotNull("Definition targets should not be null", targets)
+        assertEquals(
+            "Expected 2 definitions for redeclared variable",
+            2,
+            targets?.size ?: 0,
+        )
     }
 
-    fun testDotInRangeFileRecognized() {
-        val file =
-            myFixture.configureByText(
-                "test-dot.txt.tmpl",
-                "{{- range .Join }}\n{{ . }}\n{{- end }}",
+    fun testDotInRangeJumpsToRangePipe() {
+        myFixture.configureByText(
+            "test-dot.txt.tmpl",
+            "{{- range .Join }}\n{{ <caret>. }}\n{{- end }}",
+        )
+
+        val targets: Array<PsiElement>? =
+            GotoDeclarationAction.findAllTargetElements(
+                project,
+                myFixture.editor,
+                myFixture.caretOffset,
             )
-        assertNotNull(file)
-        assertEquals("Go Template", file.virtualFile.fileType.name)
+
+        assertNotNull("Definition targets should not be null", targets)
+        assertTrue(
+            "Expected at least 1 definition for dot in range, got ${targets?.size ?: 0}",
+            targets != null && targets.isNotEmpty(),
+        )
+    }
+
+    fun testDotAtTopLevelHasNoDefinition() {
+        myFixture.configureByText(
+            "test-dot-top.txt.tmpl",
+            "{{ <caret>. }}",
+        )
+
+        val targets: Array<PsiElement>? =
+            GotoDeclarationAction.findAllTargetElements(
+                project,
+                myFixture.editor,
+                myFixture.caretOffset,
+            )
+
+        assertTrue(
+            "Expected no definitions for top-level dot",
+            targets == null || targets.isEmpty(),
+        )
     }
 }
