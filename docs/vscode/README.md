@@ -249,7 +249,7 @@ Snippets provide quick template generation. Add to `snippets/snippets.json`:
 
 ## Configuration
 
-Read [vscode-config.md](vscode-config.md) for documentation about config in the VS Code extension.
+Read [vscode-config.md](vscode-configuration.md) for documentation about config in the VS Code extension.
 
 ## Testing
 
@@ -257,7 +257,7 @@ Read [vscode-testing.md](vscode-testing.md) for a guide on testing the VS Code e
 
 ## Building and Packaging
 
-Read the main [README](./../README.md) section about how to run and build the extension.
+Read the main [README](../../README.md) section about how to run and build the extension.
 
 ## Resources
 

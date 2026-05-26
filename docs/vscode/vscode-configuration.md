@@ -1,6 +1,6 @@
 # VS Code Extension Configuration
 
-See [Configuration](configuration.md) for the general configuration overview and option descriptions. This document covers VS Code-specific implementation details.
+See [Configuration](../configuration.md) for the general configuration overview and option descriptions. This document covers VS Code-specific implementation details.
 
 ## Architecture
 
@@ -19,15 +19,21 @@ The extension reads settings via `workspace.getConfiguration()`, which respects 
 In `clients/VSCode/package.json`, add the new option under `contributes.configuration.properties`:
 
 ```json
-"contributes": {
-  "configuration": {
-    "properties": {
-      "goTmplSupport.enableServer": { ... },
-      "goTmplSupport.trace.server": { ... },
-      "goTmplSupport.myNewOption": {
-        "type": "string",
-        "default": "default",
-        "description": "Description of my new option."
+{
+  "contributes": {
+    "configuration": {
+      "properties": {
+        "goTmplSupport.enableServer": {
+          ...
+        },
+        "goTmplSupport.trace.server": {
+          ...
+        },
+        "goTmplSupport.myNewOption": {
+          "type": "string",
+          "default": "default",
+          "description": "Description of my new option."
+        }
       }
     }
   }

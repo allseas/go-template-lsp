@@ -4,15 +4,15 @@ The Go Text Template LSP supports consistent configuration across VS Code and Je
 
 ## Platform-Specific Guides
 
-- **[VS Code Configuration](vscode-configuration.md)** — Settings stored in `settings.json`, read via the Settings UI or config files
-- **[JetBrains Configuration](jetbrains-configuration.md)** — Application-level + project-level settings, stored in IDE/project configs
+- **[VS Code Configuration](vscode/vscode-configuration.md)** — Settings stored in `settings.json`, read via the Settings UI or config files
+- **[JetBrains Configuration](jetbrains/jetbrains-configuration.md)** — Application-level + project-level settings, stored in IDE/project configs
 
 ## Configuration Options
 
 These options are supported on all platforms:
 
 | Option         | Type      | Default    | Description                                          |
-| -------------- | --------- | ---------- | ---------------------------------------------------- |
+|----------------|-----------|------------|------------------------------------------------------|
 | `enableServer` | `boolean` | `true`     | Enable/disable the language server                   |
 | `trace.server` | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose` |
 
@@ -28,6 +28,6 @@ Settings follow this precedence (highest to lowest):
 
 To add a new configuration option to both clients:
 
-1. Follow the [VS Code Configuration](vscode-configuration.md#how-to-add-a-new-configuration-option) guide to add to VS Code
-2. Follow the [JetBrains Configuration](jetbrains-configuration.md#how-to-add-a-new-configuration-option) guide to add to JetBrains
+1. Follow the [VS Code Configuration](vscode/vscode-configuration.md#how-to-add-a-new-configuration-option) guide to add to VS Code
+2. Follow the [JetBrains Configuration](jetbrains/jetbrains-configuration.md#how-to-add-a-new-configuration-option) guide to add to JetBrains
 3. Add to the LSP server's `Config` struct in `server/handlers/configuration.go`

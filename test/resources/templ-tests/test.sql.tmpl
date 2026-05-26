@@ -14,6 +14,7 @@ SELECT
 {{- if .Columns }}
 	{{- range $i, $col := .Columns }}
 		{{- if gt $i 0 }}, {{ end }}{{ $col }}
+		{{ $?????
 	{{- end }}
 {{- else }}
 	*
