@@ -1,85 +1,68 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall -Werror #-}
+{-# LANGUAGE InstanceSigs #-}
 module TextMate where
 
-import Data.List (intercalate)
-
+import Data.Aeson
+import Data.ByteString.Lazy (ByteString)
+import Data.Maybe (catMaybes)
+import qualified Data.Map.Strict as Map
 -- structure of the textmate json
 
 type ScopeName = String
 type Regex = String
 type CaptureKey = String
 type Capture = (CaptureKey, ScopeName)
+type Captures = [Capture]
 type RepoKey = String
 type Named = (RepoKey, TmPattern)
 
+-- datatype representing the regexes for a single object
 data TmPattern
-  = TmMatch   (Maybe ScopeName) Regex [Capture]
-  | TmRegion  (Maybe ScopeName) Regex Regex [Capture] [Capture] [TmPattern]
+  = TmMatch   (Maybe ScopeName) Regex Captures
+  | TmRegion  (Maybe ScopeName) Regex Regex Captures Captures [TmPattern]
   --           name              begin end   beginCaps  endCaps   inner
   | TmInclude RepoKey
 
--- Serialization from objects to raw JSON String
+capturesJSON :: Captures -> Value
+capturesJSON caps = toJSON $ Map.fromList [(k, object ["name" .= v]) | (k, v) <- caps]
 
-jsonStr :: String -> String
-jsonStr s = "\"" ++ concatMap esc s ++ "\""
-  where
-    esc '"'  = "\\\""
-    esc '\\' = "\\\\"
-    esc '\n' = "\\n"
-    esc c    = [c]
+instance ToJSON TmPattern where
+  toJSON :: TmPattern -> Value
+  toJSON (TmMatch name match captures) = object $ catMaybes
+    [ ("name" .=) <$> name
+    , Just $ "match" .= match
+    , ("captures" .=) . capturesJSON <$> omitEmpty captures
+    ]
+  toJSON (TmRegion name begin end bcaps ecaps inner) = object $ catMaybes
+    [ ("name" .=) <$> name
+    , Just $ "begin" .= begin
+    , Just $ "end" .= end
+    , ("beginCaptures" .=) . capturesJSON <$> omitEmpty bcaps
+    , ("endCaptures" .=) . capturesJSON <$> omitEmpty ecaps
+    , ("patterns" .=) <$> omitEmpty inner
+    ]
+  toJSON (TmInclude rk) = object ["include" .= ('#' : rk)]
 
-ind :: Int -> String
-ind n = replicate (n * 2) ' '
+-- datatype representing the whole syntax file
+data TmSyntax
+  = TmSyntax String [String] [String] [TmPattern] [Named]
+  --          scope  types    exts    top-patterns repository
 
-capJson :: Int -> Capture -> String
-capJson d (k, v) = ind d ++ jsonStr k ++ ": { " ++ jsonStr "name" ++ ": " ++ jsonStr v ++ " }"
+instance ToJSON TmSyntax where
+  toJSON (TmSyntax scopeName fileTypes fileExts patterns repo) = object $ catMaybes
+    [ Just $ "$schema"       .= ("https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json" :: String)
+    , Just $ "scopeName"     .= scopeName
+    , ("fileTypes" .=)       <$> omitEmpty fileTypes
+    , ("fileExtensions" .=)  <$> omitEmpty fileExts
+    , ("patterns" .=)        <$> omitEmpty patterns
+    , ("repository" .=) . Map.fromList <$> omitEmpty repo
+    ]
 
-patJson :: Int -> TmPattern -> String
-patJson d (TmInclude ref) =
-  ind d ++ "{ " ++ jsonStr "include" ++ ": " ++ jsonStr ("#" ++ ref) ++ " }"
-patJson d (TmMatch name match caps) =
-  ind d ++ "{\n"
-  ++ maybe "" (\n -> ind (d+1) ++ jsonStr "name" ++ ": " ++ jsonStr n ++ ",\n") name
-  ++ ind (d+1) ++ jsonStr "match" ++ ": " ++ jsonStr match
-  ++ (if null caps then "\n"
-      else ",\n" ++ ind (d+1) ++ jsonStr "captures" ++ ": {\n"
-           ++ intercalate ",\n" (map (capJson (d+2)) caps) ++ "\n"
-           ++ ind (d+1) ++ "}\n")
-  ++ ind d ++ "}"
-patJson d (TmRegion name begin end bCaps eCaps pats) =
-  ind d ++ "{\n"
-  ++ maybe "" (\n -> ind (d+1) ++ jsonStr "name" ++ ": " ++ jsonStr n ++ ",\n") name
-  ++ ind (d+1) ++ jsonStr "begin" ++ ": " ++ jsonStr begin ++ ",\n"
-  ++ ind (d+1) ++ jsonStr "end" ++ ": " ++ jsonStr end ++ ",\n"
-  ++ ind (d+1) ++ jsonStr "beginCaptures" ++ ": {\n"
-  ++ intercalate ",\n" (map (capJson (d+2)) bCaps) ++ "\n"
-  ++ ind (d+1) ++ "},\n"
-  ++ ind (d+1) ++ jsonStr "endCaptures" ++ ": {\n"
-  ++ intercalate ",\n" (map (capJson (d+2)) eCaps) ++ "\n"
-  ++ ind (d+1) ++ "},\n"
-  ++ ind (d+1) ++ jsonStr "patterns" ++ ": [\n"
-  ++ intercalate ",\n" (map (patJson (d+2)) pats) ++ "\n"
-  ++ ind (d+1) ++ "]\n"
-  ++ ind d ++ "}"
 
-repoJson :: Int -> [Named] -> String
-repoJson d entries =
-  ind d ++ "{\n"
-  ++ intercalate ",\n" (map entry entries) ++ "\n"
-  ++ ind d ++ "}"
-  where
-    entry (k, p) = ind (d+1) ++ jsonStr k ++ ": "
-                   ++ drop (length (ind (d+1))) (patJson (d+1) p)
+omitEmpty :: [a] -> Maybe [a]
+omitEmpty [] = Nothing
+omitEmpty xs@(_:_) = Just xs
 
-grammarJson :: [Named] -> String
-grammarJson entries =
-  "{\n"
-  ++ ind 1 ++ jsonStr "$schema" ++ ": " ++ jsonStr "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json" ++ ",\n"
-  ++ ind 1 ++ jsonStr "scopeName" ++ ": " ++ jsonStr "source.gotmpl" ++ ",\n"
-  ++ ind 1 ++ jsonStr "fileTypes" ++ ": [" ++ jsonStr "tmpl" ++ ", " ++ jsonStr "gotmpl" ++ "],\n"
-  ++ ind 1 ++ jsonStr "patterns" ++ ": [\n"
-  ++ patJson 2 (TmInclude "comment") ++ ",\n"
-  ++ patJson 2 (TmInclude "action") ++ "\n"
-  ++ ind 1 ++ "],\n"
-  ++ ind 1 ++ jsonStr "repository" ++ ": " ++ repoJson 1 entries ++ "\n"
-  ++ "}\n"
+syntaxToJson :: TmSyntax -> ByteString
+syntaxToJson = encode
