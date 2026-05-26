@@ -104,7 +104,8 @@ gotemplate-lsp/
 ├── syntax/                   # TextMate grammar generator (Haskell)
 │   ├── Grammar.hs            # Grammar specification for Go templates
 │   ├── TextMate.hs           # TextMate pattern types and JSON serialization
-│   └── Generate.hs           # Pattern generation (entry point)
+│   ├── Generate.hs           # Pattern generation (entry point)
+│   └── Generate.hs           # Regex constants
 ├── docs/                     # Documentation
 │   ├── features.md           # Feature overview and roadmap
 │   ├── server.md             # Language server architecture
@@ -185,7 +186,7 @@ The TextMate grammar for syntax highlighting is generated from a formal Go templ
 
 ```bash
 cd syntax
-runghc -isrc/grammar Generate.hs
+cabal run
 ```
 This outputs `syntax/syntaxes/gotemplate.tmLanguage.json`, which is used by both VS Code and JetBrains.
 
