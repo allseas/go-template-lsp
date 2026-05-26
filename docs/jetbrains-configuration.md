@@ -7,7 +7,7 @@ See [Configuration](configuration.md) for the general configuration overview and
 Configuration is split into two levels:
 
 | Level       | Class             | Storage                                          |
-| ----------- | ----------------- | ------------------------------------------------ |
+|-------------|-------------------|--------------------------------------------------|
 | Application | `AppSettings`     | `GoTextTemplateSettings.xml` (global IDE config) |
 | Project     | `ProjectSettings` | `.idea/goTextTemplateSettings.xml`               |
 

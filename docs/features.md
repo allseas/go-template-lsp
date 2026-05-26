@@ -18,7 +18,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 ## Editor Features
 
 | Feature                           | VS Code | JetBrains | Priority | Notes                                                        |
-| --------------------------------- | ------- | --------- | -------- | ------------------------------------------------------------ |
+|-----------------------------------|---------|-----------|----------|--------------------------------------------------------------|
 | **Syntax Highlighting**           |         |           |          |
 | Static syntax highlighting        | ✅       | ✅         | Must     | Syntax defined in `.tmpl` files                              |
 | Dynamic syntax highlighting       | ⏳       | ⏳         | Must     | Highlighting based on variables and context                  |
@@ -52,7 +52,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 The language server provides the backend intelligence for all editor features. These features support multiple IDEs through the LSP protocol.
 
 | Feature                         | Supported | Priority | Notes                                               |
-| ------------------------------- | --------- | -------- | --------------------------------------------------- |
+|---------------------------------|-----------|----------|-----------------------------------------------------|
 | **Configuration**               |           |          |
 | User configuration              | ✅         | Should   | Per-user configuration, lower priority than project |
 | Project-level settings          | ✅         | Must     | Per-project configuration override                  |
@@ -71,7 +71,7 @@ The language server provides the backend intelligence for all editor features. T
 ## Specialized Support
 
 | Feature                 | Supported | Status  | Priority | Notes                                       |
-| ----------------------- | --------- | ------- | -------- | ------------------------------------------- |
+|-------------------------|-----------|---------|----------|---------------------------------------------|
 | **Helm Templates**      |           |         |          |                                             |
 | Helm syntax support     | ⏳         | Planned | Could    | Special handling for Helm `.yaml.tpl` files |
 | Helm built-in functions | ⏳         | Planned | Could    | Auto-complete and documentation             |

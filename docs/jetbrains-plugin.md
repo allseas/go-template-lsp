@@ -287,7 +287,7 @@ Register in `plugin.xml`:
 
 ## Configuration
 
-Read [jetbrains-config.md](jetbrains-config.md) for documentation about config in the JetBrains plugin.
+Read [jetbrains-config.md](jetbrains-configuration.md) for documentation about config in the JetBrains plugin.
 
 ## Testing
 

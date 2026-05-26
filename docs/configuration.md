@@ -12,7 +12,7 @@ The Go Text Template LSP supports consistent configuration across VS Code and Je
 These options are supported on all platforms:
 
 | Option         | Type      | Default    | Description                                          |
-| -------------- | --------- | ---------- | ---------------------------------------------------- |
+|----------------|-----------|------------|------------------------------------------------------|
 | `enableServer` | `boolean` | `true`     | Enable/disable the language server                   |
 | `trace.server` | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose` |
 

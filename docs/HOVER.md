@@ -4,22 +4,22 @@ The hover provider gives contextual documentation when the user holds the cursor
 
 ## What the user sees
 
-| Cursor position | Tooltip |
-|---|---|
-| `{{ `**`if`**` .IsAdmin }}` | **If Branch** — conditional branch executed if `.IsAdmin` evaluates to true |
-| `{{ `**`range`**` $i, $v := .Items }}` | **Range Branch** — branch executed for each item in a collection |
-| `{{ range `**`$i`**`, $v := .Items }}`  | **Index variable** — serves as the index variable in the range loop |
-| `{{ range $i, `**`$v`**` := .Items }}`  | **Variable** — `$v` |
-| `{{- end -}}` | **End Tag** — marks the end of `with`, which started at line 3 |
-| `{{- else }}` | **Else Branch** — marks the else branch of `if` statement starting at line 5 |
-| `.Name` | **Field Access** — accesses the `Name` field of the current context |
-| `and` / `or` / `not` / `len` | Dedicated descriptions for each built-in function |
-| `"hello"` | **String literal** — a literal string value |
-| `42` | **Number literal** — a literal numeric value |
-| `nil` | **Nil literal** — represents a nil value |
+| Cursor position                        | Tooltip                                                                      |
+|----------------------------------------|------------------------------------------------------------------------------|
+| `{{ `**`if`**` .IsAdmin }}`            | **If Branch** — conditional branch executed if `.IsAdmin` evaluates to true  |
+| `{{ `**`range`**` $i, $v := .Items }}` | **Range Branch** — branch executed for each item in a collection             |
+| `{{ range `**`$i`**`, $v := .Items }}` | **Index variable** — serves as the index variable in the range loop          |
+| `{{ range $i, `**`$v`**` := .Items }}` | **Variable** — `$v`                                                          |
+| `{{- end -}}`                          | **End Tag** — marks the end of `with`, which started at line 3               |
+| `{{- else }}`                          | **Else Branch** — marks the else branch of `if` statement starting at line 5 |
+| `.Name`                                | **Field Access** — accesses the `Name` field of the current context          |
+| `and` / `or` / `not` / `len`           | Dedicated descriptions for each built-in function                            |
+| `"hello"`                              | **String literal** — a literal string value                                  |
+| `42`                                   | **Number literal** — a literal numeric value                                 |
+| `nil`                                  | **Nil literal** — represents a nil value                                     |
 
 All tooltips are rendered as Markdown.
-They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over nore
+They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over node
 
 ## Request flow
 
@@ -59,7 +59,7 @@ hover()
 
 ### Special case: `{{end}}` hover
 
-`{{end}}` tags do not appear as their own AST node — the parser consumes them to close a branch (`if`, `range`, `with`, `template`) but records no node for the tag itself. As a result, `nodeFind` returns the preceding node to the closing tag, which carries no useful information on its own, it might also happen that the preciding node is not in the same level as the branch which the end tag is closing, if whitespace trims are used.
+`{{end}}` tags do not appear as their own AST node — the parser consumes them to close a branch (`if`, `range`, `with`, `template`) but records no node for the tag itself. As a result, `nodeFind` returns the preceding node to the closing tag, which carries no useful information on its own. It might also happen that the preceding node is not in the same level as the branch which the end tag is closing, if whitespace trims are used.
 
 `endTagHover` (`hover.go:211`) handles this by working at the text level:
 
@@ -72,7 +72,7 @@ This logic correctly resolves end tags even when multiple blocks close on the sa
 
 ### Special case: `{{else}}` hover
 
-Similarily to end nodes, `{{else}}` and `{{else if …}}` nodes are not distinctly represented in the AST, the node under the cursor is the preceeding node rather than a dedicated else node, the existence of the else tag is only recorded as the ElseList element of a list node which does not hold the required information.
+Similarly to end nodes, `{{else}}` and `{{else if …}}` nodes are not distinctly represented in the AST. Instead, the node under the cursor is the preceding node rather than a dedicated else node. The existence of the else tag is only recorded as the ElseList element of a list node which does not hold the required information.
 
 `elseNodeHover` (`hover.go:291`) uses the same approach as end-tag hover:
 

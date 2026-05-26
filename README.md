@@ -36,7 +36,7 @@ This repository contains the source code of the *GoTemplate Support* extension. 
 Extension features:
 
 | Feature                                         | VS Code | JetBrains | Priority |
-| ----------------------------------------------- | ------- | --------- | -------- |
+|-------------------------------------------------|---------|-----------|----------|
 | Static syntax highlighting                      | ✅       | ✅         | Must     |
 | Dynamic syntax highlighting                     |         |           | Must     |
 | Autocompletion on variables                     | ✅       | ✅         | Must     |
@@ -61,7 +61,7 @@ Extension features:
 Language server features:
 
 | Feature                                                  | Supported | Priority |
-| -------------------------------------------------------- | --------- | -------- |
+|----------------------------------------------------------|-----------|----------|
 | Locally defined syntax modifications                     |           | Should   |
 | Completions and types of functions inferred from project |           | Should   |
 | Support for adding more global functions and tag types   |           | Should   |
@@ -275,7 +275,7 @@ cd clients/JetBrains/go-text-template/
 
 #### Running the Plugin for Testing
 
-This will run an Intellij IDE for testing purposes. It also builds the server binaries.
+This will run an IntelliJ IDEA instance for testing purposes. It also builds the server binaries.
 
 ```bash
 cd clients/JetBrains/go-text-template/
