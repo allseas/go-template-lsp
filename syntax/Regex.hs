@@ -13,10 +13,10 @@ wordAlt :: [String] -> String
 wordAlt ws = "\\b(" ++ intercalate "|" ws ++ ")\\b"
 -- default template open delimiter
 dOpen :: String
-dOpen = escRegex "{{-?"
+dOpen = escRegex "{{-" ++ "?"
 -- default template close
 dClose :: String
-dClose = escRegex "-?}}"
+dClose = escRegex "-" ++ "?" ++ escRegex "}}"
 
 commentOpen :: String
 commentOpen = dOpen ++ "\\s*/\\*"
