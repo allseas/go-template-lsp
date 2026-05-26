@@ -1,13 +1,13 @@
 # JetBrains Plugin Configuration
 
-See [Configuration](configuration.md) for the general configuration overview and option descriptions. This document covers JetBrains-specific implementation details.
+See [Configuration](../configuration.md) for the general configuration overview and option descriptions. This document covers JetBrains-specific implementation details.
 
 ## Architecture
 
 Configuration is split into two levels:
 
 | Level       | Class             | Storage                                          |
-| ----------- | ----------------- | ------------------------------------------------ |
+|-------------|-------------------|--------------------------------------------------|
 | Application | `AppSettings`     | `GoTextTemplateSettings.xml` (global IDE config) |
 | Project     | `ProjectSettings` | `.idea/goTextTemplateSettings.xml`               |
 

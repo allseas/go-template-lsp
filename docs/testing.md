@@ -6,4 +6,4 @@ In `/test/resources/` there are resources that can be useful for creating tests.
 
 ## Platform-Specific Guides
 
-- [VS Code Testing](vscode-testing.md)
+- [VS Code Testing](vscode/vscode-testing.md)
