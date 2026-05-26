@@ -8,3 +8,4 @@ syntax/dist-newstyle/*
 server_binaries/
 *.vsix
 **/*/*.vsix
+*.zip

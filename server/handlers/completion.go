@@ -86,7 +86,7 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 		items = append(items, protocol.CompletionItem{
 			Label:      v,
 			Kind:       &varKind,
-			FilterText: &filter,                                  // <-- key line
+			FilterText: &filter, // <-- key line
 			TextEdit:   &protocol.TextEdit{Range: wordRange, NewText: v},
 		})
 	}
