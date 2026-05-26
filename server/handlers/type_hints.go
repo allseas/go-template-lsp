@@ -5,16 +5,12 @@ import (
 	"bytes"
 	"fmt"
 	"go/types"
-	"golang.org/x/tools/go/packages"
 	"io"
 	"regexp"
 	"strings"
-)
 
-type TypeHintFile struct {
-	Path      string
-	TypeHints []TypeHint
-}
+	"golang.org/x/tools/go/packages"
+)
 
 // TypeHint represents a `gotype:` type hint found in a template file.
 type TypeHint struct {
@@ -22,8 +18,8 @@ type TypeHint struct {
 	Type string
 }
 
+// ParseTypeHints find the first match of the type hint
 func ParseTypeHints(f io.Reader) []TypeHint {
-
 	// Regex to capture a gotype hint inside a Go template comment.
 	// Supports optional trimming dashes and whitespace around delimiters, e.g.:
 	// {{/*gotype: Type*/}}, {{- /* gotype: pkg.Type */ -}}, {{/*gotype: path/to/pkg.Type*/}} etc.
@@ -60,50 +56,20 @@ type TypeField struct {
 	Embedded bool
 }
 
-// FieldKind categorises a TypeField's underlying type for use in completions.
-type FieldKind int
-
-const (
-	FieldKindString FieldKind = iota
-	FieldKindBool
-	FieldKindInt
-	FieldKindFloat
-	FieldKindSlice
-	FieldKindMap
-	FieldKindStruct
-	FieldKindOther
-)
-
-// Kind returns the FieldKind for this field, useful for classification
-func (f TypeField) Kind() FieldKind {
-	switch u := f.Type.Underlying().(type) {
-	case *types.Basic:
-		switch {
-		case u.Info()&types.IsBoolean != 0:
-			return FieldKindBool
-		case u.Info()&types.IsString != 0:
-			return FieldKindString
-		case u.Info()&types.IsInteger != 0:
-			return FieldKindInt
-		case u.Info()&types.IsFloat != 0:
-			return FieldKindFloat
-		}
-	case *types.Slice:
-		return FieldKindSlice
-	case *types.Map:
-		return FieldKindMap
-	case *types.Struct:
-		return FieldKindStruct
-	}
-	return FieldKindOther
-}
-
 // MethodType is the struct for the functions in the model.
 type MethodType struct {
 	Func       *types.Func
 	Name       string
 	ReturnName string
 	ReturnType types.Type
+	Params     []ParamType
+}
+
+// ParamType is needed to extract parameter types of a function
+type ParamType struct {
+	Name     string
+	Type     types.Type
+	TypeName string
 }
 
 // LoadedType is the result of resolving a type hint against a real Go package.
@@ -185,12 +151,25 @@ func namedMethods(named *types.Named) []MethodType {
 			continue
 		}
 
+		var params []ParamType
+		// if the generics are used in the functions, then sig.TypeParams should be extracted
+		sigParams := sig.Params()
+		for j := range sigParams.Len() {
+			p := sigParams.At(j)
+			params = append(params, ParamType{
+				Name:     p.Name(),
+				Type:     p.Type(),
+				TypeName: types.TypeString(p.Type(), nil),
+			})
+		}
+
 		ret := results.At(0)
 		methods = append(methods, MethodType{
 			Func:       fn,
 			Name:       fn.Name(),
 			ReturnType: ret.Type(),
 			ReturnName: types.TypeString(ret.Type(), nil),
+			Params:     params,
 		})
 	}
 	return methods
