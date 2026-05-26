@@ -48,7 +48,7 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
                implementationClass="com.allseas.gotexttemplate.TmplFileType"
                fieldName="INSTANCE"
                language="GoTemplate"
-               extensions="tmpl" />
+               extensions=".tmpl" />
 
           <applicationService
                serviceImplementation="com.allseas.gotexttemplate.AppSettings" />
