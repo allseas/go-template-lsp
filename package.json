@@ -10,7 +10,7 @@
   "scripts": {
     "build:server": "ts-node --esm scripts/build-server-binaries.ts",
     "build:vscode": "npm run build:server && npm run compile -w clients/VSCode",
-    "package:vscode": "npm run build:server && npm run package -w clients/VSCode",
+    "package:vscode": "npm run build:server && npm run package:no-verify -w clients/VSCode",
     "watch:vscode": "(ts-node --esm scripts/watch-server-binaries.ts) | (npm run watch -w clients/VSCode)",
     "launch:vscode": "npm run package:vscode && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test"
   },
