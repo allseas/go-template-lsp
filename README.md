@@ -13,6 +13,7 @@ This repository contains the source code of the *GoTemplate Support* extension. 
     - [Formatting and Linting](#formatting-and-linting)
     - [Building the Binaries](#building-the-binaries)
     - [Server Tests](#server-tests)
+  - [Syntax Generation](#syntax-generation)
   - [VS Code Extension](#vs-code-extension)
     - [Prerequisites for VS Code](#prerequisites-for-vs-code)
     - [Formatting and Linting the Extension](#formatting-and-linting-the-extension)
@@ -100,6 +101,11 @@ gotemplate-lsp/
 │           ├── build.gradle.kts     # Gradle build config
 │           └── gradle/              # Gradle wrapper
 ├── scripts/                  # Build scripts (TypeScript)
+├── syntax/                   # TextMate grammar generator (Haskell)
+│   ├── Grammar.hs            # Grammar specification for Go templates
+│   ├── TextMate.hs           # TextMate pattern types and JSON serialization
+│   ├── Generate.hs           # Pattern generation (entry point)
+│   └── Generate.hs           # Regex constants
 ├── docs/                     # Documentation
 │   ├── features.md           # Feature overview and roadmap
 │   ├── server.md             # Language server architecture
@@ -127,6 +133,7 @@ Comprehensive documentation is available in the `docs/` directory:
 - **npm:** 11.12.0 or later
 - **Java:** 21 or later (for JetBrains plugin development)
 - **gowatch:** For watch mode (`go install github.com/silenceper/gowatch@latest`)
+- **GHC** 8.8.4 or later (for generating the tmLanguage syntax)
 
 **Optional:**
 
@@ -172,6 +179,22 @@ cd server
 go test ./... --coverprofile=coverage.out
 go tool cover -func=coverage.out
 ```
+
+### Syntax Generation
+
+The TextMate grammar for syntax highlighting is generated from a formal Go template grammar specification written in Haskell. To regenerate the grammar (GHC required):
+
+```bash
+cd syntax
+cabal run
+```
+This outputs `syntax/syntaxes/gotemplate.tmLanguage.json`, which is used by both VS Code and JetBrains.
+
+or:
+```bash
+npm run generate:syntax
+```
+which automatically formats the file and copies it into both extensions.
 
 ### VS Code Extension
 

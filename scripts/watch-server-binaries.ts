@@ -17,7 +17,7 @@ const __dirname = dirname(__filename);
 
 const serverDirectory = join(__dirname, '..', 'server');
 
-const binariesDir = join(__dirname, '..', 'clients', 'VSCode', 'out', 'server', 'bin');
+const binariesDir = join(__dirname, '..', 'clients', 'VSCode', 'dist', 'server', 'bin');
 
 const outputPath = join(binariesDir, binaryName);
 

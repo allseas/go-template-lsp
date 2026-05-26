@@ -1,4 +1,4 @@
-package com.example.gotexttemplate
+package com.allseas.gotexttemplate
 
 import com.google.gson.JsonObject
 import com.intellij.openapi.project.Project

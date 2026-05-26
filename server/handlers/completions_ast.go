@@ -87,6 +87,21 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 
 	offset := positionToOffset(text, params.Position)
 
+	// Compute the word range covering the token at the cursor (including $ or .)
+	currentWord := getWordAtOffset(text, offset)
+	wordUTF16Len := utf16Len(currentWord)
+	startChar := int(params.Position.Character) - wordUTF16Len
+	if startChar < 0 {
+		startChar = 0
+	}
+	wordRange := protocol.Range{
+		Start: protocol.Position{
+			Line:      params.Position.Line,
+			Character: protocol.UInteger(startChar),
+		},
+		End: params.Position,
+	}
+
 	curNode := nodeFind(tree.Root, parse.Pos(offset))
 	result := buildPath(tree.Root, curNode, ctx)
 
@@ -123,7 +138,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	} else {
 		log.Debug().Str("type", fmt.Sprintf("%T", parent)).Msg(parent.String())
 	}
-	items := suggest(curNode, parent, ctx, text[curNode.Position()], isInvoked)
+	items := suggest(curNode, parent, ctx, text[curNode.Position()], isInvoked, wordRange)
 
 	return protocol.CompletionList{
 		IsIncomplete: false,
@@ -177,23 +192,24 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	return outputAny
 }
 
-func pipeFilteredItems(kind outputKind, ctx *Context) []protocol.CompletionItem {
+func pipeFilteredItems(kind outputKind, ctx *Context, wordRange protocol.Range) []protocol.CompletionItem {
 	names, ok := functionsAccepting[kind]
 	if !ok || kind == outputUntyped {
 		// type is unknown, might be because we don't know the type of the dot object or overlooked function
-		return append(append(dotItem(), varsToItems(ctx, false)...), builtinItems()...)
+		return append(append(dotItem(wordRange), varsToItems(ctx, wordRange)...), builtinItems(wordRange)...)
 	}
 
 	fnKind := protocol.CompletionItemKindFunction
 	items := make([]protocol.CompletionItem, 0, len(names)+1+len(ctx.Vars))
 
-	items = append(items, dotItem()...)
-	items = append(items, varsToItems(ctx, false)...)
+	items = append(items, dotItem(wordRange)...)
+	items = append(items, varsToItems(ctx, wordRange)...)
 	for _, name := range names {
 		n := name
 		items = append(items, protocol.CompletionItem{
-			Label: n,
-			Kind:  &fnKind,
+			Label:    n,
+			Kind:     &fnKind,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: n},
 		})
 	}
 	return items
@@ -205,29 +221,30 @@ func suggest(
 	ctx *Context,
 	sChar uint8,
 	isInvoked bool,
+	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	if sChar == '$' {
-		return varsToItems(ctx, true)
+		return varsToItems(ctx, wordRange)
 	}
 
 	if sChar == '.' {
-		return dotItem()
+		return dotItem(wordRange)
 	}
 
 	all := func() []protocol.CompletionItem {
 		if kind := pipeOutputKind(ctx, isInvoked); kind != outputAny {
-			return pipeFilteredItems(kind, ctx)
+			return pipeFilteredItems(kind, ctx, wordRange)
 		}
-		return append(append(dotItem(), varsToItems(ctx, false)...), builtinItems()...)
+		return append(append(dotItem(wordRange), varsToItems(ctx, wordRange)...), builtinItems(wordRange)...)
 	}
 	dotAndVars := func() []protocol.CompletionItem {
-		return append(dotItem(), varsToItems(ctx, false)...)
+		return append(dotItem(wordRange), varsToItems(ctx, wordRange)...)
 	}
 
 	switch p := parent.(type) {
 	case *parse.CommandNode:
 		if len(p.Args) > 0 && p.Args[0] == cur {
-			return builtinItems()
+			return builtinItems(wordRange)
 		}
 		return all()
 
@@ -250,31 +267,30 @@ func suggest(
 	}
 }
 
-func dotItem() []protocol.CompletionItem {
+func dotItem(wordRange protocol.Range) []protocol.CompletionItem {
 	kind := protocol.CompletionItemKindVariable
 	return []protocol.CompletionItem{{
-		Label: ".",
-		Kind:  &kind,
+		Label:    ".",
+		Kind:     &kind,
+		TextEdit: &protocol.TextEdit{Range: wordRange, NewText: "."},
 	}}
 }
 
-func varsToItems(ctx *Context, delSign bool) []protocol.CompletionItem {
+func varsToItems(ctx *Context, wordRange protocol.Range) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(ctx.Vars))
 	kind := protocol.CompletionItemKindVariable
 	for name := range ctx.Vars {
 		label := name
-		if delSign {
-			label = name[1:]
-		}
 		items = append(items, protocol.CompletionItem{
-			Label: label,
-			Kind:  &kind,
+			Label:    label,
+			Kind:     &kind,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: name},
 		})
 	}
 	return items
 }
 
-func builtinItems() []protocol.CompletionItem {
+func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
 	statics := []string{
 		"and", "call", "html", "index", "slice", "js", "len",
 		"not", "or", "print", "printf", "println", "urlquery",
@@ -284,8 +300,9 @@ func builtinItems() []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(statics))
 	for _, name := range statics {
 		items = append(items, protocol.CompletionItem{
-			Label: name,
-			Kind:  &kind,
+			Label:    name,
+			Kind:     &kind,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: name},
 		})
 	}
 	return items
