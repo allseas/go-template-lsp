@@ -29,7 +29,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 | Completion on built-in functions  | ✅       | ✅         | Must     | Suggests standard template functions                         |
 | Completion on local functions     | ⏳       | ⏳         | Must     | Suggests user-defined template functions                     |
 | **Navigation**                    |         |           |          |
-| Jump to definition                | ⏳       | ⏳         | Must     | Go to variable or function definition                        |
+| Jump to definition                | ✅       | ✅         | Must     | Go to variable or function definition                        |
 | Find references / Usages          | ✅       | ✅         | Must     | Find all usages of a symbol                                  |
 | Peek definition on hover          | ⏳       | ⏳         | Must     | Show definition in hover tooltip                             |
 | **Inspections & Diagnostics**     |         |           |          |
