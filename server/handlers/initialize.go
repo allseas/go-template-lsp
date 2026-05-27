@@ -29,6 +29,7 @@ func setupHandlers(langServerName string, langServerVersion string) {
 		SetTrace:                        SetTrace,
 		WorkspaceDidChangeConfiguration: ConfigChanged,
 		TextDocumentReferences:          references,
+		TextDocumentHover:               hover,
 	}
 }
 

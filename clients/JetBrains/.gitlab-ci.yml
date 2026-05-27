@@ -41,7 +41,7 @@ testing:
   image:
     name: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
   before_script:
-    - npm install
+    - npm ci
   script:
     - echo "running tests"
     - cd clients/JetBrains/go-text-template

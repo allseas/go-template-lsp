@@ -2,7 +2,7 @@
 
 ## What's in the folder
 
-- This folder contains all of the files necessary for your extension.
+- This folder contains all the files necessary for your extension.
 - `package.json` - this is the manifest file in which you declare your language support and define the location of the grammar file that has been copied into your extension.
 - `syntaxes/gotmpl.tmLanguage.json` - this is the Text mate grammar file that is used for tokenization.
 - `language-configuration.json` - this is the language configuration, defining the tokens that are used for comments and brackets.

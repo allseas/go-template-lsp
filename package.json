@@ -8,6 +8,7 @@
   },
   "workspaces": ["clients/*", "scripts"],
   "scripts": {
+    "generate:syntax": "ts-node --esm scripts/generate-syntax.ts",
     "build:server": "ts-node --esm scripts/build-server-binaries.ts",
     "build:vscode": "npm run build:server && npm run compile -w clients/VSCode",
     "package:vscode": "npm run build:server && npm run package -w clients/VSCode",

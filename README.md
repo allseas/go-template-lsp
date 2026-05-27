@@ -13,6 +13,7 @@ This repository contains the source code of the *GoTemplate Support* extension. 
     - [Formatting and Linting](#formatting-and-linting)
     - [Building the Binaries](#building-the-binaries)
     - [Server Tests](#server-tests)
+  - [Syntax Generation](#syntax-generation)
   - [VS Code Extension](#vs-code-extension)
     - [Prerequisites for VS Code](#prerequisites-for-vs-code)
     - [Formatting and Linting the Extension](#formatting-and-linting-the-extension)
@@ -36,7 +37,7 @@ This repository contains the source code of the *GoTemplate Support* extension. 
 Extension features:
 
 | Feature                                         | VS Code | JetBrains | Priority |
-| ----------------------------------------------- | ------- | --------- | -------- |
+|-------------------------------------------------|---------|-----------|----------|
 | Static syntax highlighting                      | ✅       | ✅         | Must     |
 | Dynamic syntax highlighting                     |         |           | Must     |
 | Autocompletion on variables                     | ✅       | ✅         | Must     |
@@ -61,7 +62,7 @@ Extension features:
 Language server features:
 
 | Feature                                                  | Supported | Priority |
-| -------------------------------------------------------- | --------- | -------- |
+|----------------------------------------------------------|-----------|----------|
 | Locally defined syntax modifications                     |           | Should   |
 | Completions and types of functions inferred from project |           | Should   |
 | Support for adding more global functions and tag types   |           | Should   |
@@ -70,7 +71,7 @@ Language server features:
 | Code completions and syntax highlighting for Hugo        |           | Could    |
 | User defined inspections and an ignore comment           |           | Could    |
 
-More can be read about the features in [docs/features.md](docs/features.md)
+More can be read about the features in [docs/features.md](docs/features/README.md)
 
 ## Repository Structure
 
@@ -100,6 +101,11 @@ gotemplate-lsp/
 │           ├── build.gradle.kts     # Gradle build config
 │           └── gradle/              # Gradle wrapper
 ├── scripts/                  # Build scripts (TypeScript)
+├── syntax/                   # TextMate grammar generator (Haskell)
+│   ├── Grammar.hs            # Grammar specification for Go templates
+│   ├── TextMate.hs           # TextMate pattern types and JSON serialization
+│   ├── Generate.hs           # Pattern generation (entry point)
+│   └── Generate.hs           # Regex constants
 ├── docs/                     # Documentation
 │   ├── features.md           # Feature overview and roadmap
 │   ├── server.md             # Language server architecture
@@ -113,10 +119,10 @@ gotemplate-lsp/
 
 Comprehensive documentation is available in the `docs/` directory:
 
-- **[features.md](docs/features.md)** — Complete feature matrix, design decisions, and contribution guide
+- **[features.md](docs/features/README.md)** — Complete feature matrix, design decisions, and contribution guide
 - **[server.md](docs/server.md)** — Language server architecture and guide for adding new features
-- **[vscode-extension.md](docs/vscode-extension.md)** — VS Code extension development guide with examples
-- **[jetbrains-plugin.md](docs/jetbrains-plugin.md)** — JetBrains plugin development guide with examples
+- **[vscode-extension.md](docs/vscode/README.md)** — VS Code extension development guide with examples
+- **[jetbrains-plugin.md](docs/jetbrains/README.md)** — JetBrains plugin development guide with examples
 
 ## Development
 
@@ -127,6 +133,7 @@ Comprehensive documentation is available in the `docs/` directory:
 - **npm:** 11.12.0 or later
 - **Java:** 21 or later (for JetBrains plugin development)
 - **gowatch:** For watch mode (`go install github.com/silenceper/gowatch@latest`)
+- **GHC** 8.8.4 or later (for generating the tmLanguage syntax)
 
 **Optional:**
 
@@ -173,6 +180,22 @@ go test ./... --coverprofile=coverage.out
 go tool cover -func=coverage.out
 ```
 
+### Syntax Generation
+
+The TextMate grammar for syntax highlighting is generated from a formal Go template grammar specification written in Haskell. To regenerate the grammar (GHC required):
+
+```bash
+cd syntax
+cabal run
+```
+This outputs `syntax/syntaxes/gotemplate.tmLanguage.json`, which is used by both VS Code and JetBrains.
+
+or:
+```bash
+npm run generate:syntax
+```
+which automatically formats the file and copies it into both extensions.
+
 ### VS Code Extension
 
 #### Prerequisites for VS Code
@@ -214,7 +237,7 @@ npm run test
 
 This uses `@vscode/test-cli` to run tests in a headless VS Code instance. Tests are located in `src/test/` and should follow the naming pattern `*.test.ts`.
 
-For detailed testing information, see [vscode-testing.md](docs/vscode-testing.md) and [vscode-extension.md](docs/vscode-extension.md#testing).
+For detailed testing information, see [vscode-testing.md](docs/vscode/vscode-testing.md) and [vscode-extension.md](docs/vscode/README.md#testing).
 
 #### Running the Extension with Watching
 
@@ -275,7 +298,7 @@ cd clients/JetBrains/go-text-template/
 
 #### Running the Plugin for Testing
 
-This will run an Intellij IDE for testing purposes. It also builds the server binaries.
+This will run an IntelliJ IDEA instance for testing purposes. It also builds the server binaries.
 
 ```bash
 cd clients/JetBrains/go-text-template/
@@ -305,7 +328,7 @@ To publish directly to the JetBrains Marketplace (requires authentication token)
 ./gradlew publishPlugin
 ```
 
-For more detailed information on plugin development, see [jetbrains-plugin.md](docs/jetbrains-plugin.md).
+For more detailed information on plugin development, see [jetbrains-plugin.md](docs/jetbrains/README.md).
 
 ## Architecture Overview
 
@@ -323,7 +346,7 @@ For detailed architecture information, see [server.md](docs/server.md).
 
 ### Adding New Features
 
-1. **Add feature to roadmap** in [docs/features.md](docs/features.md)
+1. **Add feature to roadmap** in [docs/features.md](docs/features/README.md)
 2. **Implement in server** — Add LSP handler in `server/handlers/`
 3. **Add to VS Code** — Update `clients/VSCode/` if needed
 4. **Add to JetBrains** — Update `clients/JetBrains/` if needed
@@ -333,8 +356,8 @@ For detailed architecture information, see [server.md](docs/server.md).
 Each component has its own development guide:
 
 - [server.md](docs/server.md) — How to add server features
-- [vscode-extension.md](docs/vscode-extension.md) — How to add VS Code features
-- [jetbrains-plugin.md](docs/jetbrains-plugin.md) — How to add JetBrains features
+- [vscode-extension.md](docs/vscode/README.md) — How to add VS Code features
+- [jetbrains-plugin.md](docs/jetbrains/README.md) — How to add JetBrains features
 
 ## Resources
 

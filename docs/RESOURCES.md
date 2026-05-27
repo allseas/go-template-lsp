@@ -6,7 +6,7 @@
 
 The following icon was modified to create the *text/template* file type icon:
 
-<https://github.com/vscode-icons/vscode-icons/blob/master/icons/file_type_json.svg>, from vscode-icons, licensed with the MIT license:
+<https://github.com/vscode-icons/vscode-icons/blob/master/icons/file_type_json.svg> from vscode-icons, licensed with the MIT license:
 
 ```license
 The MIT License (MIT)
