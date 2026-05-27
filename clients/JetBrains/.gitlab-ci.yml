@@ -30,7 +30,7 @@ testing:
     - \. "$HOME/.nvm/nvm.sh"
     - nvm install 24
     - npm install npm -g
-    - npm install
+    - npm ci
   script:
     - echo "running tests"
     - cd clients/JetBrains/go-text-template

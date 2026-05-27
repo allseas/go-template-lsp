@@ -62,7 +62,7 @@ release-build:
     - apk add --no-cache curl
     - curl -fsSL "https://go.dev/dl/go1.26.2.linux-amd64.tar.gz" | tar -xz -C /usr/local
     - export PATH="/usr/local/go/bin:$PATH"
-    - npm install
+    - npm ci
   script:
     - npm run build:server && npm run package:no-verify -w clients/VSCode
   artifacts:

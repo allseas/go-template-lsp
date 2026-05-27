@@ -14,7 +14,7 @@ linting:
     stage: lint
     image: node:24-alpine
     before_script:
-        - npm install
+        - npm ci
     script:
         - echo "Running TSESLint"
         - npm run lint:check -w clients/VSCode
@@ -23,7 +23,7 @@ formatting:
     stage: lint
     image: node:24-alpine
     before_script:
-        - npm install
+        - npm ci
     script:
         - echo "Running Prettier"
         - npm run format:check -w clients/VSCode
@@ -40,7 +40,7 @@ testing:
         - \. "$HOME/.nvm/nvm.sh"
         - nvm install 24
         - npm install npm -g
-        - npm install
+        - npm ci
     script:
         - echo "running tests"
         - xvfb-run --server-args="-screen 0 1920x1080x24" npm test -w clients/VSCode
