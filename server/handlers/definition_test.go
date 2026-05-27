@@ -76,15 +76,13 @@ func TestDefinitionVariableOnDeclaration(t *testing.T) {
 	assert.Len(t, locations, 1)
 	assert.Equal(
 		t,
-		protocol.Location(
-			protocol.Location{
-				URI: uri,
-				Range: protocol.Range{
-					Start: protocol.Position{Line: 0x0, Character: 0x3},
-					End:   protocol.Position{Line: 0x0, Character: 0x8},
-				},
+		protocol.Location{
+			URI: uri,
+			Range: protocol.Range{
+				Start: protocol.Position{Line: 0x0, Character: 0x3},
+				End:   protocol.Position{Line: 0x0, Character: 0x8},
 			},
-		),
+		},
 		locations[0],
 	)
 }
