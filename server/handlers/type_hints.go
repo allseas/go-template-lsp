@@ -124,15 +124,11 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*LoadedType, error) {
 
 // splitTypeHint splits a raw gotype hint into (importPath, typeName).
 func splitTypeHint(hint string) (importPath, typeName string) {
-	for i := len(hint) - 1; i >= 0; i-- {
-		if hint[i] == '.' {
-			after := hint[i+1:]
-			if !strings.Contains(after, "/") {
-				return hint[:i], after
-			}
-		}
+	idx := strings.LastIndex(hint, ".")
+	if idx == -1 {
+		return ".", hint
 	}
-	return ".", hint
+	return hint[:idx], hint[idx+1:]
 }
 
 // namedMethods extracts the methods from the model

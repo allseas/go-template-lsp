@@ -6,6 +6,8 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tliron/glsp v0.2.2
+	go.lsp.dev/uri v0.3.0
+	golang.org/x/tools v0.45.0
 	text-template-parser v0.0.0-00010101000000-000000000000
 )
 
@@ -33,7 +35,6 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/tools v0.45.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 

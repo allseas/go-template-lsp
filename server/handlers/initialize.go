@@ -1,13 +1,13 @@
 package handlers
 
 import (
-	"net/url"
-	"runtime"
+	"fmt"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/tliron/glsp/server"
+	lspuri "go.lsp.dev/uri"
 )
 
 var (
@@ -17,16 +17,12 @@ var (
 	workspaceRoot string
 )
 
-func uriToPath(uri string) string {
-	u, err := url.Parse(uri)
+func uriToPath(uri string) (string, error) {
+	u, err := lspuri.Parse(uri)
 	if err != nil {
-		return uri
+		return "", fmt.Errorf("failed to parse URI")
 	}
-	path := u.Path
-	if runtime.GOOS == "windows" && len(path) > 2 && path[0] == '/' && path[2] == ':' {
-		path = path[1:]
-	}
-	return path
+	return u.Filename(), nil
 }
 
 // setupHandlers initializes the handler configuration with the given language server name and version. This is separated from server startup to enable testing.
@@ -68,7 +64,11 @@ func Init(langServerName string, langServerVersion string) error {
 func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
 	// use RootURI as it is more modern and RootPath is deprecated
 	if params.RootURI != nil {
-		workspaceRoot = uriToPath(*params.RootURI)
+		path, err := uriToPath(*params.RootURI)
+		if err != nil {
+			return nil, fmt.Errorf("initialize: %w", err)
+		}
+		workspaceRoot = path
 	} else if params.RootPath != nil {
 		workspaceRoot = *params.RootPath
 	}
