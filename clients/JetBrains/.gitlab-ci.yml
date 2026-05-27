@@ -4,7 +4,6 @@ workflow:
 
 stages:
   - build
-  - lint
   - test
 
 default:
@@ -28,13 +27,13 @@ build-image:
       allow_failure: true
 
 linting:
-  stage: lint
+  stage: test
   image:
     name: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
   script:
     - echo "running ktlint..."
     - cd clients/JetBrains/go-text-template
-    - ./gradlew ktlintCheck
+    - ./gradlew ktlintCheck --no-configuration-cache
 
 testing:
   stage: test
@@ -45,4 +44,4 @@ testing:
   script:
     - echo "running tests"
     - cd clients/JetBrains/go-text-template
-    - ./gradlew test --build-cache --parallel --max-workers=4
+    - ./gradlew test --build-cache --parallel --max-workers=4 --no-watch-fs --no-configuration-cache

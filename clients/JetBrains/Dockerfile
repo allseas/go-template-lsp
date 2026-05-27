@@ -51,4 +51,5 @@ COPY go-text-template/gradlew /tmp/gradle-deps/
 RUN cd /tmp/gradle-deps && \
     chmod +x gradlew && \
     ./gradlew dependencies --build-cache || true && \
+    ./gradlew help --no-configuration-cache || true && \
     rm -rf /tmp/gradle-deps
