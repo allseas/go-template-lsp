@@ -10,18 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const serverDirectory = join(__dirname, '..', 'server');
-
-const buildForVSCode = process.argv.includes('--vscode');
-
-let serverBinariesDirectory: string;
-
-if (buildForVSCode) {
-    serverBinariesDirectory = join(__dirname, '..', 'clients', 'VSCode', 'out', 'server', 'bin');
-    console.log('Building for VSCode extension (output to clients/VSCode/out/server/bin)');
-} else {
-    serverBinariesDirectory = join(__dirname, '..', 'server_binaries');
-    console.log('Building to server_binaries directory');
-}
+const serverBinariesDirectory = join(__dirname, '..', 'server_binaries')
 
 if (!existsSync(serverBinariesDirectory)){
     mkdirSync(serverBinariesDirectory, {recursive: true});
