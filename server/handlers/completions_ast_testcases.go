@@ -1,6 +1,5 @@
 package handlers
 
-// rewritten to the Go structured style using AI
 type completionTestCase struct {
 	name        string
 	src         string
@@ -14,7 +13,7 @@ type completionTestCase struct {
 }
 
 var completionTestCases = []completionTestCase{
-	// ── dot field completions ────────────────────────────────────────────────
+	// dot field completions
 	{
 		name:     "dot triggers Order field completions",
 		src:      `{{.}}`,
@@ -37,7 +36,7 @@ var completionTestCases = []completionTestCase{
 		withType:    true,
 		notContains: []string{"len", "eq", "html"},
 	},
-	// ── dot method completions ───────────────────────────────────────────────
+	// dot method completions
 	{
 		name:     "dot returns usable method names without dot prefix",
 		src:      `{{.}}`,
@@ -82,7 +81,7 @@ var completionTestCases = []completionTestCase{
 		subStr:      "l",
 		notContains: []string{".DisplayName", ".ItemCount"},
 	},
-	// ── pipe filtering — model fields ────────────────────────────────────────
+	// pipe filtering — model fields
 	{
 		name:        "string field piped — string-accepting builtins suggested",
 		src:         `{{.CustomerName | }}`,
@@ -121,7 +120,7 @@ var completionTestCases = []completionTestCase{
 		withType:  true,
 		contains:  []string{"len", "html", "and"},
 	},
-	// ── pipe filtering — model methods ───────────────────────────────────────
+	// pipe filtering — model methods
 	{
 		name:        "string-returning method piped — string-accepting builtins",
 		src:         `{{.DisplayName | }}`,
@@ -162,7 +161,7 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"html", "len"},
 		notContains: []string{"not"},
 	},
-	// ── user method pipe filtering ───────────────────────────────────────────
+	// user method pipe filtering
 	{
 		name:      "string field piped — no dot-prefixed methods",
 		src:       `{{.CustomerName | }}`,
@@ -223,7 +222,7 @@ var completionTestCases = []completionTestCase{
 		withType:    true,
 		notContains: []string{"DisplayName", "Format", "wrongSecond"},
 	},
-	// ── slice field pipe ─────────────────────────────────────────────────────
+	// slice field pipe
 	{
 		name:        "slice field piped — len/index/slice shown, no methods",
 		src:         `{{.Items | }}`,
@@ -234,7 +233,7 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"len", "index", "slice"},
 		notContains: []string{".DisplayName", ".ItemCount", "DisplayName", "ItemCount"},
 	},
-	// ── multi-stage pipe chaining ────────────────────────────────────────────
+	// multi-stage pipe chaining
 	{
 		name:        "html after string field — string builtins only",
 		src:         `{{.CustomerName | html | }}`,
@@ -255,7 +254,7 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"and", "or"},
 		notContains: []string{"len", "html", ".Oper"},
 	},
-	// ── dot piped directly ───────────────────────────────────────────────────
+	// dot piped directly
 	{
 		name:        "dot piped — all builtins shown, no dot-prefixed fields",
 		src:         `{{. | }}`,
@@ -276,7 +275,7 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"len"},
 		notContains: []string{".Address", ".Items", ".ID"},
 	},
-	// ── builtin chained with model ───────────────────────────────────────────
+	// builtin chained with model
 	{
 		name:      "len of items piped — int-accepting builtins",
 		src:       `{{.Items | len | }}`,
@@ -304,7 +303,7 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"len", "js"},
 		notContains: []string{"not", "eq"},
 	},
-	// ── invoked vs non-invoked ───────────────────────────────────────────────
+	// invoked vs non-invoked
 	{
 		name:        "invoked after string pipe — string builtins, not bool",
 		src:         `{{.CustomerName | }}`,
@@ -315,7 +314,7 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"html", "len"},
 		notContains: []string{"not"},
 	},
-	// ── scope switch — range ─────────────────────────────────────────────────
+	// scope switch — range
 	{
 		name:        "inside range — dot-prefixed Item methods, Order methods absent",
 		src:         `{{range .Items}}{{len .SKU}}{{end}}`,
@@ -362,7 +361,7 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"not", "and"},
 		notContains: []string{"html", "len"},
 	},
-	// ── scope switch — with ──────────────────────────────────────────────────
+	// scope switch — with
 	{
 		name:        "inside with — dot-prefixed Address methods, Order methods absent",
 		src:         `{{with .Address}}{{len .Street}}{{end}}`,
@@ -403,7 +402,7 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"not", "and"},
 		notContains: []string{"html", "len"},
 	},
-	// ── dot suggestions (no type) ────────────────────────────────────────────
+	// dot suggestions (no type)
 	{
 		name:        "dot in if condition — no builtins",
 		src:         `{{if .}}{{end}}`,
@@ -428,7 +427,7 @@ var completionTestCases = []completionTestCase{
 		subStr:      ".",
 		notContains: []string{"eq", "len"},
 	},
-	// ── variable suggestions ─────────────────────────────────────────────────
+	// variable suggestions
 	{
 		name:        "dollar sChar — vars returned without sigil",
 		src:         `{{$top := .}}{{$}}`,
@@ -493,7 +492,7 @@ var completionTestCases = []completionTestCase{
 		occurrence: 1,
 		contains:   []string{"w"},
 	},
-	// ── builtin suggestions ──────────────────────────────────────────────────
+	// builtin suggestions
 	{
 		name:   "builtins appear in general context",
 		src:    `{{len .}}`,
@@ -524,7 +523,7 @@ var completionTestCases = []completionTestCase{
 		occurrence:  1,
 		notContains: []string{"len", "range"},
 	},
-	// ── pipe filtered suggestions ────────────────────────────────────────────
+	// pipe filtered suggestions
 	{
 		name:        "after len pipe — int-accepting builtins only",
 		src:         `{{. | len | }}`,
@@ -557,7 +556,7 @@ var completionTestCases = []completionTestCase{
 		subStr:   "l",
 		contains: []string{"len", "html", "and"},
 	},
-	// ── command node position ────────────────────────────────────────────────
+	// command node position
 	{
 		name:     "first arg of command — builtins returned",
 		src:      `{{len .}}`,
@@ -566,7 +565,7 @@ var completionTestCases = []completionTestCase{
 	},
 }
 
-// ── nodeFind test cases ──────────────────────────────────────────────────────
+// nodeFind test cases
 
 type nodeFindTestCase struct {
 	name     string
@@ -602,7 +601,7 @@ var nodeFindTestCases = []nodeFindTestCase{
 	},
 }
 
-// ── buildPath scope test cases ───────────────────────────────────────────────
+// buildPath scope test cases
 
 type buildPathScopeTestCase struct {
 	name        string
@@ -629,7 +628,7 @@ var buildPathScopeTestCases = []buildPathScopeTestCase{
 	},
 }
 
-// ── completionAst handler test cases ────────────────────────────────────────
+// completionAst handler test cases
 
 type completionAstTestCase struct {
 	name           string
@@ -682,7 +681,7 @@ var completionAstTestCases = []completionAstTestCase{
 	},
 }
 
-// ── completionWithFallback handler test cases ────────────────────────────────
+// completionWithFallback handler test cases
 
 type completionFallbackTestCase struct {
 	name      string

@@ -1,7 +1,6 @@
 package handlers
 
-// rewritten to the Go structured style using AI
-// ── ParseTypeHints test cases ────────────────────────────────────────────────
+// ParseTypeHints test cases
 
 type parseTypeHintTestCase struct {
 	name      string
@@ -63,7 +62,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	},
 }
 
-// ── splitTypeHint test cases ─────────────────────────────────────────────────
+// splitTypeHint test cases
 
 type splitTypeHintTestCase struct {
 	name       string
@@ -105,7 +104,7 @@ var splitTypeHintTestCases = []splitTypeHintTestCase{
 	},
 }
 
-// ── LoadTypeFromHint test cases ──────────────────────────────────────────────
+// LoadTypeFromHint test cases
 
 type loadTypeHintTestCase struct {
 	name         string
