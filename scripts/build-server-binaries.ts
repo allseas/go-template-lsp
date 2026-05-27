@@ -10,12 +10,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const serverDirectory = join(__dirname, '..', 'server');
+const serverBinariesDirectory = join(__dirname, '..', 'server_binaries')
 
-const distDir = join(__dirname, '..', 'dist');
-const binariesDir = join(distDir, 'server');
-
-if (!existsSync(distDir)) {
-    mkdirSync(distDir, { recursive: true });
+if (!existsSync(serverBinariesDirectory)){
+    mkdirSync(serverBinariesDirectory, {recursive: true});
 }
 
 // Platform configurations: [platform, arch, outputName]
@@ -31,7 +29,7 @@ const platforms = [
 console.log(`Building server binaries for ${platforms.length} platform(s)...`);
 
 platforms.forEach(([goos, goarch, outputName]) => {
-    const outputPath = join(binariesDir, outputName);
+    const outputPath = join(serverBinariesDirectory, outputName);
     console.log(`  Building ${outputName} (GOOS=${goos} GOARCH=${goarch})...`);
     
     execSync(

@@ -81,18 +81,23 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 		}
 		seen[v] = true
 
+		filter := strings.TrimPrefix(v, "$")
+
 		items = append(items, protocol.CompletionItem{
-			Label:    v,
-			Kind:     &varKind,
-			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: v},
+			Label:      v,
+			Kind:       &varKind,
+			FilterText: &filter, // <-- key line
+			TextEdit:   &protocol.TextEdit{Range: wordRange, NewText: v},
 		})
 	}
 
 	for _, fn := range globalFunctions {
+		fnLabel := fn
 		items = append(items, protocol.CompletionItem{
-			Label:    fn,
-			Kind:     &fnKind,
-			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: fn},
+			Label:      fn,
+			Kind:       &fnKind,
+			FilterText: &fnLabel,
+			TextEdit:   &protocol.TextEdit{Range: wordRange, NewText: fn},
 		})
 	}
 

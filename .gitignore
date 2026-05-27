@@ -6,3 +6,6 @@ coverage.out
 server/handlers/__debug*
 syntax/dist-newstyle/*
 server_binaries/
+*.vsix
+**/*/*.vsix
+*.zip
