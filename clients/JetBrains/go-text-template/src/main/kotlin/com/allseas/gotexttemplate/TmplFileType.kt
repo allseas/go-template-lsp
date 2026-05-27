@@ -1,4 +1,4 @@
-package com.example.gotexttemplate
+package com.allseas.gotexttemplate
 
 import com.intellij.openapi.fileTypes.LanguageFileType
 import javax.swing.Icon
