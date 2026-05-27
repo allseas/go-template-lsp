@@ -255,7 +255,9 @@ func suggest(
 	}
 
 	dotAndVars := func() []protocol.CompletionItem {
-		return append(dotItem(wordRange), varsToItems(ctx, wordRange)...)
+		return append(
+			dotItem(*ctx, false, nil, outputAny, wordRange),
+			varsToItems(ctx, false, wordRange)...)
 	}
 
 	switch p := parent.(type) {
@@ -305,12 +307,21 @@ func dotItem(
 	if lt := ctx.DotType; lt != nil {
 		items = append(items, fieldCompletionItems(lt.Fields, prefix)...)
 		items = append(items, methodCompletionItems(lt.Methods, inputType, pipeKind, prefix)...)
+		items = append(items, fieldCompletionItems(lt.Fields, prefix, wordRange)...)
+		items = append(
+			items,
+			methodCompletionItems(lt.Methods, inputType, pipeKind, prefix, wordRange)...)
 	}
 	return items
 }
 
 // fieldCompletionItems returns the list of fields with or without the dot
 func fieldCompletionItems(fields []TypeField, prefix string) []protocol.CompletionItem {
+func fieldCompletionItems(
+	fields []TypeField,
+	prefix string,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
 	kind := protocol.CompletionItemKindField
 	items := make([]protocol.CompletionItem, 0, len(fields))
 	for _, f := range fields {

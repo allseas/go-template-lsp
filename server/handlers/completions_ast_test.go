@@ -843,3 +843,25 @@ func TestCompletionWithFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
+	enableServer(t)
+	uri := "file:///invoked-dollar.tmpl"
+	content := `{{$top := .}}{{$}}`
+	store.Set(uri, content)
+	t.Cleanup(func() { store.Remove(uri) })
+
+	const pos protocol.UInteger = 16
+	result := completionAst(nil, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 0, Character: pos},
+		},
+		Context: &protocol.CompletionContext{TriggerKind: protocol.CompletionTriggerKindInvoked},
+	})
+
+	require.NotNil(t, result)
+	labels := labelsFrom(t, result)
+	assert.Contains(t, labels, "top")
+	assert.NotContains(t, labels, "$top")
+}
