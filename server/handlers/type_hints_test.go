@@ -66,7 +66,7 @@ func TestLoadTypeFromHint(t *testing.T) {
 
 func TestNamedMethods(t *testing.T) {
 	t.Run("extracts Order methods and params", func(t *testing.T) {
-		cfg := &packages.Config{Mode: packages.NeedTypes}
+		cfg := &packages.Config{Mode: packages.NeedTypes, Dir: "testdata"}
 		pkgs, err := packages.Load(cfg, "text-template-server/src/model")
 		require.NoError(t, err)
 		require.NotEmpty(t, pkgs)

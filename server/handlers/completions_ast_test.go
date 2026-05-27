@@ -84,7 +84,10 @@ func offsetOf(t *testing.T, s, substr string, n int) int {
 
 func orderLoadedType(t *testing.T) *LoadedType {
 	t.Helper()
-	cfg := &packages.Config{Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax}
+	cfg := &packages.Config{
+		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax,
+		Dir:  "testdata",
+	}
 	pkgs, err := packages.Load(cfg, "text-template-server/src/model")
 	require.NoError(t, err)
 	require.Len(t, pkgs, 1)

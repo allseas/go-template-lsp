@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ func TestInitializeSetsWorkspaceRootAndCapabilities(t *testing.T) {
 
 	initResult, ok := result.(protocol.InitializeResult)
 	assert.True(t, ok)
-	assert.Equal(t, "/tmp/project", workspaceRoot)
+	assert.Equal(t, filepath.FromSlash("/tmp/project"), workspaceRoot)
 
 	requireCaps := initResult.Capabilities
 	assert.NotNil(t, requireCaps.TextDocumentSync)
@@ -67,7 +68,9 @@ func TestInitializeUsesRootPathWhenRootURIMissing(t *testing.T) {
 
 func TestURIToPathInvalidURI(t *testing.T) {
 	badURI := "%zzzz"
-	assert.Equal(t, badURI, uriToPath(badURI))
+	res, err := uriToPath(badURI)
+	assert.Error(t, err)
+	assert.Empty(t, res)
 }
 
 func TestShutdown(t *testing.T) {

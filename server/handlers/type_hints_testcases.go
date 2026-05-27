@@ -121,7 +121,7 @@ var loadTypeHintTestCases = []loadTypeHintTestCase{
 	{
 		name:         "loads Order type with fields and methods",
 		hint:         "text-template-server/src/model.Order",
-		root:         "",
+		root:         "testdata",
 		wantTypeName: "Order",
 		wantFields: []string{
 			"ID",
@@ -137,19 +137,19 @@ var loadTypeHintTestCases = []loadTypeHintTestCase{
 	{
 		name:    "returns error for invalid import path",
 		hint:    "nonexistent/package.Foo",
-		root:    "",
+		root:    "testdata",
 		wantErr: true,
 	},
 	{
 		name:    "returns error when type not found in package",
 		hint:    "text-template-server/src/model.NonExistent",
-		root:    "",
+		root:    "testdata",
 		wantErr: true,
 	},
 	{
 		name:    "returns error when symbol is not a named type",
 		hint:    "fmt.Println",
-		root:    "",
+		root:    "testdata",
 		wantErr: true,
 	},
 }
