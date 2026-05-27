@@ -1,5 +1,6 @@
 package handlers
 
+// rewritten to the Go structured style using AI
 type completionTestCase struct {
 	name        string
 	src         string
