@@ -31,8 +31,7 @@ func suggestAt(t *testing.T, src string, offset int, isInvoked bool) []string {
 	}
 
 	sChar := src[offset]
-	items := suggest(cur, parent, ctx, sChar, isInvoked)
-
+	items := suggest(cur, parent, ctx, sChar, isInvoked, protocol.Range{})
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Label
@@ -109,11 +108,10 @@ func TestDotSuggestions(t *testing.T) {
 
 // variables
 func TestVariableSuggestions(t *testing.T) {
-	t.Run("sChar dollar returns vars without sigil", func(t *testing.T) {
+	t.Run("sChar dollar returns vars with sigil", func(t *testing.T) {
 		src := `{{$top := .}}{{$}}`
 		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "top")
-		assert.NotContains(t, labels, "$top", "should react on $")
+		assert.Contains(t, labels, "$top")
 	})
 
 	t.Run("sChar non-dollar includes full $var label", func(t *testing.T) {
@@ -125,13 +123,13 @@ func TestVariableSuggestions(t *testing.T) {
 	t.Run("variable declared before cursor is visible", func(t *testing.T) {
 		src := `{{$x := .}}{{$x}}`
 		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "x")
+		assert.Contains(t, labels, "$x")
 	})
 
 	t.Run("variable declared after cursor is not visible", func(t *testing.T) {
 		src := `{{$early := .}}{{$}}{{$late := .}}`
 		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "early")
+		assert.Contains(t, labels, "$early")
 		assert.NotContains(t, labels, "late")
 		assert.NotContains(t, labels, "$late")
 	})
@@ -139,8 +137,8 @@ func TestVariableSuggestions(t *testing.T) {
 	t.Run("range index and value variables visible inside body", func(t *testing.T) {
 		src := `{{range $i, $v := .}}{{$}}{{end}}`
 		labels := suggestAt(t, src, offsetOf(t, src, "$", 2), false)
-		assert.Contains(t, labels, "i")
-		assert.Contains(t, labels, "v")
+		assert.Contains(t, labels, "$i")
+		assert.Contains(t, labels, "$v")
 	})
 
 	t.Run("range variable not visible after end", func(t *testing.T) {
@@ -153,21 +151,21 @@ func TestVariableSuggestions(t *testing.T) {
 	t.Run("outer variable visible inside nested range", func(t *testing.T) {
 		src := `{{$outer := .}}{{range $i := .}}{{range $j := .}}{{$}}{{end}}{{end}}`
 		labels := suggestAt(t, src, offsetOf(t, src, "$", 3), false)
-		assert.Contains(t, labels, "outer")
-		assert.Contains(t, labels, "i")
-		assert.Contains(t, labels, "j")
+		assert.Contains(t, labels, "$outer")
+		assert.Contains(t, labels, "$i")
+		assert.Contains(t, labels, "$j")
 	})
 
 	t.Run("if condition variable visible inside block", func(t *testing.T) {
 		src := `{{if $cond := .}}{{$}}{{end}}`
 		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "cond")
+		assert.Contains(t, labels, "$cond")
 	})
 
 	t.Run("with variable visible inside block", func(t *testing.T) {
 		src := `{{with $w := .}}{{$}}{{end}}`
 		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "w")
+		assert.Contains(t, labels, "$w")
 	})
 }
 

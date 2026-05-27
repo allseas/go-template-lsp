@@ -62,12 +62,16 @@ release-build:
     - apk add --no-cache curl
     - curl -fsSL "https://go.dev/dl/go1.26.2.linux-amd64.tar.gz" | tar -xz -C /usr/local
     - export PATH="/usr/local/go/bin:$PATH"
+    - curl -fsSL "https://aka.ms/download-jdk/microsoft-jdk-21-linux-x64.tar.gz" | tar -xz -C /usr/local
+    - export JAVA_HOME="/usr/local/jdk-21"
+    - export PATH="$JAVA_HOME/bin:$PATH"
     - npm install
   script:
-    - npm run build:server && npm run package:no-verify -w clients/VSCode
+    - npm run package:both
   artifacts:
     paths:
       - "*.vsix"
+      - "go-template-jetbrains.zip"
 
 release-publish:
   stage: release
@@ -79,6 +83,7 @@ release-publish:
       artifacts: true
   script:
     - VSIX_FILE=$(find . -maxdepth 1 -name '*.vsix' | head -1)
+    - JETBRAINS_ZIP="go-template-jetbrains.zip"
     - export GLAB_ENABLE_CI_AUTOLOGIN=true
     - |
       glab release create "${CI_COMMIT_TAG}" \
@@ -86,4 +91,7 @@ release-publish:
         --notes "Release ${CI_COMMIT_TAG}"
     - |
       glab release upload "${CI_COMMIT_TAG}" "${VSIX_FILE}" \
+        --use-package-registry
+    - |
+      glab release upload "${CI_COMMIT_TAG}" "${JETBRAINS_ZIP}" \
         --use-package-registry

@@ -192,11 +192,17 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	return outputAny
 }
 
-func pipeFilteredItems(kind outputKind, ctx *Context, wordRange protocol.Range) []protocol.CompletionItem {
+func pipeFilteredItems(
+	kind outputKind,
+	ctx *Context,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
 	names, ok := functionsAccepting[kind]
 	if !ok || kind == outputUntyped {
 		// type is unknown, might be because we don't know the type of the dot object or overlooked function
-		return append(append(dotItem(wordRange), varsToItems(ctx, wordRange)...), builtinItems(wordRange)...)
+		return append(
+			append(dotItem(wordRange), varsToItems(ctx, wordRange)...),
+			builtinItems(wordRange)...)
 	}
 
 	fnKind := protocol.CompletionItemKindFunction
@@ -235,7 +241,9 @@ func suggest(
 		if kind := pipeOutputKind(ctx, isInvoked); kind != outputAny {
 			return pipeFilteredItems(kind, ctx, wordRange)
 		}
-		return append(append(dotItem(wordRange), varsToItems(ctx, wordRange)...), builtinItems(wordRange)...)
+		return append(
+			append(dotItem(wordRange), varsToItems(ctx, wordRange)...),
+			builtinItems(wordRange)...)
 	}
 	dotAndVars := func() []protocol.CompletionItem {
 		return append(dotItem(wordRange), varsToItems(ctx, wordRange)...)
