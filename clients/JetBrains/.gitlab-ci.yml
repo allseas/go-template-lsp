@@ -45,4 +45,4 @@ testing:
   script:
     - echo "running tests"
     - cd clients/JetBrains/go-text-template
-    - ./gradlew test --no-configuration-cache
+    - ./gradlew test --build-cache --parallel --max-workers=4
