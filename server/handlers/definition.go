@@ -30,6 +30,8 @@ func definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		varName := target.Ident[0]
 
 		var results []protocol.Location
+
+		// this goes over the tree and finds declarations (inside PipeNode) of varName
 		inspect(doc.tree.Root, func(n parse.Node) bool {
 			pipe, ok := n.(*parse.PipeNode)
 			if !ok {
@@ -52,8 +54,9 @@ func definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		return results, nil
 	}
 
-	if node.Type() == parse.NodeDot {
-		// TODO: is that the correct behaviour to go to the previous range/with?
+	switch node.Type() {
+	case parse.NodeDot:
+		// TODO: decide if that is the correct behaviour to go to the previous range/with?
 		ctx := &Context{Vars: make(map[string]parse.Node)}
 		buildPath(doc.tree.Root, node, ctx)
 
@@ -72,9 +75,7 @@ func definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 			}
 		}
 		return nil, nil
-	}
-
-	if node.Type() == parse.NodeField {
+	case parse.NodeField:
 		// TODO: go to the definition in the go files
 		return nil, nil
 	}
