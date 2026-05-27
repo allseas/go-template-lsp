@@ -7,6 +7,8 @@ export default defineConfig([
         files: "out/test/**/*.test.js",
         version: "insiders",
         workspaceFolder: "../../test/resources/templ-tests",
+        extensionDevelopmentPath: "./",
+        launchArgs: ["--extensionDevelopmentPath=."],
         mocha: {
             ui: "tdd",
             timeout: 20000,
