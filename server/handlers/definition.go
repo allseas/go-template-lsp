@@ -25,7 +25,8 @@ func definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		return nil, nil
 	}
 
-	if node.Type() == parse.NodeVariable {
+	switch node.Type() {
+	case parse.NodeVariable:
 		target := node.(*parse.VariableNode)
 		varName := target.Ident[0]
 
@@ -52,9 +53,6 @@ func definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 			return nil, nil
 		}
 		return results, nil
-	}
-
-	switch node.Type() {
 	case parse.NodeDot:
 		// TODO: decide if that is the correct behaviour to go to the previous range/with?
 		ctx := &Context{Vars: make(map[string]parse.Node)}
