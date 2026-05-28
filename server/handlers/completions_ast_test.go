@@ -1,37 +1,31 @@
 package handlers
 
 import (
+	"go/types"
 	"testing"
 	parse "text-template-parser"
+
+	"golang.org/x/tools/go/packages"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// suggestAt parses src, finds the node at offset, builds the path/context,
-// and returns the suggestion labels. It is the core helper for all AST tests.
-func suggestAt(t *testing.T, src string, offset int, isInvoked bool) []string {
+func suggestAt(t *testing.T, src string, offset int) []string {
 	t.Helper()
-
 	trees, err := parse.Parse("test", src, "", "", builtins())
-	require.NoError(t, err, "template must parse without error")
-
+	require.NoError(t, err)
 	root := trees["test"].Root
 	ctx := &Context{Vars: map[string]parse.Node{}}
-
-	pos := parse.Pos(offset)
-	cur := nodeFind(root, pos)
+	cur := nodeFind(root, parse.Pos(offset))
 	ok := buildPath(root, cur, ctx)
-	require.True(t, ok, "target node must be found in tree")
-
+	require.True(t, ok)
 	var parent parse.Node
 	if len(ctx.Path) >= 2 {
 		parent = ctx.Path[len(ctx.Path)-2]
 	}
-
-	sChar := src[offset]
-	items := suggest(cur, parent, ctx, sChar, isInvoked, protocol.Range{})
+	items := suggest(parent, ctx, src[offset], false, protocol.Range{})
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Label
@@ -39,13 +33,43 @@ func suggestAt(t *testing.T, src string, offset int, isInvoked bool) []string {
 	return labels
 }
 
-// builtins returns the minimum map required by parse.Parse
+func suggestAtWithType(
+	t *testing.T,
+	src string,
+	offset int,
+	isInvoked bool,
+	lt *LoadedType,
+) []string {
+	t.Helper()
+	trees, err := parse.Parse("test", src, "", "", builtins())
+	require.NoError(t, err)
+	root := trees["test"].Root
+	ctx := &Context{Vars: map[string]parse.Node{}, DotType: lt}
+	cur := nodeFind(root, parse.Pos(offset))
+	ok := buildPath(root, cur, ctx)
+	require.True(t, ok)
+	var parent parse.Node
+	if len(ctx.Path) >= 2 {
+		parent = ctx.Path[len(ctx.Path)-2]
+	}
+	items := suggest(parent, ctx, src[offset], isInvoked, protocol.Range{})
+	labels := make([]string, len(items))
+	for i, item := range items {
+		labels[i] = item.Label
+	}
+	return labels
+}
+
 func builtins() map[string]any {
 	return map[string]any{
 		"and": true, "call": true, "html": true, "index": true,
 		"slice": true, "js": true, "len": true, "not": true, "or": true,
 		"print": true, "printf": true, "println": true, "urlquery": true,
 		"eq": true, "ne": true, "lt": true, "le": true, "gt": true, "ge": true,
+		"DisplayName": true, "Summary": true, "ItemCount": true,
+		"IsLargeOrder": true, "Format": true, "Label": true, "Total": true,
+		"IsExpensive": true, "Describe": true, "Line": true, "IsLocal": true,
+		"ZipCode": true,
 	}
 }
 
@@ -64,406 +88,161 @@ func offsetOf(t *testing.T, s, substr string, n int) int {
 	return -1
 }
 
-// dot tests
-
-func TestDotSuggestions(t *testing.T) {
-	t.Run("bare dot action returns dot item", func(t *testing.T) {
-		src := `{{.}}`
-		// offset 2 is the '.' character
-		labels := suggestAt(t, src, 2, false)
-		assert.Contains(t, labels, ".")
-	})
-
-	t.Run("dot in if condition", func(t *testing.T) {
-		src := `{{if .}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, ".", 0), false)
-		assert.Contains(t, labels, ".")
-		assert.NotContains(t, labels, "eq")
-		assert.NotContains(t, labels, "len")
-	})
-
-	t.Run("dot in range pipeline", func(t *testing.T) {
-		src := `{{range .}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, ".", 0), false)
-		assert.Contains(t, labels, ".")
-		assert.NotContains(t, labels, "eq")
-		assert.NotContains(t, labels, "len")
-	})
-
-	t.Run("dot in with pipeline", func(t *testing.T) {
-		src := `{{with .}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, ".", 0), false)
-		assert.Contains(t, labels, ".")
-		assert.NotContains(t, labels, "eq")
-		assert.NotContains(t, labels, "len")
-	})
-
-	t.Run("sChar dot returns only dot item, not builtins", func(t *testing.T) {
-		src := `{{.}}`
-		labels := suggestAt(t, src, 2, false)
-		assert.NotContains(t, labels, "eq")
-		assert.NotContains(t, labels, "len")
-	})
+func orderLoadedType(t *testing.T) *LoadedType {
+	t.Helper()
+	cfg := &packages.Config{
+		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax,
+		Dir:  "testdata",
+	}
+	pkgs, err := packages.Load(cfg, "text-template-server/src/model")
+	require.NoError(t, err)
+	require.Len(t, pkgs, 1)
+	pkg := pkgs[0]
+	obj := pkg.Types.Scope().Lookup("Order")
+	require.NotNil(t, obj)
+	named := obj.Type().(*types.Named)
+	return &LoadedType{
+		Pkg:     pkg,
+		Named:   named,
+		Fields:  structFields(named),
+		Methods: namedMethods(named),
+	}
 }
 
-// variables
-func TestVariableSuggestions(t *testing.T) {
-	t.Run("sChar dollar returns vars with sigil", func(t *testing.T) {
-		src := `{{$top := .}}{{$}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "$top")
-	})
-
-	t.Run("sChar non-dollar includes full $var label", func(t *testing.T) {
-		src := `{{$top := .}}{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
-		assert.Contains(t, labels, "$top")
-	})
-
-	t.Run("variable declared before cursor is visible", func(t *testing.T) {
-		src := `{{$x := .}}{{$x}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "$x")
-	})
-
-	t.Run("variable declared after cursor is not visible", func(t *testing.T) {
-		src := `{{$early := .}}{{$}}{{$late := .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "$early")
-		assert.NotContains(t, labels, "late")
-		assert.NotContains(t, labels, "$late")
-	})
-
-	t.Run("range index and value variables visible inside body", func(t *testing.T) {
-		src := `{{range $i, $v := .}}{{$}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 2), false)
-		assert.Contains(t, labels, "$i")
-		assert.Contains(t, labels, "$v")
-	})
-
-	t.Run("range variable not visible after end", func(t *testing.T) {
-		src := `{{range $inner := .}}{{end}}{{$}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.NotContains(t, labels, "inner")
-		assert.NotContains(t, labels, "$inner")
-	})
-
-	t.Run("outer variable visible inside nested range", func(t *testing.T) {
-		src := `{{$outer := .}}{{range $i := .}}{{range $j := .}}{{$}}{{end}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 3), false)
-		assert.Contains(t, labels, "$outer")
-		assert.Contains(t, labels, "$i")
-		assert.Contains(t, labels, "$j")
-	})
-
-	t.Run("if condition variable visible inside block", func(t *testing.T) {
-		src := `{{if $cond := .}}{{$}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "$cond")
-	})
-
-	t.Run("with variable visible inside block", func(t *testing.T) {
-		src := `{{with $w := .}}{{$}}{{end}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.Contains(t, labels, "$w")
-	})
+func TestCompletionSuggestions(t *testing.T) {
+	lt := orderLoadedType(t)
+	for _, tc := range completionTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			offset := offsetOf(t, tc.src, tc.subStr, tc.occurrence) + tc.offsetAdj
+			var labels []string
+			if tc.withType {
+				labels = suggestAtWithType(t, tc.src, offset, tc.isInvoked, lt)
+			} else {
+				labels = suggestAt(t, tc.src, offset)
+			}
+			for _, want := range tc.contains {
+				assert.Contains(t, labels, want)
+			}
+			for _, notWant := range tc.notContains {
+				assert.NotContains(t, labels, notWant)
+			}
+		})
+	}
 }
-
-// builtins suggest
-
-func TestBuiltinSuggestions(t *testing.T) {
-	t.Run("builtins appear in general context", func(t *testing.T) {
-		src := `{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
-		for _, fn := range []string{"len", "eq", "ne", "and", "or", "not", "print", "printf", "println", "index"} {
-			assert.Contains(t, labels, fn, "builtin %q should be present", fn)
-		}
-	})
-
-	t.Run("builtins not returned when sChar is dot", func(t *testing.T) {
-		src := `{{.}}`
-		labels := suggestAt(t, src, 2, false)
-		assert.NotContains(t, labels, "len")
-	})
-
-	t.Run("builtins not returned when sChar is dollar", func(t *testing.T) {
-		src := `{{$x := .}}{{$}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "$", 1), false)
-		assert.NotContains(t, labels, "len")
-		assert.NotContains(t, labels, "range")
-	})
-}
-
-// pipe filtering
-
-func TestPipeFilteredSuggestions(t *testing.T) {
-	t.Run("after len pipe, only int-accepting functions suggested", func(t *testing.T) {
-		src := `{{len . | eq . .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "e", 0), false)
-		assert.Contains(t, labels, "eq")
-		assert.Contains(t, labels, "lt")
-		assert.Contains(t, labels, "print")
-		// those should get filtered out
-		assert.NotContains(t, labels, "html")
-		assert.NotContains(t, labels, "js")
-	})
-
-	t.Run(
-		"after len pipe, only int-accepting functions suggested on ctrl+space",
-		func(t *testing.T) {
-			src := `{{. | len | }}`
-			labels := suggestAt(t, src, offsetOf(t, src, "}}", 0)-1, true)
-			assert.Contains(t, labels, "eq")
-			assert.Contains(t, labels, "lt")
-			assert.Contains(t, labels, "print")
-			// those should get filtered out
-			assert.NotContains(t, labels, "index")
-			assert.NotContains(t, labels, "js")
-		},
-	)
-
-	t.Run("after not pipe, only bool-accepting functions suggested", func(t *testing.T) {
-		src := `{{not . | and . .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "a", 0), false)
-		assert.Contains(t, labels, "and")
-		assert.Contains(t, labels, "or")
-		assert.Contains(t, labels, "not")
-		assert.NotContains(t, labels, "len")
-		assert.NotContains(t, labels, "html")
-	})
-
-	t.Run("after html pipe, only string-accepting functions suggested", func(t *testing.T) {
-		src := `{{html . | len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
-		assert.Contains(t, labels, "len")
-		assert.Contains(t, labels, "index")
-		assert.NotContains(t, labels, "and")
-		assert.NotContains(t, labels, "not")
-	})
-
-	t.Run("no preceding pipe returns full list", func(t *testing.T) {
-		src := `{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
-		assert.Contains(t, labels, "len")
-		assert.Contains(t, labels, "html")
-		assert.Contains(t, labels, "and")
-	})
-}
-
-// command node positions
-
-func TestCommandNodePositionSuggestions(t *testing.T) {
-	t.Run("first arg of command returns only builtins", func(t *testing.T) {
-		src := `{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, "l", 0), false)
-		assert.Contains(t, labels, "len")
-		assert.Contains(t, labels, "eq")
-	})
-
-	t.Run("second arg of command returns all", func(t *testing.T) {
-		src := `{{len .}}`
-		labels := suggestAt(t, src, offsetOf(t, src, ".", 0), false)
-		assert.Contains(t, labels, ".")
-	})
-}
-
-// node find
 
 func TestNodeFind(t *testing.T) {
-	t.Run("finds dot node at its position", func(t *testing.T) {
-		src := `{{.}}`
-		trees, err := parse.Parse("test", src, "", "", builtins())
-		require.NoError(t, err)
-		root := trees["test"].Root
-
-		node := nodeFind(root, parse.Pos(2))
-		_, isDot := node.(*parse.DotNode)
-		assert.True(t, isDot, "expected DotNode, got %T", node)
-	})
-
-	t.Run("finds identifier node", func(t *testing.T) {
-		src := `{{len .}}`
-		trees, err := parse.Parse("test", src, "", "", builtins())
-		require.NoError(t, err)
-		root := trees["test"].Root
-
-		node := nodeFind(root, parse.Pos(2))
-		id, isIdent := node.(*parse.IdentifierNode)
-		assert.True(t, isIdent, "expected IdentifierNode, got %T", node)
-		assert.Equal(t, "len", id.Ident)
-	})
-
-	t.Run("finds variable node", func(t *testing.T) {
-		src := `{{$x := .}}{{$x}}`
-		trees, err := parse.Parse("test", src, "", "", builtins())
-		require.NoError(t, err)
-		root := trees["test"].Root
-
-		// second $
-		node := nodeFind(root, parse.Pos(20))
-		v, isVar := node.(*parse.VariableNode)
-		assert.True(t, isVar, "expected VariableNode, got %T", node)
-		assert.Equal(t, "$x", v.Ident[0])
-	})
+	for _, tc := range nodeFindTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			trees, err := parse.Parse("test", tc.src, "", "", builtins())
+			require.NoError(t, err)
+			node := nodeFind(trees["test"].Root, parse.Pos(tc.pos))
+			if tc.isDot {
+				_, ok := node.(*parse.DotNode)
+				assert.True(t, ok, "expected DotNode, got %T", node)
+			}
+			if tc.isIdent {
+				id, ok := node.(*parse.IdentifierNode)
+				require.True(t, ok, "expected IdentifierNode, got %T", node)
+				assert.Equal(t, tc.ident, id.Ident)
+			}
+			if tc.isVar {
+				v, ok := node.(*parse.VariableNode)
+				require.True(t, ok, "expected VariableNode, got %T", node)
+				assert.Equal(t, tc.varIdent, v.Ident[0])
+			}
+		})
+	}
 }
-
-// buildPath correctness check
 
 func TestBuildPathScope(t *testing.T) {
-	t.Run("vars reset after if branch not taken", func(t *testing.T) {
-		// $inner is declared inside the if-else; cursor is after {{end}},
-		// so buildPath should NOT leave $inner in ctx.Vars.
-		src := `{{if .}}{{$inner := .}}{{end}}{{.}}`
-		trees, err := parse.Parse("test", src, "", "", builtins())
-		require.NoError(t, err)
-		root := trees["test"].Root
-
-		ctx := &Context{Vars: map[string]parse.Node{}}
-		pos := parse.Pos(offsetOf(t, src, ".", 2))
-		cur := nodeFind(root, pos)
-		buildPath(root, cur, ctx)
-
-		_, hasInner := ctx.Vars["$inner"]
-		assert.False(t, hasInner, "$inner should not leak out of if block")
-	})
-
-	t.Run("outer var always in scope", func(t *testing.T) {
-		src := `{{$outer := .}}{{if .}}{{end}}{{.}}`
-		trees, err := parse.Parse("test", src, "", "", builtins())
-		require.NoError(t, err)
-		root := trees["test"].Root
-
-		ctx := &Context{Vars: map[string]parse.Node{}}
-		pos := parse.Pos(offsetOf(t, src, ".", 2))
-		cur := nodeFind(root, pos)
-		buildPath(root, cur, ctx)
-
-		_, hasOuter := ctx.Vars["$outer"]
-		assert.True(t, hasOuter, "$outer must survive if block")
-	})
+	for _, tc := range buildPathScopeTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			trees, err := parse.Parse("test", tc.src, "", "", builtins())
+			require.NoError(t, err)
+			root := trees["test"].Root
+			ctx := &Context{Vars: map[string]parse.Node{}}
+			pos := parse.Pos(offsetOf(t, tc.src, ".", tc.dotOccur))
+			buildPath(root, nodeFind(root, pos), ctx)
+			_, present := ctx.Vars[tc.varName]
+			assert.Equal(t, tc.wantPresent, present)
+		})
+	}
 }
 
-// full completion tests
-
 func TestCompletionAst(t *testing.T) {
-	t.Run("returns nil when server disabled", func(t *testing.T) {
-		original := GetConfig()
-		setConfig(Config{EnableServer: false})
-		t.Cleanup(func() { setConfig(original) })
-
-		uri := "file:///disabled.tmpl"
-		store.Set(uri, "{{.}}")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
+	for _, tc := range completionAstTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.serverDisabled {
+				original := GetConfig()
+				setConfig(Config{EnableServer: false})
+				t.Cleanup(func() { setConfig(original) })
+			} else {
+				enableServer(t)
+			}
+			if !tc.skipStore {
+				store.Set(tc.uri, tc.content)
+				t.Cleanup(func() { store.Remove(tc.uri) })
+			}
+			result := completionAst(nil, &protocol.CompletionParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: tc.uri},
+					Position:     protocol.Position{Line: tc.line, Character: tc.character},
+				},
+			})
+			if tc.wantNil {
+				assert.Nil(t, result)
+				return
+			}
+			require.NotNil(t, result)
+			if len(tc.wantLabels) > 0 {
+				list, ok := result.(protocol.CompletionList)
+				require.True(t, ok)
+				assert.False(t, list.IsIncomplete)
+				assert.Contains(t, labelsFrom(t, result), tc.wantLabels[0])
+			}
 		})
-		assert.Nil(t, result)
-	})
-
-	t.Run("returns nil when document not in store", func(t *testing.T) {
-		enableServer(t)
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: "file:///missing.tmpl"},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
-		})
-		assert.Nil(t, result)
-	})
-
-	t.Run("returns nil when tree is nil", func(t *testing.T) {
-		enableServer(t)
-		uri := "file:///notree.tmpl"
-		// Set a document with no parsed tree by storing broken template
-		store.Set(uri, "{{invalid template {{{{")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
-		})
-		// with the new parser, the tree is not nil in the wrong code case
-		assert.NotNil(t, result)
-	})
-
-	t.Run("returns nil when cursor outside template block", func(t *testing.T) {
-		enableServer(t)
-		uri := "file:///outside.tmpl"
-		store.Set(uri, "{{.}}\nplain text")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 1, Character: 2},
-			},
-		})
-		assert.Nil(t, result)
-	})
-
-	t.Run("returns CompletionList for valid template and position", func(t *testing.T) {
-		enableServer(t)
-		uri := "file:///valid.tmpl"
-		store.Set(uri, "{{.}}")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		result := completionAst(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
-		})
-		require.NotNil(t, result)
-		list, ok := result.(protocol.CompletionList)
-		require.True(t, ok)
-		assert.False(t, list.IsIncomplete)
-
-		labels := make([]string, len(list.Items))
-		for i, item := range list.Items {
-			labels[i] = item.Label
-		}
-		assert.Contains(t, labels, ".")
-	})
+	}
 }
 
 func TestCompletionWithFallback(t *testing.T) {
-	t.Run("returns ast result when ast succeeds", func(t *testing.T) {
-		enableServer(t)
-		uri := "file:///fallback-ok.tmpl"
-		store.Set(uri, "{{.}}")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		resp, err := completionWithFallback(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 0, Character: 2},
-			},
+	for _, tc := range completionFallbackTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			enableServer(t)
+			store.Set(tc.uri, tc.content)
+			t.Cleanup(func() { store.Remove(tc.uri) })
+			resp, err := completionWithFallback(nil, &protocol.CompletionParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: tc.uri},
+					Position:     protocol.Position{Line: tc.line, Character: tc.character},
+				},
+			})
+			require.NoError(t, err)
+			if tc.wantList {
+				_, ok := resp.(protocol.CompletionList)
+				assert.True(t, ok, "expected CompletionList")
+			}
 		})
-		require.NoError(t, err)
-		_, ok := resp.(protocol.CompletionList)
-		assert.True(t, ok, "expected CompletionList from ast path")
+	}
+}
+
+func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
+	enableServer(t)
+	uri := "file:///invoked-dollar.tmpl"
+	content := `{{$top := .}}{{$}}`
+	store.Set(uri, content)
+	t.Cleanup(func() { store.Remove(uri) })
+
+	const pos protocol.UInteger = 16
+	result := completionAst(nil, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     protocol.Position{Line: 0, Character: pos},
+		},
+		Context: &protocol.CompletionContext{TriggerKind: protocol.CompletionTriggerKindInvoked},
 	})
 
-	t.Run("falls back to regex when ast returns nil", func(t *testing.T) {
-		enableServer(t)
-		// cursor outside template — ast returns nil, fallback should run
-		uri := "file:///fallback-nil.tmpl"
-		store.Set(uri, "{{$x := .}}\nplain")
-		t.Cleanup(func() { store.Remove(uri) })
-
-		resp, err := completionWithFallback(nil, &protocol.CompletionParams{
-			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-				Position:     protocol.Position{Line: 1, Character: 2},
-			},
-		})
-		require.NoError(t, err)
-		_ = resp
-	})
+	require.NotNil(t, result)
+	labels := labelsFrom(t, result)
+	assert.Contains(t, labels, "top")
+	assert.NotContains(t, labels, "$top")
 }

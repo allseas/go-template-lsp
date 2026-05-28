@@ -65,7 +65,7 @@ release-build:
     - curl -fsSL "https://aka.ms/download-jdk/microsoft-jdk-21-linux-x64.tar.gz" | tar -xz -C /usr/local
     - export JAVA_HOME="/usr/local/jdk-21"
     - export PATH="$JAVA_HOME/bin:$PATH"
-    - npm install
+    - npm ci
   script:
     - npm run package:both
   artifacts:
