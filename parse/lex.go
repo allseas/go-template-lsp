@@ -418,7 +418,8 @@ func lexInsideAction(l *lexer) stateFn {
 		return l.emit(itemAssign)
 	case r == ':':
 		if l.next() != '=' {
-			return l.errorf("expected :=")
+			l.backup() // Put the non-'=' back
+			return l.emit(itemChar)
 		}
 		return l.emit(itemDeclare)
 	case r == '|':
