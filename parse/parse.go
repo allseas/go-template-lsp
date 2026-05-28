@@ -447,7 +447,7 @@ func (t *Tree) textOrAction() Node {
 	default:
 		if t.Mode&ParsePartial != 0 {
 			recErr := t.recordError(token.pos, "unexpected token: %s", token)
-			return t.newUndefined(token.pos, recErr, token.String())
+			return t.newUndefined(token.pos, recErr, token.val)
 		}
 		t.unexpected(token, "input")
 	}
@@ -499,7 +499,7 @@ func (t *Tree) action() (n Node) {
 	pipe := t.pipeline("command", itemRightDelim)
 	if t.Mode&ParsePartial != 0 && pipe == nil {
 		recErr := t.recordError(token.pos, "unexpected token in action: %s", t.peek())
-		return t.newUndefined(pos, recErr, token.String()+t.peek().String())
+		return t.newUndefined(pos, recErr, token.val+t.peek().val)
 	}
 	return t.newAction(pos, token.line, pipe)
 }
@@ -515,7 +515,7 @@ func (t *Tree) breakControl(pos Pos, line int) Node {
 			t.unexpected(token, "{{break}}")
 		} else {
 			recErr := t.recordError(token.pos, "unexpected token after {{break}}: %s", token)
-			return t.newUndefined(token.pos, recErr, "{{break"+token.String())
+			return t.newUndefined(token.pos, recErr, "{{break"+token.val)
 		}
 	}
 	if t.rangeDepth == 0 {
@@ -540,7 +540,7 @@ func (t *Tree) continueControl(pos Pos, line int) Node {
 			t.unexpected(token, "{{continue}}")
 		} else {
 			recErr := t.recordError(token.pos, "unexpected token after {{continue}}: %s", token)
-			return t.newUndefined(token.pos, recErr, "{{continue"+token.String())
+			return t.newUndefined(token.pos, recErr, "{{continue"+token.val)
 		}
 	}
 	if t.rangeDepth == 0 {
@@ -590,7 +590,7 @@ decls:
 						t.errorf("range can only initialize variables")
 					} else {
 						bad := t.peekNonSpace()
-						t.recordError(bad.pos, "unexpected token after variable declaration in range pipeline: %s", bad)
+						t.recordError(bad.pos, "unexpected token after variable declaration in range pipeline: %s", bad.val)
 						goto decls
 					}
 				}
@@ -621,6 +621,14 @@ decls:
 			itemNumber, itemNil, itemRawString, itemString, itemVariable, itemLeftParen:
 			t.backup()
 			pipe.append(t.command(i > 0))
+		case itemPipe:
+			if t.Mode&ParsePartial != 0 {
+				pipe.append(t.newCommand(token.pos))
+				recErr := t.recordError(token.pos, "unexpected token in pipeline: %s", token)
+				pipe.Cmds[len(pipe.Cmds)-1].append(t.newUndefined(token.pos, recErr, token.val))
+			} else {
+				t.unexpected(token, context)
+			}
 		default:
 			if t.Mode&ParsePartial == 0 {
 				t.unexpected(token, context)
@@ -892,7 +900,7 @@ func (t *Tree) command(hasInput bool) *CommandNode {
 				t.unexpected(token, "operand")
 			} else {
 				recErr := t.recordError(token.pos, "unexpected token in command: %s", token)
-				cmd.append(t.newUndefined(token.pos, recErr, token.String()))
+				cmd.append(t.newUndefined(token.pos, recErr, token.val))
 				return cmd
 			}
 		}
@@ -970,7 +978,7 @@ func (t *Tree) term() Node {
 				t.errorf("function %q not defined", token.val)
 			} else {
 				recErr := t.recordError(token.pos, "function %q not defined", token.val)
-				return t.newUndefined(token.pos, recErr, token.String())
+				return t.newUndefined(token.pos, recErr, token.val)
 			}
 		}
 		return NewIdentifier(token.val).SetTree(t).SetPos(token.pos)
@@ -991,7 +999,7 @@ func (t *Tree) term() Node {
 				t.error(err)
 			} else {
 				recErr := t.recordError(token.pos, "%s", err)
-				return t.newUndefined(token.pos, recErr, token.String())
+				return t.newUndefined(token.pos, recErr, token.val)
 			}
 		}
 		return number
@@ -1010,7 +1018,7 @@ func (t *Tree) term() Node {
 				t.error(err)
 			} else {
 				recErr := t.recordError(token.pos, "%s", err)
-				return t.newUndefined(token.pos, recErr, token.String())
+				return t.newUndefined(token.pos, recErr, token.val)
 			}
 		}
 		return t.newString(token.pos, token.val, s)
