@@ -3,6 +3,8 @@ package handlers
 
 import (
 	"fmt"
+	"go/types"
+	"strings"
 	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
@@ -18,6 +20,8 @@ type Context struct {
 	Vars map[string]parse.Node
 	// used for the previous functions in the pipe to extract the context using Pipe.Cmds
 	Pipe *parse.PipeNode
+	// DotType is the resolved Go type of the current dot (.) object.
+	DotType *LoadedType
 }
 
 type outputKind int
@@ -83,11 +87,13 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	text := doc.text
 	tree := doc.tree
 
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	ctx := &Context{
+		Vars:    map[string]parse.Node{"$": nil},
+		DotType: doc.loadedType,
+	}
 
 	offset := positionToOffset(text, params.Position)
 
-	// Compute the word range covering the token at the cursor (including $ or .)
 	currentWord := getWordAtOffset(text, offset)
 	wordUTF16Len := utf16Len(currentWord)
 	startChar := int(params.Position.Character) - wordUTF16Len
@@ -118,9 +124,6 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	}
 
 	if !isInsideTemplate(text, offset) {
-		log.Debug().
-			Int("offset new ", offset).
-			Msg("completion: cursor is not inside a template block, skipping")
 		return nil
 	}
 
@@ -129,16 +132,20 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 		return nil
 	}
 
-	log.Debug().Msg(tree.Root.String())
-	log.Debug().
-		Str("type cur", fmt.Sprintf("%T, %c", curNode, text[curNode.Position()])).
-		Msg(curNode.String())
-	if parent == nil {
-		log.Debug().Msg("parent is nil")
-	} else {
-		log.Debug().Str("type", fmt.Sprintf("%T", parent)).Msg(parent.String())
+	var sChar uint8
+	if offset > 0 && offset <= len(text) {
+		sChar = text[offset-1]
 	}
-	items := suggest(curNode, parent, ctx, text[curNode.Position()], isInvoked, wordRange)
+	// Ctrl+Space doesn't add a trigger character; infer variable/dot context from the word under cursor.
+	if isInvoked {
+		if strings.HasPrefix(currentWord, "$") {
+			sChar = '$'
+		} else if strings.HasPrefix(currentWord, ".") {
+			sChar = '.'
+		}
+	}
+
+	items := suggest(parent, ctx, sChar, isInvoked, wordRange)
 
 	return protocol.CompletionList{
 		IsIncomplete: false,
@@ -149,7 +156,6 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 var functionsAccepting = map[outputKind][]string{
 	outputInt: {
 		"eq", "ne", "lt", "le", "gt", "ge",
-		"not",
 		"print", "printf", "println",
 	},
 	outputBool: {
@@ -170,8 +176,8 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 		return outputAny
 	}
 	cmds := ctx.Pipe.Cmds
+	// precedingIdx is -1 when the user invokes the suggestion mid-typing and -2 when automatically suggested
 	precedingIdx := len(cmds) - 2
-
 	if isInvoked {
 		precedingIdx = len(cmds) - 1
 	}
@@ -192,37 +198,152 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	return outputAny
 }
 
+// pipeOutputType returns the type of a previous command in a pipe.
+// If the current command is broken, then nil is returned, as the pipe becomes nil
+func pipeOutputType(ctx *Context, isInvoked bool) types.Type {
+	if ctx.Pipe == nil || ctx.DotType == nil {
+		return nil
+	}
+	cmds := ctx.Pipe.Cmds
+	precedingIdx := len(cmds) - 2
+	if isInvoked {
+		precedingIdx = len(cmds) - 1
+	}
+	if precedingIdx < 0 {
+		return nil
+	}
+	preceding := cmds[precedingIdx]
+	if len(preceding.Args) == 0 {
+		return nil
+	}
+	switch arg := preceding.Args[0].(type) {
+	case *parse.DotNode:
+		return ctx.DotType.Named
+	case *parse.FieldNode:
+		if len(arg.Ident) != 1 {
+			return nil
+		}
+		name := arg.Ident[0]
+		for _, f := range ctx.DotType.Fields {
+			if f.Name == name {
+				return f.Type
+			}
+		}
+		for _, m := range ctx.DotType.Methods {
+			if m.Name == name {
+				return m.ReturnType
+			}
+		}
+	case *parse.IdentifierNode:
+		for _, m := range ctx.DotType.Methods {
+			if m.Name == arg.Ident {
+				return m.ReturnType
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
+// typeToOutputKind maps a concrete Go type to the outputKind used to filter builtins.
+func typeToOutputKind(t types.Type) outputKind {
+	basic, ok := t.Underlying().(*types.Basic)
+	if !ok {
+		return outputUntyped
+	}
+	switch {
+	case basic.Info()&types.IsString != 0:
+		return outputString
+	case basic.Info()&types.IsInteger != 0:
+		return outputInt
+	case basic.Info()&types.IsBoolean != 0:
+		return outputBool
+	}
+	return outputUntyped
+}
+
+// basicTypeMatchesKind reports whether t is compatible with the given output kind.
+func basicTypeMatchesKind(t types.Type, kind outputKind) bool {
+	basic, ok := t.Underlying().(*types.Basic)
+	if !ok {
+		return false
+	}
+	switch kind {
+	case outputInt:
+		return basic.Info()&types.IsInteger != 0
+	case outputBool:
+		return basic.Info()&types.IsBoolean != 0
+	case outputString:
+		return basic.Info()&types.IsString != 0
+	}
+	return false
+}
+
+// methodIsUsable checks whether there are issues in the function definition
+// only valid go template functions should be accepted
+// functions that return 2 or more arguments are not accepted, except those where one of them is an error
+func methodIsUsable(m MethodType) bool {
+	if m.Func == nil {
+		return false
+	}
+	sig, ok := m.Func.Type().(*types.Signature)
+	if !ok {
+		return false
+	}
+	results := sig.Results()
+	switch results.Len() {
+	case 1:
+		return true
+	case 2:
+		second := results.At(1).Type()
+		errType := types.Universe.Lookup("error").Type()
+		return types.Implements(second, errType.Underlying().(*types.Interface))
+	default:
+		return false
+	}
+}
+
+// pipeFilteredItems determines based on the input types what should be the suggestion list
 func pipeFilteredItems(
 	kind outputKind,
+	inputType types.Type,
+	pipeInputType types.Type,
 	ctx *Context,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
-	names, ok := functionsAccepting[kind]
-	if !ok || kind == outputUntyped {
-		// type is unknown, might be because we don't know the type of the dot object or overlooked function
-		return append(
-			append(dotItem(wordRange), varsToItems(ctx, wordRange)...),
-			builtinItems(wordRange)...)
+	items := make([]protocol.CompletionItem, 0)
+	items = append(items, dotItem(*ctx, false, pipeInputType, kind, wordRange)...)
+	items = append(items, varsToItems(ctx, false, wordRange)...)
+
+	if ctx.DotType == nil {
+		items = append(items, builtinItems(wordRange)...)
+		return items
+	}
+
+	effectiveKind := kind
+	if effectiveKind == outputAny && inputType != nil {
+		effectiveKind = typeToOutputKind(inputType)
+	}
+
+	names, ok := functionsAccepting[effectiveKind]
+	if !ok || effectiveKind == outputUntyped || effectiveKind == outputAny {
+		items = append(items, builtinItems(wordRange)...)
+		return items
 	}
 
 	fnKind := protocol.CompletionItemKindFunction
-	items := make([]protocol.CompletionItem, 0, len(names)+1+len(ctx.Vars))
 
-	items = append(items, dotItem(wordRange)...)
-	items = append(items, varsToItems(ctx, wordRange)...)
 	for _, name := range names {
-		n := name
 		items = append(items, protocol.CompletionItem{
-			Label:    n,
+			Label:    name,
 			Kind:     &fnKind,
-			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: n},
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: name},
 		})
 	}
 	return items
 }
 
 func suggest(
-	cur parse.Node,
 	parent parse.Node,
 	ctx *Context,
 	sChar uint8,
@@ -230,30 +351,38 @@ func suggest(
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	if sChar == '$' {
-		return varsToItems(ctx, wordRange)
+		return varsToItems(ctx, true, wordRange)
 	}
 
 	if sChar == '.' {
-		return dotItem(wordRange)
+		kind := pipeOutputKind(ctx, isInvoked)
+		pipeInputType := pipeOutputType(ctx, isInvoked)
+
+		// if both pipeInputType is nil and kind = outputAny, it means that there was an issue while parsing and the whole pipe became an UndefinedNode
+		// one solution would be to remove the incorrect part of the pipe and give suggestions, but this is clumsy, so the parser should be adjusted
+		return dotItem(*ctx, true, pipeInputType, kind, wordRange)
 	}
 
 	all := func() []protocol.CompletionItem {
-		if kind := pipeOutputKind(ctx, isInvoked); kind != outputAny {
-			return pipeFilteredItems(kind, ctx, wordRange)
+		// kind is primarily used to determine the output type of a function that is the previous node in a pipe
+		kind := pipeOutputKind(ctx, isInvoked)
+		// pipeInputType is used to determine the type of the dot object that the function is going to be applied on
+		pipeInputType := pipeOutputType(ctx, isInvoked)
+		inputType := pipeInputType
+		if inputType == nil && kind == outputAny && ctx.DotType != nil {
+			inputType = ctx.DotType.Named
 		}
-		return append(
-			append(dotItem(wordRange), varsToItems(ctx, wordRange)...),
-			builtinItems(wordRange)...)
-	}
-	dotAndVars := func() []protocol.CompletionItem {
-		return append(dotItem(wordRange), varsToItems(ctx, wordRange)...)
+		return pipeFilteredItems(kind, inputType, pipeInputType, ctx, wordRange)
 	}
 
-	switch p := parent.(type) {
+	dotAndVars := func() []protocol.CompletionItem {
+		return append(
+			dotItem(*ctx, false, nil, outputAny, wordRange),
+			varsToItems(ctx, false, wordRange)...)
+	}
+
+	switch parent.(type) {
 	case *parse.CommandNode:
-		if len(p.Args) > 0 && p.Args[0] == cur {
-			return builtinItems(wordRange)
-		}
 		return all()
 
 	case *parse.ChainNode:
@@ -275,24 +404,120 @@ func suggest(
 	}
 }
 
-func dotItem(wordRange protocol.Range) []protocol.CompletionItem {
-	kind := protocol.CompletionItemKindVariable
-	return []protocol.CompletionItem{{
-		Label:    ".",
-		Kind:     &kind,
-		TextEdit: &protocol.TextEdit{Range: wordRange, NewText: "."},
-	}}
+// dotItem returns the list of items that should be suggested on dot
+func dotItem(
+	ctx Context,
+	delSign bool,
+	inputType types.Type,
+	pipeKind outputKind,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	items := []protocol.CompletionItem{}
+	inPipe := inputType != nil || (pipeKind != outputAny && pipeKind != outputUntyped)
+	if inPipe {
+		return items
+	}
+	prefix := ""
+	if !delSign {
+		kind := protocol.CompletionItemKindVariable
+		items = append(items, protocol.CompletionItem{
+			Label:    ".",
+			Kind:     &kind,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: "."},
+		})
+		prefix = "."
+	}
+	if lt := ctx.DotType; lt != nil {
+		items = append(items, fieldCompletionItems(lt.Fields, prefix, wordRange)...)
+		items = append(
+			items,
+			methodCompletionItems(lt.Methods, inputType, pipeKind, prefix, wordRange)...)
+	}
+	return items
 }
 
-func varsToItems(ctx *Context, wordRange protocol.Range) []protocol.CompletionItem {
-	items := make([]protocol.CompletionItem, 0, len(ctx.Vars))
-	kind := protocol.CompletionItemKindVariable
-	for name := range ctx.Vars {
-		label := name
+// fieldCompletionItems returns the list of fields with or without the dot
+func fieldCompletionItems(
+	fields []TypeField,
+	prefix string,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindField
+	items := make([]protocol.CompletionItem, 0, len(fields))
+	for _, f := range fields {
+		detail := f.TypeName
+		label := prefix + f.Name
 		items = append(items, protocol.CompletionItem{
 			Label:    label,
 			Kind:     &kind,
-			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: name},
+			Detail:   &detail,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: label},
+		})
+	}
+	return items
+}
+
+// methodAcceptsInput checks whether the function can accept the input
+func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind) bool {
+	if inputType != nil {
+		for _, p := range m.Params {
+			if types.Identical(p.Type, inputType) {
+				return true
+			}
+		}
+		return false
+	}
+	if pipeKind != outputAny && pipeKind != outputUntyped {
+		lastParam := m.Params[len(m.Params)-1]
+		return basicTypeMatchesKind(lastParam.Type, pipeKind)
+	}
+	return true
+}
+
+// methodCompletionItems builds the function completion list with or without the dot
+func methodCompletionItems(
+	methods []MethodType,
+	inputType types.Type,
+	pipeKind outputKind,
+	prefix string,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindMethod
+	items := make([]protocol.CompletionItem, 0, len(methods))
+	for _, m := range methods {
+		if !methodIsUsable(m) || !methodAcceptsInput(m, inputType, pipeKind) {
+			continue
+		}
+		detail := m.ReturnName
+		label := prefix + m.Name
+		items = append(items, protocol.CompletionItem{
+			Label:    label,
+			Kind:     &kind,
+			Detail:   &detail,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: label},
+		})
+	}
+	return items
+}
+
+// varsToItems returns the list of variables
+func varsToItems(ctx *Context, delSign bool, wordRange protocol.Range) []protocol.CompletionItem {
+	items := make([]protocol.CompletionItem, 0, len(ctx.Vars))
+	kind := protocol.CompletionItemKindVariable
+	for name := range ctx.Vars {
+		if name == "$" {
+			continue
+		}
+		label := name
+		filter := name
+		if delSign {
+			label = name[1:]
+		}
+		items = append(items, protocol.CompletionItem{
+			Label:      label,
+			Kind:       &kind,
+			FilterText: &filter,
+			TextEdit:   &protocol.TextEdit{Range: wordRange, NewText: name},
 		})
 	}
 	return items
@@ -382,6 +607,62 @@ func buildPathBranch(
 	return found
 }
 
+// resolvePipeDotType derives the dot type for the body of a range or with block.
+func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *LoadedType {
+	if ctx.DotType == nil || pipe == nil || len(pipe.Cmds) != 1 {
+		return ctx.DotType
+	}
+	cmd := pipe.Cmds[0]
+	if len(cmd.Args) != 1 {
+		return ctx.DotType
+	}
+	field, ok := cmd.Args[0].(*parse.FieldNode)
+	if !ok || len(field.Ident) != 1 {
+		return ctx.DotType
+	}
+	fieldName := field.Ident[0]
+	var fieldType types.Type
+	for _, f := range ctx.DotType.Fields {
+		if f.Name == fieldName {
+			fieldType = f.Type
+			break
+		}
+	}
+	if fieldType == nil {
+		return ctx.DotType
+	}
+	t := fieldType
+	if unwrapSlice {
+		sl, ok := t.Underlying().(*types.Slice)
+		if !ok {
+			// probably trying to iterate over a struct, not a slice
+			return nil
+		}
+		t = sl.Elem()
+	} else {
+		if _, ok := t.Underlying().(*types.Slice); ok {
+			return nil
+		}
+	}
+	named, ok := t.(*types.Named)
+	if !ok {
+		if ptr, ok2 := t.(*types.Pointer); ok2 {
+			named, ok = ptr.Elem().(*types.Named)
+			if !ok {
+				return ctx.DotType
+			}
+		} else {
+			return ctx.DotType
+		}
+	}
+	return &LoadedType{
+		Pkg:     ctx.DotType.Pkg,
+		Named:   named,
+		Fields:  structFields(named),
+		Methods: namedMethods(named),
+	}
+}
+
 // main traversal logic
 func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 	if isLeafNode(n) {
@@ -420,10 +701,22 @@ func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
 
 	case *parse.RangeNode:
-		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+		prevDot := ctx.DotType
+		ctx.DotType = resolvePipeDotType(n.Pipe, true, ctx)
+		found := buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+		if !found {
+			ctx.DotType = prevDot
+		}
+		return found
 
 	case *parse.WithNode:
-		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+		prevDot := ctx.DotType
+		ctx.DotType = resolvePipeDotType(n.Pipe, false, ctx)
+		found := buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
+		if !found {
+			ctx.DotType = prevDot
+		}
+		return found
 
 	case *parse.CommandNode:
 		for _, arg := range n.Args {

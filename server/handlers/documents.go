@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"strings"
 	"sync"
 	parse "text-template-parser"
 
@@ -11,8 +12,9 @@ import (
 )
 
 type document struct {
-	text string
-	tree *parse.Tree
+	text       string
+	tree       *parse.Tree
+	loadedType *LoadedType
 }
 
 type documentStore struct {
@@ -27,6 +29,18 @@ var store = &documentStore{
 func (s *documentStore) Set(uri, text string) {
 	tree, err := parseTemplate(uri, text)
 
+	var lt *LoadedType
+	if workspaceRoot != "" {
+		hints := ParseTypeHints(strings.NewReader(text))
+		if len(hints) > 0 {
+			if loaded, lerr := LoadTypeFromHint(hints[0].Type, workspaceRoot); lerr == nil {
+				lt = loaded
+			} else {
+				log.Debug().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
+			}
+		}
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -36,7 +50,7 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 
-	s.docs[uri] = &document{text: text, tree: tree}
+	s.docs[uri] = &document{text: text, tree: tree, loadedType: lt}
 }
 
 func (s *documentStore) Get(uri string) (*document, bool) {
