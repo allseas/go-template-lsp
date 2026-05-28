@@ -25,7 +25,7 @@ func suggestAt(t *testing.T, src string, offset int) []string {
 	if len(ctx.Path) >= 2 {
 		parent = ctx.Path[len(ctx.Path)-2]
 	}
-	items := suggest(cur, parent, ctx, src[offset], false, protocol.Range{})
+	items := suggest(parent, ctx, src[offset], false, protocol.Range{})
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Label
@@ -52,7 +52,7 @@ func suggestAtWithType(
 	if len(ctx.Path) >= 2 {
 		parent = ctx.Path[len(ctx.Path)-2]
 	}
-	items := suggest(cur, parent, ctx, src[offset], isInvoked, protocol.Range{})
+	items := suggest(parent, ctx, src[offset], isInvoked, protocol.Range{})
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Label

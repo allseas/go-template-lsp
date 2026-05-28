@@ -145,7 +145,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 		}
 	}
 
-	items := suggest(curNode, parent, ctx, sChar, isInvoked, wordRange)
+	items := suggest(parent, ctx, sChar, isInvoked, wordRange)
 
 	return protocol.CompletionList{
 		IsIncomplete: false,
@@ -344,7 +344,6 @@ func pipeFilteredItems(
 }
 
 func suggest(
-	cur parse.Node,
 	parent parse.Node,
 	ctx *Context,
 	sChar uint8,
@@ -470,10 +469,7 @@ func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind)
 	}
 	if pipeKind != outputAny && pipeKind != outputUntyped {
 		lastParam := m.Params[len(m.Params)-1]
-		if basicTypeMatchesKind(lastParam.Type, pipeKind) {
-			return true
-		}
-		return false
+		return basicTypeMatchesKind(lastParam.Type, pipeKind)
 	}
 	return true
 }
