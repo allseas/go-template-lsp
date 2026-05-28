@@ -188,7 +188,7 @@ var completionTestCases = []completionTestCase{
 	},
 	{
 		name:        "identifier in pipe — no dot-prefixed methods",
-		src:         `{{ItemCount | }}`,
+		src:         `{{.ItemCount | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
 		isInvoked:   true,
@@ -215,7 +215,7 @@ var completionTestCases = []completionTestCase{
 	},
 	{
 		name:        "identifier pipe — bare method names absent",
-		src:         `{{ItemCount | }}`,
+		src:         `{{.ItemCount | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
 		isInvoked:   true,

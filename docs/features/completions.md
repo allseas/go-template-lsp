@@ -4,15 +4,14 @@ Completions based on AST offer context-aware suggestions when the user types in 
 
 ## What the user sees
 
-| Cursor position | Suggestions                                                                                                   |
-|---|---------------------------------------------------------------------------------------------------------------|
-| `{{ `**`$`**` }}` | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix                                          |
-| `{{ `**`.`**` }}` | `.` item, or all fields and methods of the current dot type if a type hint is resolved                        |
-| `{{ .Items \| `**`len`**` \| `**`▌`**` }}` | Functions that accept `int` output: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `not`, `print`, `printf`, `println`   |
+| Cursor position                              | Suggestions                                                                                                   |
+|----------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| `{{ `**`$`**` }}`                            | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix                                          |
+| `{{ `**`.`**` }}`                            | `.` item, or all fields and methods of the current dot type if a type hint is resolved                        |
+| `{{ .Items \| `**`len`**` \| `**`▌`**` }}`   | Functions that accept `int` output: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `not`, `print`, `printf`, `println`   |
 | `{{ .IsAdmin \| `**`not`**` \| `**`▌`**` }}` | Functions that accept `bool` output: `and`, `or`, `not`, `print`, `printf`, `println`                         |
-| `{{ .Name \| `**`html`**` \| `**`▌`**` }}` | Functions that accept `string` output: `html`, `js`, `urlquery`, `len`, `print`, `printf`, `println`, `index` |
-| First argument of a `CommandNode` | Built-in or user defined functions                                                                            |
-| All other positions | `.`, `$`, variables in scope, and all built-in and user defined functions                                     |
+| `{{ .Name \| `**`html`**` \| `**`▌`**` }}`   | Functions that accept `string` output: `html`, `js`, `urlquery`, `len`, `print`, `printf`, `println`, `index` |
+| `CommandNode`, `PipeNode`, `IfNode`, etc.    | All scope-aware function, variables and dot objects                                                           |
 
 Completion is triggered automatically on `$` and `.`, or manually via the editor's invoke shortcut (`Ctrl + Space`).
 
@@ -98,7 +97,7 @@ When completions are chained with `|`, the item list is narrowed to functions th
 
 - Non-invoked: looks at the command *before* the current one (`len(cmds) - 2`).
 - Invoked: looks at the current command itself (`len(cmds) - 1`).
-  It resolves the first argument of that command to an `IdentifierNode` and looks it up in `builtinOutput`, a map from built-in name to `outputKind`:
+  It resolves the first argument of that command to an `IdentifierNode` (in case it is not an `IdentifierNode`, `outputAny` is returned) and looks it up in `builtinOutput`, a map from built-in name to `outputKind`:
 
 | `outputKind` | Produced by |
 |---|---|

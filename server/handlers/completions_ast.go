@@ -382,11 +382,8 @@ func suggest(
 			varsToItems(ctx, false, wordRange)...)
 	}
 
-	switch p := parent.(type) {
+	switch parent.(type) {
 	case *parse.CommandNode:
-		if len(p.Args) > 0 && p.Args[0] == cur {
-			return builtinItems(wordRange)
-		}
 		return all()
 
 	case *parse.ChainNode:
@@ -472,10 +469,9 @@ func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind)
 		return false
 	}
 	if pipeKind != outputAny && pipeKind != outputUntyped {
-		for _, p := range m.Params {
-			if basicTypeMatchesKind(p.Type, pipeKind) {
-				return true
-			}
+		lastParam := m.Params[len(m.Params)-1]
+		if basicTypeMatchesKind(lastParam.Type, pipeKind) {
+			return true
 		}
 		return false
 	}
