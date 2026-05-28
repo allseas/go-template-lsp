@@ -3,35 +3,45 @@ workflow:
     - when : always
 
 stages:
-  - lint
+  - build
   - test
 
 default:
-  interruptible: true 
+  interruptible: true
+
+build-image:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    IMAGE_TAG: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $IMAGE_TAG clients/JetBrains/
+    - docker push $IMAGE_TAG
+  rules:
+    - changes:
+        - clients/JetBrains/Dockerfile
+    - when: manual
+      allow_failure: true
 
 linting:
-  stage: lint
-  image: gradle:9.0.0-jdk21-alpine
+  stage: test
+  image:
+    name: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
   script:
     - echo "running ktlint..."
     - cd clients/JetBrains/go-text-template
-    - ./gradlew ktlintCheck
+    - ./gradlew ktlintCheck --no-configuration-cache
 
 testing:
   stage: test
-#  image: gradle:9.0.0-jdk21-alpine
-  image: golang:tip-trixie
+  image:
+    name: $CI_REGISTRY_IMAGE/jetbrains-ci:latest
   before_script:
-    - apt -q --yes update
-    - apt -q --yes upgrade
-    - apt -q --yes install openjdk-21-jdk
-    - apt -q --yes install e2fsprogs e2fslibs-dev
-    - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash #NVM https://nodejs.org/en/download
-    - \. "$HOME/.nvm/nvm.sh"
-    - nvm install 24
-    - npm install npm -g
-    - npm install
+    - npm ci
   script:
     - echo "running tests"
     - cd clients/JetBrains/go-text-template
-    - ./gradlew test --no-configuration-cache
+    - ./gradlew test --build-cache --parallel --max-workers=4 --no-watch-fs --no-configuration-cache
