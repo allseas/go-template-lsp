@@ -356,8 +356,10 @@ func suggest(
 
 	if sChar == '.' {
 		if len(ctx.Path) > 0 {
-			if cmd, ok := ctx.Path[len(ctx.Path)-1].(*parse.CommandNode); ok && len(cmd.Args) >= 2 {
-				if f, ok := cmd.Args[len(cmd.Args)-2].(*parse.FieldNode); ok {
+			cmd, ok := ctx.Path[len(ctx.Path)-1].(*parse.CommandNode)
+			if ok && len(cmd.Args) >= 2 {
+				f, ok := cmd.Args[len(cmd.Args)-2].(*parse.FieldNode)
+				if ok {
 					resolved := resolveFieldChain(ctx.DotType, f.Ident)
 					if resolved != nil {
 						return fieldChainCompletionItems(resolved, wordRange)
