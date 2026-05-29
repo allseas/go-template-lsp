@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"fmt"
+	"go/types"
 	"strings"
 	parse "text-template-parser"
 
@@ -19,8 +20,7 @@ var nodeMessage = map[parse.NodeType]string{
 	parse.NodeField:      "**Field Access** - `%s`\n\nAccesses the `%s` field of the `.%s` context.",
 	parse.NodeIdentifier: "**Identifier** - `%s`\n\nRepresents an identifier in a command or action.",
 	parse.NodePipe:       "**Pipeline** - `%s`\n\nA sequence of commands connected by `|`.",
-	parse.NodeVariable:   "**Variable** - `%s`\n\n",
-	parse.NodeText:       "**Text** - `%.15s`\n\nPlain text content.",
+	parse.NodeVariable:   "```go\nvar %s\n```",
 	parse.NodeTemplate:   "**Template** - `%s`\n\nDefines a template named `%s`.",
 	parse.NodeList:       "***Document root*** - \n\n Root node of the parse tree, containing all other nodes.",
 	parse.NodeBool:       "**Boolean literal** - `%v`\n\nA literal value.",
@@ -32,7 +32,7 @@ var nodeMessage = map[parse.NodeType]string{
 
 var specialMessages = map[string]string{
 	"and":   "**And Function** - `and`\n\nA built-in function that returns the first argument if it is false, and the last argument otherwise.",
-	"index": "**Index variable** - `%s`\n\n serves as the index variable in the range loop, representing the current iteration count.",
+	"index": "```go\nvar %s int\n```\n\n serves as the index variable in the `range` loop, representing the current iteration count.",
 	"len":   "**Len Function** - `len`\n\nA built-in function that returns the length of its argument.",
 	"not":   "**Not Function** - `not`\n\nA built-in function that returns the boolean negation of its argument.",
 	"or":    "**Or Function** - `or`\n\nA built-in function that returns the first argument if it is true, and the last argument otherwise.",
@@ -136,7 +136,7 @@ func MessageIndexVariable(n *parse.VariableNode) string {
 }
 
 // MessageVariable generates a hover message for a VariableNode, including the variable name.
-func MessageVariable(n *parse.VariableNode) string {
+func MessageVariable(n *parse.VariableNode, varValue any, typ types.Type) string {
 	ident := ""
 	if len(n.Ident) > 0 {
 		ident = n.Ident[0]
@@ -147,11 +147,6 @@ func MessageVariable(n *parse.VariableNode) string {
 // MessageBool generates a hover message for a BoolNode, including the boolean value.
 func MessageBool(n *parse.BoolNode) string {
 	return fmt.Sprintf(nodeMessage[parse.NodeBool], n.True)
-}
-
-// MessageText generates a hover message for a TextNode, including a truncated version of the text content.
-func MessageText(n *parse.TextNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeText], n.Text)
 }
 
 // MessageTemplate generates a hover message for a TemplateNode, including the template name.

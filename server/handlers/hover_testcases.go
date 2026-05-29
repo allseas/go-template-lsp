@@ -235,7 +235,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$v"}}),
+				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$v"}}, nil, nil),
 			},
 		},
 		expectingError: false,
@@ -268,7 +268,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$lastLogin"}}),
+				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$lastLogin"}}, nil, nil),
 			},
 		},
 		expectingError: false,

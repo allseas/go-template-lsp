@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"go/types"
 	"strings"
 	"sync"
 	parse "text-template-parser"
@@ -268,4 +269,25 @@ func WasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
 		}
 	}
 	return false
+}
+
+// ResolveVarInfo resolves a variable node to its value and Go type
+func ResolveVarInfo(root parse.Node, target *parse.VariableNode, docLoadedType *LoadedType) (value any, goType types.Type) {
+	if target == nil || len(target.Ident) == 0 {
+		return nil, nil
+	}
+
+	ctx := &Context{Vars: make(map[string]parse.Node), DotType: docLoadedType}
+	buildPath(root, target, ctx)
+
+	if pnode, ok := ctx.Vars[target.Ident[0]].(*parse.PipeNode); ok && pnode != nil {
+		pipe := pnode
+
+		// this can be a literal or a function
+		assignedValue := pipe.Cmds[len(pipe.Cmds)-1].Args[0]
+
+		log.Debug().Any("assvalue", assignedValue).Msg("ResolveVarInfo")
+	}
+
+	return nil, nil
 }

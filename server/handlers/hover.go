@@ -137,16 +137,13 @@ func buildHoverContent(target parse.Node, hover *protocol.Hover, doc *document) 
 				Value: MessageIndexVariable(target),
 			}
 		} else {
+			varValue, goType := ResolveVarInfo(doc.tree.Root, target, doc.loadedType)
+
 			hover.Contents = protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageVariable(target),
+				Value: MessageVariable(target, varValue, goType),
 			}
-		}
-	case *parse.TextNode:
-		log.Debug().Msg("Hover on TextNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageText(target),
+
 		}
 	case *parse.TemplateNode:
 		log.Debug().Msg("Hover on TemplateNode")
