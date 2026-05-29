@@ -25,7 +25,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 | Target language syntax            | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.) |
 | **Code Completion**               |                  |                    |          |
 | Completion on template variables  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests available variables in current scope                |
-| Completion on struct field names  | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Auto-complete struct field access                            |
+| Completion on struct field names  | 🚧 (⏳)           | 🚧 (⏳)             | Must     | Auto-complete struct field access                            |
 | Completion on built-in functions  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests standard template functions                         |
 | Completion on local functions     | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Suggests user-defined template functions                     |
 | **Navigation**                    |                  |                    |          |
@@ -57,6 +57,7 @@ The language server provides the backend intelligence for all editor features. T
 | User configuration              | ✅ (⏳)              | Should   | Per-user configuration, lower priority than project |
 | Project-level settings          | ✅ (⏳)              | Must     | Per-project configuration override                  |
 | Per-file configuration comments | ⏳ (⏳)              | Could    | `// @gotemplate disable-inspection-name`            |
+| Dotfile Config                  | ⏳ (⏳)              | Should   |                                                     |
 | **Analysis**                    |                    |          |
 | Local syntax modifications      | ⏳ (⏳)              | Should   | Support custom delimiters or syntax extensions      |
 | Function inference from project | ⏳ (⏳)              | Should   | Detect custom template functions from source        |
