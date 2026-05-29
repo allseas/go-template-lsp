@@ -355,11 +355,21 @@ func suggest(
 	}
 
 	if sChar == '.' {
+		if len(ctx.Path) > 0 {
+			cmd, ok := ctx.Path[len(ctx.Path)-1].(*parse.CommandNode)
+			if ok && len(cmd.Args) >= 2 {
+				f, ok := cmd.Args[len(cmd.Args)-2].(*parse.FieldNode)
+				if ok {
+					resolved := resolveFieldChain(ctx.DotType, f.Ident)
+					if resolved != nil {
+						return fieldChainCompletionItems(resolved, wordRange)
+					}
+					return []protocol.CompletionItem{}
+				}
+			}
+		}
 		kind := pipeOutputKind(ctx, isInvoked)
 		pipeInputType := pipeOutputType(ctx, isInvoked)
-
-		// if both pipeInputType is nil and kind = outputAny, it means that there was an issue while parsing and the whole pipe became an UndefinedNode
-		// one solution would be to remove the incorrect part of the pipe and give suggestions, but this is clumsy, so the parser should be adjusted
 		return dotItem(*ctx, true, pipeInputType, kind, wordRange)
 	}
 
@@ -505,7 +515,7 @@ func varsToItems(ctx *Context, delSign bool, wordRange protocol.Range) []protoco
 	items := make([]protocol.CompletionItem, 0, len(ctx.Vars))
 	kind := protocol.CompletionItemKindVariable
 	for name := range ctx.Vars {
-		if name == "$" {
+		if delSign && name == "$" {
 			continue
 		}
 		label := name
@@ -605,6 +615,57 @@ func buildPathBranch(
 		ctx.Vars = snapshot
 	}
 	return found
+}
+
+// resolveFieldChain walks lt following each name in idents and returns the final
+// LoadedType, or nil if any step cannot be resolved.
+func resolveFieldChain(lt *LoadedType, idents []string) *LoadedType {
+	if lt == nil {
+		return nil
+	}
+	cur := lt
+	for _, name := range idents {
+		var next *LoadedType
+		for _, f := range lt.Fields {
+			if f.Name == name {
+				next = typeAsLoadedType(f.Type, lt)
+			}
+		}
+		for _, m := range lt.Methods {
+			if m.Name == name {
+				next = typeAsLoadedType(m.ReturnType, lt)
+			}
+		}
+		cur = next
+	}
+	return cur
+}
+
+// typeAsLoadedType converts a Go type into a *LoadedType, reusing pkg from base.
+// Returns nil for non-navigable types (primitives, slices, etc.).
+func typeAsLoadedType(t types.Type, base *LoadedType) *LoadedType {
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	named, ok := t.(*types.Named)
+	if !ok {
+		return nil
+	}
+	return &LoadedType{
+		Pkg:     base.Pkg,
+		Named:   named,
+		Fields:  structFields(named),
+		Methods: namedMethods(named),
+	}
+}
+
+// fieldChainCompletionItems returns fields and methods of a chain-resolved type,
+// without a dot prefix (the dot was already consumed as the trigger character).
+func fieldChainCompletionItems(lt *LoadedType, wordRange protocol.Range) []protocol.CompletionItem {
+	items := make([]protocol.CompletionItem, 0, len(lt.Fields)+len(lt.Methods))
+	items = append(items, fieldCompletionItems(lt.Fields, "", wordRange)...)
+	items = append(items, methodCompletionItems(lt.Methods, nil, outputAny, "", wordRange)...)
+	return items
 }
 
 // resolvePipeDotType derives the dot type for the body of a range or with block.
