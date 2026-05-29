@@ -78,12 +78,15 @@ const (
 
 // Nodes.
 
+// UndefinedNode represents a fragment of input the parser could not interpret
+// while running in ParsePartial mode. The same error in Err is also appended
+// to the enclosing Tree's Errors slice.
 type UndefinedNode struct {
 	NodeType
 	Pos
-	tr    *Tree
-	cause string // A description of the error that caused this node to be created.
-	str   string // Raw string which caused the error
+	tr  *Tree
+	Err error  // the error that caused this node to be produced
+	str string // original source text
 }
 
 func (u *UndefinedNode) tree() *Tree {
@@ -96,10 +99,6 @@ func (u *UndefinedNode) String() string {
 	return sb.String()
 }
 
-func (u *UndefinedNode) Cause() string {
-	return u.cause
-}
-
 func (u *UndefinedNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(u.str)
 }
@@ -108,8 +107,8 @@ func (u *UndefinedNode) Type() NodeType {
 	return NodeUndefined
 }
 
-func (t *Tree) newUndefined(pos Pos, cause string, str string) *UndefinedNode {
-	return &UndefinedNode{NodeType: NodeUndefined, Pos: pos, tr: t, cause: cause, str: str}
+func (t *Tree) newUndefined(pos Pos, err error, str string) *UndefinedNode {
+	return &UndefinedNode{NodeType: NodeUndefined, Pos: pos, tr: t, Err: err, str: str}
 }
 
 func (u *UndefinedNode) Copy() Node {
@@ -120,7 +119,7 @@ func (u *UndefinedNode) CopyUndefined() *UndefinedNode {
 	if u == nil {
 		return nil
 	}
-	return &UndefinedNode{NodeType: NodeUndefined, Pos: u.Pos, tr: u.tr, cause: u.cause}
+	return &UndefinedNode{NodeType: NodeUndefined, Pos: u.Pos, tr: u.tr, Err: u.Err, str: u.str}
 }
 
 // ListNode holds a sequence of nodes.
@@ -250,7 +249,7 @@ func (p *PipeNode) append(command *CommandNode) {
 }
 
 func (p *PipeNode) String() string {
-	// For some reason this was called with p == nil
+	// For some reason this was called with p == nil without a trace in the debugger.
 	// Hardcoded null check to avoid panicking
 	if p == nil {
 		return "<nil>"

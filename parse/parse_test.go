@@ -893,7 +893,7 @@ func TestRobustness(t *testing.T) {
 	for _, test := range robustTests {
 		t.Run(test.name, func(t *testing.T) {
 			tr := New("robust")
-			tr.Mode = IgnoreErrors
+			tr.Mode = ParsePartial
 			_, err := tr.Parse(test.input, "", "", make(map[string]*Tree), nil)
 			if err != nil && test.ok {
 				t.Errorf("unexpected error: %v", err)

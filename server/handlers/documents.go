@@ -76,7 +76,7 @@ func parseTemplate(uri, text string) (*parse.Tree, error) {
 
 func tryParse(text string) (*parse.Tree, error) {
 	t := parse.New("t")
-	t.Mode = parse.IgnoreErrors | parse.SkipFuncCheck
+	t.Mode = parse.ParsePartial | parse.SkipFuncCheck
 	treeSet := map[string]*parse.Tree{}
 	_, err := t.Parse(text, "{{", "}}", treeSet)
 	if err != nil {

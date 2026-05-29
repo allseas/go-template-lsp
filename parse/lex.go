@@ -385,11 +385,22 @@ func lexRightDelim(l *lexer) stateFn {
 	return l.emitItem(i)
 }
 
+func (l *lexer) atLeftDelim() bool {
+	if strings.HasPrefix(l.input[l.pos:], l.leftDelim) {
+		return true
+	}
+	return false
+}
+
 // lexInsideAction scans the elements inside action delimiters.
 func lexInsideAction(l *lexer) stateFn {
 	// Either number, quoted string, or identifier.
 	// Spaces separate arguments; runs of spaces turn into itemSpace.
 	// Pipe symbols separate and are emitted.
+	if l.atLeftDelim() {
+		return lexLeftDelim
+	}
+
 	delim, _ := l.atRightDelim()
 	if delim {
 		if l.parenDepth == 0 {
@@ -407,7 +418,8 @@ func lexInsideAction(l *lexer) stateFn {
 		return l.emit(itemAssign)
 	case r == ':':
 		if l.next() != '=' {
-			return l.errorf("expected :=")
+			l.backup() // Put the non-'=' back
+			return l.emit(itemChar)
 		}
 		return l.emit(itemDeclare)
 	case r == '|':

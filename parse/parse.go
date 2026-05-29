@@ -22,6 +22,7 @@ type Tree struct {
 	ParseName string    // name of the top-level template during parsing, for error messages.
 	Root      *ListNode // top-level root of the tree.
 	Mode      Mode      // parsing mode.
+	Errors    []error   // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
 	text      string    // text parsed to create the template (or its parent)
 	// Parsing only; cleared after parse.
 	funcs      []map[string]any
@@ -41,7 +42,7 @@ type Mode uint
 const (
 	ParseComments Mode = 1 << iota // parse comments and add them to AST
 	SkipFuncCheck                  // do not check that functions are defined
-	IgnoreErrors
+	ParsePartial
 )
 
 // maxStackDepth is the maximum depth permitted for nested
@@ -182,10 +183,35 @@ func (t *Tree) error(err error) {
 	t.errorf("%s", err)
 }
 
+// recordError formats a partial-parse error tagged with pos, appends it to
+// t.Errors, and returns it. Callers in ParsePartial mode also attach the
+// returned error to the UndefinedNode produced at the same site.
+func (t *Tree) recordError(pos Pos, format string, args ...any) error {
+	line := 1
+	char := 0
+	if p := int(pos); p >= 0 && p <= len(t.text) {
+		line += strings.Count(t.text[:p], "\n")
+		if i := strings.LastIndex(t.text[:p], "\n"); i != -1 {
+			char = p - i
+		} else {
+			char = p + 1
+		}
+	}
+
+	prefix := fmt.Sprintf("template: %s:%d:%d: ", t.ParseName, line, char)
+	err := fmt.Errorf(prefix+format, args...)
+	t.Errors = append(t.Errors, err)
+	return err
+}
+
+// errMark returns the current length of t.Errors, for use as a baseline by
+// callers that need to detect new errors recorded by a sub-parse step.
+func (t *Tree) errMark() int { return len(t.Errors) }
+
 // expect consumes the next token and guarantees it has the required type.
 func (t *Tree) expect(expected itemType, context string) item {
 	token := t.nextNonSpace()
-	if token.typ != expected && t.Mode&IgnoreErrors == 0 {
+	if token.typ != expected && t.Mode&ParsePartial == 0 {
 		t.unexpected(token, context)
 	}
 	return token
@@ -194,7 +220,7 @@ func (t *Tree) expect(expected itemType, context string) item {
 // expectOneOf consumes the next token and guarantees it has one of the required types.
 func (t *Tree) expectOneOf(expected1, expected2 itemType, context string) item {
 	token := t.nextNonSpace()
-	if token.typ != expected1 && token.typ != expected2 && t.Mode&IgnoreErrors == 0 {
+	if token.typ != expected1 && token.typ != expected2 && t.Mode&ParsePartial == 0 {
 		t.unexpected(token, context)
 	}
 	return token
@@ -312,7 +338,7 @@ func IsEmptyTree(n Node) bool {
 // It runs to EOF.
 func (t *Tree) parse() {
 	t.Root = t.newList(t.peek().pos)
-	for t.peek().typ != itemEOF && (t.Mode&IgnoreErrors == 0 || t.peek().typ != itemError) {
+	for t.peek().typ != itemEOF && (t.Mode&ParsePartial == 0 || t.peek().typ != itemError) {
 		if t.peek().typ == itemLeftDelim {
 			delim := t.next()
 			if t.nextNonSpace().typ == itemDefine {
@@ -328,10 +354,11 @@ func (t *Tree) parse() {
 		}
 		switch n := t.textOrAction(); n.Type() {
 		case nodeEnd, nodeElse:
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.errorf("unexpected %s", n)
 			} else {
-				t.Root.append(t.newUndefined(n.Position(), "unexpected node: "+n.String(), n.String()))
+				err := t.recordError(n.Position(), "unexpected %s", n)
+				t.Root.append(t.newUndefined(n.Position(), err, n.String()))
 			}
 		default:
 			t.Root.append(n)
@@ -348,33 +375,35 @@ func (t *Tree) parseDefinition() {
 	var err error
 	t.Name, err = strconv.Unquote(name.val)
 	if err != nil {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.error(err)
 		} else {
 			t.Name = name.val
-			err = fmt.Errorf("invalid template name %q: %w", name.val, err)
+			t.recordError(name.pos, "invalid template name %q: %v", name.val, err)
 		}
 	}
 	t.expect(itemRightDelim, context)
 	var end Node
 	t.Root, end = t.itemList()
 	if end == nil {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.errorf("unexpected EOF in %s", context)
 		} else {
 			t.backup()
 			lastToken := t.next()
-			t.Root.append(t.newUndefined(lastToken.pos, "unexpected EOF in "+context, lastToken.String()))
+			recErr := t.recordError(lastToken.pos, "unexpected EOF in %s", context)
+			t.Root.append(t.newUndefined(lastToken.pos, recErr, lastToken.String()))
 			t.add()
 			t.stopParse()
 			return
 		}
 	}
 	if end.Type() != nodeEnd {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.errorf("unexpected %s in %s", end, context)
 		} else {
-			t.Root.append(t.newUndefined(end.Position(), "unexpected node: "+end.String(), end.String()))
+			recErr := t.recordError(end.Position(), "unexpected %s in %s", end, context)
+			t.Root.append(t.newUndefined(end.Position(), recErr, end.String()))
 			t.add()
 			t.stopParse()
 			return
@@ -399,11 +428,12 @@ func (t *Tree) itemList() (list *ListNode, next Node) {
 		}
 		list.append(n)
 	}
-	if t.Mode&IgnoreErrors == 0 {
+	if t.Mode&ParsePartial == 0 {
 		t.errorf("unexpected EOF")
 		return
 	}
-	n := t.newUndefined(t.peek().pos, "unexpected EOF", "")
+	recErr := t.recordError(t.peek().pos, "unexpected EOF")
+	n := t.newUndefined(t.peek().pos, recErr, "")
 	list.append(n)
 	return list, n
 }
@@ -422,8 +452,9 @@ func (t *Tree) textOrAction() Node {
 	case itemComment:
 		return t.newComment(token.pos, token.val)
 	default:
-		if t.Mode&IgnoreErrors != 0 {
-			return t.newUndefined(token.pos, "unexpected token: "+token.String(), token.String())
+		if t.Mode&ParsePartial != 0 {
+			recErr := t.recordError(token.pos, "unexpected token: %s", token)
+			return t.newUndefined(token.pos, recErr, token.val)
 		}
 		t.unexpected(token, "input")
 	}
@@ -442,6 +473,8 @@ func (t *Tree) clearActionLine() {
 // Left delim is past. Now get actions.
 // First word could be a keyword such as range.
 func (t *Tree) action() (n Node) {
+	t.backup()
+	pos := t.next().pos
 	switch token := t.nextNonSpace(); token.typ {
 	case itemBlock:
 		return t.blockControl()
@@ -461,21 +494,21 @@ func (t *Tree) action() (n Node) {
 		return t.templateControl()
 	case itemWith:
 		return t.withControl()
-		// case itemError:
-		// 	if t.Mode&IgnoreErrors == 0 {
-		// 		t.unexpected(token, context)
-		// 	} else {
-		// 		return t.newUndefined(token.pos, token.val)
-		// 	}
+	case itemError:
+		if t.Mode&ParsePartial != 0 {
+			recErr := t.recordError(token.pos, "unexpected token in command: %s", token)
+			return t.newUndefined(token.pos, recErr, token.val)
+		}
 	}
 	t.backup()
 	token := t.peek()
 	// Do not pop variables; they persist until "end".
-	var pipe, err = t.pipeline("command", itemRightDelim)
-	if err != "" {
-		return t.newUndefined(token.pos, "error parsing command: "+err, pipe.String())
+	pipe := t.pipeline("command", itemRightDelim)
+	if t.Mode&ParsePartial != 0 && pipe == nil {
+		recErr := t.recordError(token.pos, "unexpected token in action: %s", t.peek())
+		return t.newUndefined(pos, recErr, token.val+t.peek().val)
 	}
-	return t.newAction(token.pos, token.line, pipe)
+	return t.newAction(pos, token.line, pipe)
 }
 
 // Break:
@@ -485,17 +518,19 @@ func (t *Tree) action() (n Node) {
 // Break keyword is past.
 func (t *Tree) breakControl(pos Pos, line int) Node {
 	if token := t.nextNonSpace(); token.typ != itemRightDelim {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.unexpected(token, "{{break}}")
 		} else {
-			return t.newUndefined(token.pos, "unexpected token after {{break}}: "+token.String(), "{{break"+token.String())
+			recErr := t.recordError(token.pos, "unexpected token after {{break}}: %s", token)
+			return t.newUndefined(token.pos, recErr, "{{break"+token.val)
 		}
 	}
 	if t.rangeDepth == 0 {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.errorf("{{break}} outside {{range}}")
 		} else {
-			return t.newUndefined(pos, "{{break}} outside {{range}}", "{{break}}")
+			recErr := t.recordError(pos, "{{break}} outside {{range}}")
+			return t.newUndefined(pos, recErr, "{{break}}")
 		}
 	}
 	return t.newBreak(pos, line)
@@ -508,17 +543,19 @@ func (t *Tree) breakControl(pos Pos, line int) Node {
 // Continue keyword is past.
 func (t *Tree) continueControl(pos Pos, line int) Node {
 	if token := t.nextNonSpace(); token.typ != itemRightDelim {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.unexpected(token, "{{continue}}")
 		} else {
-			return t.newUndefined(token.pos, "unexpected token after {{continue}}: "+token.String(), "{{continue"+token.String())
+			recErr := t.recordError(token.pos, "unexpected token after {{continue}}: %s", token)
+			return t.newUndefined(token.pos, recErr, "{{continue"+token.val)
 		}
 	}
 	if t.rangeDepth == 0 {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.errorf("{{continue}} outside {{range}}")
 		} else {
-			return t.newUndefined(pos, "{{continue}} outside {{range}}", "{{continue}}")
+			recErr := t.recordError(pos, "{{continue}} outside {{range}}")
+			return t.newUndefined(pos, recErr, "{{continue}}")
 		}
 	}
 	return t.newContinue(pos, line)
@@ -527,7 +564,7 @@ func (t *Tree) continueControl(pos Pos, line int) Node {
 // Pipeline:
 //
 //	declarations? command ('|' command)*
-func (t *Tree) pipeline(context string, end itemType) (pipe *PipeNode, err string) {
+func (t *Tree) pipeline(context string, end itemType) (pipe *PipeNode) {
 	token := t.peekNonSpace()
 	pipe = t.newPipeline(token.pos, token.line, nil)
 	// Are there declarations or assignments?
@@ -552,22 +589,23 @@ decls:
 			t.vars = append(t.vars, v.val)
 			if context == "range" && len(pipe.Decl) < 2 {
 				switch t.peekNonSpace().typ {
-				case itemVariable, itemRightDelim, itemRightParen: // right delim ?? why
+				case itemVariable, itemRightDelim, itemRightParen:
 					// second initialized variable in a range pipeline
 					goto decls
 				default:
-					if t.Mode&IgnoreErrors == 0 {
+					if t.Mode&ParsePartial == 0 {
 						t.errorf("range can only initialize variables")
 					} else {
-						err += fmt.Sprintf("unexpected token after variable declaration in range pipeline: %s", t.peekNonSpace())
+						bad := t.peekNonSpace()
+						t.recordError(bad.pos, "unexpected token after variable declaration in range pipeline: %s", bad.val)
 						goto decls
 					}
 				}
 			}
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.errorf("too many declarations in %s", context)
 			} else {
-				err += fmt.Sprintf("too many declarations in %s", context)
+				t.recordError(v.pos, "too many declarations in %s", context)
 				goto decls
 			}
 		case tokenAfterVariable.typ == itemSpace:
@@ -576,53 +614,71 @@ decls:
 			t.backup2(v)
 		}
 	}
-	for {
+	for i := 0; ; i++ {
 		switch token := t.nextNonSpace(); token.typ {
+		case itemLeftDelim:
+			t.backup()
+			return nil
+
 		case end:
 			// At this point, the pipeline is complete
-			err += t.checkPipeline(pipe, context)
+			t.checkPipeline(pipe, context)
 			return
 		case itemBool, itemCharConstant, itemComplex, itemDot, itemField, itemIdentifier,
 			itemNumber, itemNil, itemRawString, itemString, itemVariable, itemLeftParen:
 			t.backup()
-			pipe.append(t.command())
+			pipe.append(t.command(i > 0))
+		case itemPipe:
+			if t.Mode&ParsePartial != 0 {
+				pipe.append(t.newCommand(token.pos))
+				recErr := t.recordError(token.pos, "unexpected token in pipeline: %s", token)
+				pipe.Cmds[len(pipe.Cmds)-1].append(t.newUndefined(token.pos, recErr, token.val))
+			} else {
+				t.unexpected(token, context)
+			}
 		default:
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.unexpected(token, context)
 			} else {
-				err += fmt.Sprintf("unexpected token in %s: %s", context, token)
+				recErr := t.recordError(token.pos, "unexpected token in %s: %s", context, token)
+				cmd := t.newCommand(token.pos)
+				cmd.append(t.newUndefined(token.pos, recErr, token.val))
+				pipe.append(cmd)
 				return
 			}
 		}
 	}
 }
 
-func (t *Tree) checkPipeline(pipe *PipeNode, context string) (err string) {
+func (t *Tree) checkPipeline(pipe *PipeNode, context string) {
 	// Reject empty pipelines
 	if len(pipe.Cmds) == 0 {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.errorf("missing value for %s", context)
+		} else {
+			recErr := t.recordError(pipe.Position(), "missing value for %s", context)
+			pipe.Cmds = append(pipe.Cmds, t.newCommand(pipe.Position()))
+			pipe.Cmds[0].append(t.newUndefined(pipe.Position(), recErr, ""))
+			return
 		}
-		err += fmt.Sprintf("missing value for %s", context)
-		return err
 	}
 	// Only the first command of a pipeline can start with a non executable operand
 	for i, c := range pipe.Cmds[1:] {
 		switch c.Args[0].Type() {
 		case NodeBool, NodeDot, NodeNil, NodeNumber, NodeString:
 			// With A|B|C, pipeline stage 2 is B
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.errorf("non executable command in pipeline stage %d", i+2)
+			} else {
+				t.recordError(c.Position(), "non executable command in pipeline stage %d", i+2)
 			}
-			err += fmt.Sprintf("non executable command in pipeline stage %d", i+2)
 		}
 	}
-	return err
 }
 
-func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, list, elseList *ListNode, err string) {
+func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, list, elseList *ListNode) {
 	defer t.popVars(len(t.vars))
-	pipe, err = t.pipeline(context, itemRightDelim)
+	pipe = t.pipeline(context, itemRightDelim)
 	if context == "range" {
 		t.rangeDepth++
 	}
@@ -655,15 +711,15 @@ func (t *Tree) parseControl(context string) (pos Pos, line int, pipe *PipeNode, 
 		} else {
 			elseList, next = t.itemList()
 			if next.Type() != nodeEnd {
-				if t.Mode&IgnoreErrors == 0 {
+				if t.Mode&ParsePartial == 0 {
 					t.errorf("expected end; found %s", next)
 				} else {
-					err += fmt.Sprintf("expected end; found %s", next)
+					t.recordError(next.Position(), "expected end; found %s", next)
 				}
 			}
 		}
 	}
-	return pipe.Position(), pipe.Line, pipe, list, elseList, err
+	return pipe.Position(), pipe.Line, pipe, list, elseList
 }
 
 // If:
@@ -676,14 +732,7 @@ func (t *Tree) ifControl() Node {
 	t.backup() // put back the "if" token so we can get its location.
 	position := t.next().pos
 
-	pos, line, pipe, list, elseList, err := t.parseControl("if")
-	if err != "" {
-		elsestr := ""
-		if elseList != nil {
-			elsestr = "{{else}}" + elseList.String()
-		}
-		return t.newUndefined(pos, "error parsing if control: "+err, "{{if "+pipe.String()+"}}"+list.String()+elsestr+"{{end}}")
-	}
+	_, line, pipe, list, elseList := t.parseControl("if")
 	return t.newIf(position, line, pipe, list, elseList)
 }
 
@@ -697,10 +746,7 @@ func (t *Tree) rangeControl() Node {
 	t.backup() // put back the "range" token so we can get its location.
 	position := t.next().pos
 
-	pos, line, pipe, list, elseList, err := t.parseControl("range")
-	if err != "" {
-		return t.newUndefined(pos, "error parsing range control: "+err, "{{range "+pipe.String()+"}}"+list.String()+"{{end}}")
-	}
+	_, line, pipe, list, elseList := t.parseControl("range")
 	return t.newRange(position, line, pipe, list, elseList)
 }
 
@@ -714,14 +760,7 @@ func (t *Tree) withControl() Node {
 	t.backup() // put back the "with" token so we can get its location.
 	position := t.next().pos
 
-	pos, line, pipe, list, elseList, err := t.parseControl("with")
-	if err != "" {
-		elsestr := ""
-		if elseList != nil {
-			elsestr = "{{else}}" + elseList.String()
-		}
-		return t.newUndefined(pos, "error parsing with control: "+err, "{{with "+pipe.String()+"}}"+list.String()+elsestr+"{{end}}")
-	}
+	_, line, pipe, list, elseList := t.parseControl("with")
 	return t.newWith(position, line, pipe, list, elseList)
 }
 
@@ -762,9 +801,8 @@ func (t *Tree) blockControl() Node {
 	const context = "block clause"
 
 	token := t.nextNonSpace()
-	name, err := t.parseTemplateName(token, context)
-	pipe, er := t.pipeline(context, itemRightDelim)
-	err += er
+	name := t.parseTemplateName(token, context)
+	pipe := t.pipeline(context, itemRightDelim)
 	block := New(name) // name will be updated once we know it.
 	block.text = t.text
 	block.Mode = t.Mode
@@ -773,18 +811,19 @@ func (t *Tree) blockControl() Node {
 	var end Node
 	block.Root, end = block.itemList()
 	if end.Type() != nodeEnd {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.errorf("unexpected %s in %s", end, context)
 		} else {
-			err += fmt.Sprintf("unexpected %s in %s", end, context)
+			t.recordError(end.Position(), "unexpected %s in %s", end, context)
 		}
+	}
+	// Propagate any errors recorded on the inner block tree into the parent's
+	// Errors slice so callers see them in one place.
+	if len(block.Errors) > 0 {
+		t.Errors = append(t.Errors, block.Errors...)
 	}
 	block.add()
 	block.stopParse()
-
-	if err != "" {
-		return t.newUndefined(token.pos, "error parsing block control: "+err, "{{block "+name+"}}"+block.Root.String()+"{{end}}")
-	}
 
 	return t.newTemplate(token.pos, token.line, name, pipe)
 }
@@ -798,34 +837,33 @@ func (t *Tree) blockControl() Node {
 func (t *Tree) templateControl() Node {
 	const context = "template clause"
 	token := t.nextNonSpace()
-	name, err := t.parseTemplateName(token, context)
+	name := t.parseTemplateName(token, context)
 	var pipe *PipeNode
-	var er string
 	if t.nextNonSpace().typ != itemRightDelim {
 		t.backup()
 		// Do not pop variables; they persist until "end".
-		pipe, er = t.pipeline(context, itemRightDelim)
-		err += er
-	}
-	if err != "" {
-		return t.newUndefined(token.pos, "error parsing template control: "+err, "{{template "+name+"}}")
+		pipe = t.pipeline(context, itemRightDelim)
 	}
 	return t.newTemplate(token.pos, token.line, name, pipe)
 }
 
-func (t *Tree) parseTemplateName(token item, context string) (name string, err string) {
+func (t *Tree) parseTemplateName(token item, context string) (name string) {
 	switch token.typ {
 	case itemString, itemRawString:
 		s, err := strconv.Unquote(token.val)
-		if err != nil && t.Mode&IgnoreErrors == 0 {
-			t.error(err)
+		if err != nil {
+			if t.Mode&ParsePartial == 0 {
+				t.error(err)
+			} else {
+				t.recordError(token.pos, "%s", err)
+			}
 		}
 		name = s
 	default:
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.unexpected(token, context)
 		} else {
-			err += fmt.Sprintf("unexpected token in %s: %s", context, token)
+			t.recordError(token.pos, "unexpected token in %s: %s", context, token)
 		}
 	}
 	return
@@ -837,15 +875,27 @@ func (t *Tree) parseTemplateName(token item, context string) (name string, err s
 //
 // space-separated arguments up to a pipeline character or right delimiter.
 // we consume the pipe character but leave the right delim to terminate the action.
-func (t *Tree) command() *CommandNode {
+func (t *Tree) command(hasInput bool) *CommandNode {
 	cmd := t.newCommand(t.peekNonSpace().pos)
 	for {
 		t.peekNonSpace() // skip leading spaces.
 		operand := t.operand()
 		if operand != nil {
+			// only accessed in ParsePartial mode to retain backwards compatibility.
+			if t.Mode&ParsePartial != 0 && hasInput && len(cmd.Args) == 0 {
+				// The first operand of a command is the function to call, so it cannot be a literal.
+				switch operand.Type() {
+				case NodeBool, NodeDot, NodeNil, NodeNumber, NodeString:
+					recErr := t.recordError(operand.Position(), "unexpected literal operand in command: %s", operand)
+					operand = t.newUndefined(operand.Position(), recErr, operand.String())
+				}
+			}
 			cmd.append(operand)
 		}
 		switch token := t.next(); token.typ {
+		case itemLeftDelim:
+			t.backup()
+			return nil
 		case itemSpace:
 			continue
 		case itemRightDelim, itemRightParen:
@@ -853,20 +903,22 @@ func (t *Tree) command() *CommandNode {
 		case itemPipe:
 			// nothing here; break loop below
 		default:
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.unexpected(token, "operand")
 			} else {
-				cmd.append(t.newUndefined(token.pos, "unexpected token in command: "+token.String(), token.String()))
+				recErr := t.recordError(token.pos, "unexpected token in command: %s", token)
+				cmd.append(t.newUndefined(token.pos, recErr, token.val))
 				return cmd
 			}
 		}
 		break
 	}
 	if len(cmd.Args) == 0 {
-		if t.Mode&IgnoreErrors == 0 {
+		if t.Mode&ParsePartial == 0 {
 			t.errorf("empty command")
 		} else {
-			cmd.Args = append(cmd.Args, t.newUndefined(t.peek().pos, "empty command", " "))
+			recErr := t.recordError(t.peek().pos, "empty command")
+			cmd.Args = append(cmd.Args, t.newUndefined(t.peek().pos, recErr, " "))
 		}
 	}
 	return cmd
@@ -900,10 +952,11 @@ func (t *Tree) operand() Node {
 		case NodeVariable:
 			node = t.newVariable(chain.Position(), chain.String())
 		case NodeBool, NodeString, NodeNumber, NodeNil, NodeDot:
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.errorf("unexpected . after term %q", node.String())
 			} else {
-				node = t.newUndefined(chain.Position(), fmt.Sprintf("unexpected . after term %q", node.String()), chain.String())
+				recErr := t.recordError(chain.Position(), "unexpected . after term %q", node.String())
+				node = t.newUndefined(chain.Position(), recErr, chain.String())
 			}
 		default:
 			node = chain
@@ -928,10 +981,11 @@ func (t *Tree) term() Node {
 	case itemIdentifier:
 		checkFunc := t.Mode&SkipFuncCheck == 0
 		if checkFunc && !t.hasFunction(token.val) {
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.errorf("function %q not defined", token.val)
 			} else {
-				return t.newUndefined(token.pos, fmt.Sprintf("function %q not defined", token.val), token.String())
+				recErr := t.recordError(token.pos, "function %q not defined", token.val)
+				return t.newUndefined(token.pos, recErr, token.val)
 			}
 		}
 		return NewIdentifier(token.val).SetTree(t).SetPos(token.pos)
@@ -948,10 +1002,11 @@ func (t *Tree) term() Node {
 	case itemCharConstant, itemComplex, itemNumber:
 		number, err := t.newNumber(token.pos, token.val, token.typ)
 		if err != nil {
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.error(err)
 			} else {
-				return t.newUndefined(token.pos, fmt.Sprintf("error parsing number: %v", err), token.String())
+				recErr := t.recordError(token.pos, "%s", err)
+				return t.newUndefined(token.pos, recErr, token.val)
 			}
 		}
 		return number
@@ -961,18 +1016,16 @@ func (t *Tree) term() Node {
 		}
 		t.stackDepth++
 		defer func() { t.stackDepth-- }()
-		pipe, err := t.pipeline("parenthesized pipeline", itemRightParen)
-		if err != "" {
-			return t.newUndefined(token.pos, "error parsing parenthesized pipeline: "+err, "("+pipe.String()+")")
-		}
+		pipe := t.pipeline("parenthesized pipeline", itemRightParen)
 		return pipe
 	case itemString, itemRawString:
 		s, err := strconv.Unquote(token.val)
 		if err != nil {
-			if t.Mode&IgnoreErrors == 0 {
+			if t.Mode&ParsePartial == 0 {
 				t.error(err)
 			} else {
-				return t.newUndefined(token.pos, fmt.Sprintf("error parsing string: %v", err), token.String())
+				recErr := t.recordError(token.pos, "%s", err)
+				return t.newUndefined(token.pos, recErr, token.val)
 			}
 		}
 		return t.newString(token.pos, token.val, s)
@@ -1008,11 +1061,12 @@ func (t *Tree) useVar(pos Pos, name string) Node {
 			return v
 		}
 	}
-	if t.Mode&IgnoreErrors == 0 {
+	if t.Mode&ParsePartial == 0 {
 		// The error message is more helpful if we can say which variable is undefined.
 		t.errorf("undefined variable %q", v.Ident[0])
 	} else {
-		return t.newUndefined(pos, fmt.Sprintf("undefined variable %q", v.Ident[0]), v.String())
+		recErr := t.recordError(pos, "undefined variable %q", v.Ident[0])
+		return t.newUndefined(pos, recErr, v.String())
 	}
 	return nil
 }
