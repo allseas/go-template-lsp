@@ -193,3 +193,79 @@ func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 	walk(root)
 	return best
 }
+
+// FindVarDeclarations returns all variable declaration nodes for a given variable name in the tree.
+func FindVarDeclarations(root parse.Node, varName string) []*parse.VariableNode {
+	var decls []*parse.VariableNode
+
+	inspect(root, func(n parse.Node) bool {
+		// this goes over the tree and finds declarations (inside PipeNode) of varName
+		pipe, ok := n.(*parse.PipeNode)
+		if !ok {
+			return true
+		}
+		for _, decl := range pipe.Decl {
+			if len(decl.Ident) > 0 && decl.Ident[0] == varName {
+				decls = append(decls, decl)
+			}
+		}
+		return true
+	})
+	return decls
+}
+
+// IsIndexVariable determines if a variable node refers to the index variable in a range.
+func IsIndexVariable(target *parse.VariableNode, root *parse.ListNode) bool {
+	if target == nil || len(target.Ident) == 0 {
+		return false
+	}
+	ctx := &Context{Vars: make(map[string]parse.Node)}
+	buildPath(root, target, ctx)
+
+	path := ctx.Path
+	if len(path) < 2 {
+		return WasDeclaredAsIndex(target, ctx)
+	}
+	branch := path[len(path)-2]
+	if _, ok := branch.(*parse.RangeNode); !ok {
+		return WasDeclaredAsIndex(target, ctx)
+	}
+	branchNode := branch.(*parse.RangeNode)
+
+	pipe := branchNode.Pipe
+	if len(pipe.Decl) == 0 {
+		return false
+	}
+	return pipe.Decl[0] == target
+}
+
+// WasDeclaredAsIndex checks whether the provided variable node was declared as the index by scanning
+// the context constructed by buildPath (used when the variable isn't directly the declared index in the immediate range).
+func WasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
+	if target == nil || len(target.Ident) == 0 {
+		return false
+	}
+	for ident, pipe := range ctx.Vars {
+		if ident != target.Ident[0] {
+			continue
+		}
+		pn, ok := pipe.(*parse.PipeNode)
+		if !ok || len(pn.Decl) == 0 || len(pn.Decl[0].Ident) == 0 {
+			return false
+		}
+		if pn.Decl[0].Ident[0] != target.Ident[0] {
+			return false
+		}
+		for _, node := range ctx.Path {
+			rn, ok := node.(*parse.RangeNode)
+			if !ok {
+				continue
+			}
+			if rn.Pipe != pipe {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}

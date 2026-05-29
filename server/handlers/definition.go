@@ -32,22 +32,13 @@ func definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 
 		var results []protocol.Location
 
-		// this goes over the tree and finds declarations (inside PipeNode) of varName
-		inspect(doc.tree.Root, func(n parse.Node) bool {
-			pipe, ok := n.(*parse.PipeNode)
-			if !ok {
-				return true
-			}
-			for _, decl := range pipe.Decl {
-				if decl.Ident[0] == varName {
-					results = append(results, protocol.Location{
-						URI:   uri,
-						Range: nodeToRange(decl, doc.text),
-					})
-				}
-			}
-			return true
-		})
+		decls := FindVarDeclarations(doc.tree.Root, varName)
+		for _, decl := range decls {
+			results = append(results, protocol.Location{
+				URI:   uri,
+				Range: nodeToRange(decl, doc.text),
+			})
+		}
 
 		if len(results) == 0 {
 			return nil, nil

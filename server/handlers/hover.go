@@ -129,9 +129,9 @@ func buildHoverContent(target parse.Node, hover *protocol.Hover, doc *document) 
 			Value: MessagePipe(target),
 		}
 	case *parse.VariableNode:
-		log.Debug().Msg("Hover on VariableNode")
+		log.Debug().Any("node", target).Msg("Hover on VariableNode")
 
-		if isIndexVariable(target, doc.tree.Root) {
+		if IsIndexVariable(target, doc.tree.Root) {
 			hover.Contents = protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
 				Value: MessageIndexVariable(target),
@@ -366,43 +366,4 @@ func elseNodeHover(
 	}
 
 	return
-}
-
-func isIndexVariable(target *parse.VariableNode, root *parse.ListNode) bool {
-	ctx := &Context{Vars: make(map[string]parse.Node)}
-	buildPath(root, target, ctx)
-
-	path := ctx.Path
-	branch := path[len(path)-2] // branch is the second to last element in the path
-	if _, ok := branch.(*parse.RangeNode); !ok {
-		return wasDeclaredAsIndex(target, ctx)
-	}
-	branchNode := branch.(*parse.RangeNode)
-
-	pipe := branchNode.Pipe
-
-	return pipe.Decl[0] == target
-}
-
-func wasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
-	for ident, pipe := range ctx.Vars {
-		if ident != target.Ident[0] {
-			continue
-		}
-		if pipe.(*parse.PipeNode).Decl[0].Ident[0] != target.Ident[0] {
-			return false
-		}
-		for _, node := range ctx.Path {
-			if _, ok := node.(*parse.RangeNode); !ok {
-				continue
-			}
-			rangeNode := node.(*parse.RangeNode)
-
-			if rangeNode.Pipe != pipe {
-				continue
-			}
-			return true
-		}
-	}
-	return false
 }
