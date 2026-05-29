@@ -41,15 +41,15 @@ Extension features:
 | Static syntax highlighting                      | ✅       | ✅         | Must     |
 | Dynamic syntax highlighting                     |         |           | Must     |
 | Autocompletion on variables                     | ✅       | ✅         | Must     |
-| Autocompletion on field names                   |         |           | Must     |
+| Autocompletion on field names                   | ✅       | ✅         | Must     |
 | Autocompletion on global functions              | ✅       | ✅         | Must     |
 | Autocompletion on local functions               |         |           | Must     |
 | Inspection on duplicate variable names          |         |           | Must     |
-| Jump to definition                              |         |           | Must     |
+| Jump to definition                              | ✅       | ✅         | Must     |
 | Definition on hover                             |         |           | Must     |
 | Toggling features                               |         |           | Must     |
 | Find usages of a variable or function           | ✅       | ✅         | Must     |
-| Type checking on template                       |         |           | Must     |
+| Type checking on template                       | ✅       | ✅         | Must     |
 | Type checking on function                       |         |           | Should   |
 | Wrap selection in a comment                     | ✅       | ✅         | Should   |
 | Highlight end of the current block              |         |           | Should   |
