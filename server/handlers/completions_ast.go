@@ -513,7 +513,7 @@ func varsToItems(ctx *Context, delSign bool, wordRange protocol.Range) []protoco
 	items := make([]protocol.CompletionItem, 0, len(ctx.Vars))
 	kind := protocol.CompletionItemKindVariable
 	for name := range ctx.Vars {
-		if name == "$" {
+		if delSign && name == "$" {
 			continue
 		}
 		label := name
