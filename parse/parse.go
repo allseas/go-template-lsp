@@ -188,10 +188,17 @@ func (t *Tree) error(err error) {
 // returned error to the UndefinedNode produced at the same site.
 func (t *Tree) recordError(pos Pos, format string, args ...any) error {
 	line := 1
+	char := 0
 	if p := int(pos); p >= 0 && p <= len(t.text) {
 		line += strings.Count(t.text[:p], "\n")
+		if i := strings.LastIndex(t.text[:p], "\n"); i != -1 {
+			char = p - i
+		} else {
+			char = p + 1
+		}
 	}
-	prefix := fmt.Sprintf("template: %s:%d: ", t.ParseName, line)
+
+	prefix := fmt.Sprintf("template: %s:%d:%d: ", t.ParseName, line, char)
 	err := fmt.Errorf(prefix+format, args...)
 	t.Errors = append(t.Errors, err)
 	return err

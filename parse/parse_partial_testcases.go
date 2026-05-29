@@ -31,15 +31,15 @@ var robustTreeTests = []robustTreeTest{
 				Nodes: []Node{
 					&UndefinedNode{
 						NodeType: NodeUndefined,
-						Pos:      trimMarkerLen,
-						Err:      errors.New("template: robust:1: unexpected token in command: unclosed action"),
+						Pos:      2,
+						Err:      errors.New("template: robust:1:3: unexpected token in command: unclosed action"),
 						str:      "unclosed action",
 					},
 				},
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: unexpected token in command: unclosed action"),
+				errors.New("template: robust:1:3: unexpected token in command: unclosed action"),
 			},
 		},
 		ok:      true,
@@ -67,7 +67,7 @@ var robustTreeTests = []robustTreeTest{
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      2,
-											Err:      errors.New("template: robust:1: missing value for command"),
+											Err:      errors.New("template: robust:1:3: missing value for command"),
 											str:      "",
 										},
 									},
@@ -79,7 +79,7 @@ var robustTreeTests = []robustTreeTest{
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: missing value for command"),
+				errors.New("template: robust:1:2: missing value for command"),
 			},
 		},
 		ok:      true,
@@ -101,7 +101,7 @@ var robustTreeTests = []robustTreeTest{
 					&UndefinedNode{
 						NodeType: NodeUndefined,
 						Pos:      2,
-						Err:      errors.New("template: robust:1: unexpected token in action: \"{{\""),
+						Err:      errors.New("template: robust:1:6: unexpected token in action: \"{{\""),
 						str:      "3{{",
 					},
 					&ActionNode{
@@ -116,7 +116,7 @@ var robustTreeTests = []robustTreeTest{
 									Args: []Node{
 										&NumberNode{
 											NodeType: NodeNumber,
-											Pos:      10,
+											Pos:      9,
 											Text:     "3",
 										},
 									},
@@ -127,14 +127,14 @@ var robustTreeTests = []robustTreeTest{
 					},
 					&TextNode{
 						NodeType: NodeText,
-						Pos:      15,
+						Pos:      12,
 						Text:     []byte(" t"),
 					},
 				},
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: unexpected token in command: unclosed action with command"),
+				errors.New("template: robust:1:6: unexpected token in command: unclosed action with command"),
 			},
 		},
 		ok:      true,
@@ -177,7 +177,7 @@ var robustTreeTests = []robustTreeTest{
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      8,
-											Err:      errors.New("template: robust:1: unexpected token in command: unclosed action"),
+											Err:      errors.New("template: robust:1:9: unexpected token in command: unclosed action"),
 											str:      "unclosed action",
 										},
 									},
@@ -190,7 +190,7 @@ var robustTreeTests = []robustTreeTest{
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: unexpected token in command: unclosed action with command and pipe"),
+				errors.New("template: robust:1:9: unexpected token in command: unclosed action with command and pipe"),
 			},
 		},
 		ok:      true,
@@ -234,10 +234,8 @@ var robustTreeTests = []robustTreeTest{
 					},
 				},
 			},
-			Mode: ParsePartial,
-			Errors: []error{
-				errors.New("template: robust:1: unexpected token in command: command and pipe missing command"),
-			},
+			Mode:   ParsePartial,
+			Errors: []error{},
 		},
 		ok:      true,
 		message: "",
@@ -273,7 +271,7 @@ var robustTreeTests = []robustTreeTest{
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      7,
-											Err:      errors.New("template: robust:1: unexpected token in command: <.>"),
+											Err:      errors.New("template: robust:1:8: unexpected token in command: <.>"),
 											str:      ".",
 										},
 									},
@@ -286,7 +284,7 @@ var robustTreeTests = []robustTreeTest{
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: unexpected token in field chain: <.>"),
+				errors.New("template: robust:1:8: unexpected token in field chain: <.>"),
 			},
 		},
 		ok:      true,
@@ -318,7 +316,7 @@ var robustTreeTests = []robustTreeTest{
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      5,
-											Err:      errors.New("template: robust:1: unexpected token in pipeline: \"|\""),
+											Err:      errors.New("template: robust:1:6: unexpected token in pipeline: \"|\""),
 											str:      "|",
 										},
 									},
@@ -329,7 +327,7 @@ var robustTreeTests = []robustTreeTest{
 									Args: []Node{
 										&IdentifierNode{
 											NodeType: NodeIdentifier,
-											Pos:      8,
+											Pos:      7,
 											Ident:    "print",
 										},
 									},
@@ -342,7 +340,7 @@ var robustTreeTests = []robustTreeTest{
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: unexpected token in command: command missing value"),
+				errors.New("template: robust:1:6: unexpected token in command: command missing value"),
 			},
 		},
 		ok:      true,
@@ -382,7 +380,7 @@ var robustTreeTests = []robustTreeTest{
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      5,
-											Err:      errors.New("template: robust:1: missing value for command"),
+											Err:      errors.New("template: robust:1:6: missing value for command"),
 											str:      "",
 										},
 									},
@@ -395,7 +393,7 @@ var robustTreeTests = []robustTreeTest{
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: missing value for command"),
+				errors.New("template: robust:1:6: missing value for command"),
 			},
 		},
 		ok:      true,
@@ -435,7 +433,7 @@ var robustTreeTests = []robustTreeTest{
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      10,
-											Err:      errors.New("template: robust:1: unexpected token in command: unclosed action"),
+											Err:      errors.New("template: robust:1:11: unexpected token in command: unclosed action"),
 											str:      "unclosed action",
 										},
 									},
@@ -448,7 +446,7 @@ var robustTreeTests = []robustTreeTest{
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: unexpected token in command: unclosed action"),
+				errors.New("template: robust:1:11: unexpected token in command: unclosed action"),
 			},
 		},
 		ok:      true,
@@ -481,13 +479,13 @@ var robustTreeTests = []robustTreeTest{
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      5,
-											Err:      errors.New("template: robust:1: undefined variable \"$x\""),
+											Err:      errors.New("template: robust:1:6: undefined variable \"$x\""),
 											str:      "$x",
 										},
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      8,
-											Err:      errors.New("template: robust:1: unexpected token in command: \":\""),
+											Err:      errors.New("template: robust:1:9: unexpected token in command: \":\""),
 											str:      ":",
 										},
 									},
@@ -498,7 +496,7 @@ var robustTreeTests = []robustTreeTest{
 										&UndefinedNode{
 											NodeType: NodeUndefined,
 											Pos:      10,
-											Err:      errors.New("template: robust:1: unexpected literal operand in command: 3"),
+											Err:      errors.New("template: robust:1:11: unexpected literal operand in command: 3"),
 											str:      "3",
 										},
 									},
@@ -511,18 +509,118 @@ var robustTreeTests = []robustTreeTest{
 			},
 			Mode: ParsePartial,
 			Errors: []error{
-				errors.New("template: robust:1: variable declaration missing ="),
+				errors.New("template: robust:1:11: variable declaration missing ="),
 			},
 		},
 		ok:      true,
 		message: "",
 	},
-	// {
-	// 	name:  "unclosed variable declaration with pipe",
-	// 	input: "m {{ $x := 3 |",
-	// },
-	// {
-	// 	name:  "variable declaration with pipe and missing command",
-	// 	input: "m {{ $x :=  | printf }}",
-	// },
+	{
+		name:  "assignment to an undeclared variable",
+		input: "m {{ $x = 4 }}",
+		result: &Tree{
+			Root: &ListNode{
+				NodeType: NodeList,
+				Pos:      0,
+				Nodes: []Node{
+					&TextNode{
+						NodeType: NodeText,
+						Pos:      0,
+						Text:     []byte("m "),
+					},
+					&ActionNode{
+						NodeType: NodeAction,
+						Pos:      2,
+						Pipe: &PipeNode{
+							NodeType: NodePipe,
+							Pos:      4,
+							IsAssign: true,
+							Decl: []*VariableNode{
+								{
+									NodeType: NodeVariable,
+									Pos:      5,
+									Ident:    []string{"$x"},
+								},
+							},
+							Cmds: []*CommandNode{
+								{
+									NodeType: NodeCommand,
+									Pos:      6,
+									Args: []Node{
+										&NumberNode{
+											NodeType: NodeNumber,
+											Pos:      10,
+											Text:     "4",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		ok:      true,
+		message: "",
+	},
+	{
+		name:  "variable declaration with pipe and missing command",
+		input: "m {{ $x :=  | printf }}",
+		result: &Tree{
+			Root: &ListNode{
+				NodeType: NodeList,
+				Pos:      0,
+				Nodes: []Node{
+					&TextNode{
+						NodeType: NodeText,
+						Pos:      0,
+						Text:     []byte("m "),
+					},
+					&ActionNode{
+						NodeType: NodeAction,
+						Pos:      2,
+						Pipe: &PipeNode{
+							NodeType: NodePipe,
+							Pos:      4,
+							IsAssign: false,
+							Decl: []*VariableNode{
+								{
+									NodeType: NodeVariable,
+									Pos:      5,
+									Ident:    []string{"$x"},
+								},
+							},
+							Cmds: []*CommandNode{
+								{
+									NodeType: NodeCommand,
+									Args: []Node{
+										&UndefinedNode{
+											NodeType: NodeUndefined,
+											Pos:      12,
+											Err:      errors.New("template: robust:1:13: unexpected token in pipeline: \"|\""),
+											str:      "|",
+										},
+									},
+									Pos: 4,
+								},
+								{
+									NodeType: NodeCommand,
+									Args: []Node{
+										&IdentifierNode{
+											NodeType: NodeIdentifier,
+											Pos:      14,
+											Ident:    "printf",
+										},
+									},
+									Pos: 6,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		ok:      true,
+		message: "",
+	},
 }

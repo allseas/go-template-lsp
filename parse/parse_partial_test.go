@@ -142,6 +142,10 @@ func compareNodes(a, b Node, path string) string {
 	if a.Type() != b.Type() {
 		return fmt.Sprintf("%s: got node type %v (%T), want %v (%T)", path, a.Type(), a, b.Type(), b)
 	}
+	// Check Pos field for all nodes
+	if a.Position() != b.Position() {
+		return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Position(), b.Position())
+	}
 	switch a := a.(type) {
 	case *ListNode:
 		return compareListNodes(a, b.(*ListNode), path)
@@ -160,16 +164,10 @@ func compareNodes(a, b Node, path string) string {
 
 	case *ActionNode:
 		bv := b.(*ActionNode)
-		if a.Pos != bv.Pos {
-			return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Pos, bv.Pos)
-		}
 		return comparePipeNodes(a.Pipe, bv.Pipe, path+".Pipe")
 
 	case *IfNode:
 		bv := b.(*IfNode)
-		if a.Pos != bv.Pos {
-			return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Pos, bv.Pos)
-		}
 		if diff := comparePipeNodes(a.Pipe, bv.Pipe, path+".Pipe"); diff != "" {
 			return diff
 		}
@@ -180,9 +178,6 @@ func compareNodes(a, b Node, path string) string {
 
 	case *RangeNode:
 		bv := b.(*RangeNode)
-		if a.Pos != bv.Pos {
-			return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Pos, bv.Pos)
-		}
 		if diff := comparePipeNodes(a.Pipe, bv.Pipe, path+".Pipe"); diff != "" {
 			return diff
 		}
@@ -193,9 +188,6 @@ func compareNodes(a, b Node, path string) string {
 
 	case *WithNode:
 		bv := b.(*WithNode)
-		if a.Pos != bv.Pos {
-			return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Pos, bv.Pos)
-		}
 		if diff := comparePipeNodes(a.Pipe, bv.Pipe, path+".Pipe"); diff != "" {
 			return diff
 		}
@@ -206,25 +198,16 @@ func compareNodes(a, b Node, path string) string {
 
 	case *TemplateNode:
 		bv := b.(*TemplateNode)
-		if a.Pos != bv.Pos {
-			return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Pos, bv.Pos)
-		}
 		if a.Name != bv.Name {
 			return fmt.Sprintf("%s.Name: got %q, want %q", path, a.Name, bv.Name)
 		}
 		return comparePipeNodes(a.Pipe, bv.Pipe, path+".Pipe")
 
 	case *BreakNode:
-		bv := b.(*BreakNode)
-		if a.Pos != bv.Pos {
-			return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Pos, bv.Pos)
-		}
+		// Pos already checked above
 
 	case *ContinueNode:
-		bv := b.(*ContinueNode)
-		if a.Pos != bv.Pos {
-			return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Pos, bv.Pos)
-		}
+		// Pos already checked above
 
 	case *IdentifierNode:
 		bv := b.(*IdentifierNode)
@@ -267,10 +250,10 @@ func compareNodes(a, b Node, path string) string {
 		return compareNodes(a.Node, bv.Node, path+".Node")
 
 	case *DotNode:
-		// no fields to compare
+		// Pos already checked above
 
 	case *NilNode:
-		// no fields to compare
+		// Pos already checked above
 
 	case *BoolNode:
 		bv := b.(*BoolNode)
@@ -295,9 +278,6 @@ func compareNodes(a, b Node, path string) string {
 
 	case *UndefinedNode:
 		bv := b.(*UndefinedNode)
-		if a.Pos != bv.Pos {
-			return fmt.Sprintf("%s.Pos: got %v, want %v", path, a.Pos, bv.Pos)
-		}
 		if a.Err == nil && bv.Err != nil {
 			return fmt.Sprintf("%s.Err: got nil, want %v", path, bv.Err)
 		}
