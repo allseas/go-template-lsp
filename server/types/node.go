@@ -835,83 +835,16 @@ func (s *StringNode) ValueType() types.Type {
 	return types.Typ[types.String]
 }
 
-// endNode represents an {{end}} action.
-// It does not appear in the final parse tree.
-type endNode struct {
-	NodeType
-	Pos
-	tr *Tree
-}
-
-func (t *Tree) newEnd(pos Pos) *endNode {
-	return &endNode{tr: t, NodeType: nodeEnd, Pos: pos}
-}
-
-func (e *endNode) String() string {
-	return "{{end}}"
-}
-
-func (e *endNode) writeTo(sb *strings.Builder) {
-	sb.WriteString(e.String())
-}
-
-func (e *endNode) tree() *Tree {
-	return e.tr
-}
-
-func (e *endNode) Copy() Node {
-	return e.tr.newEnd(e.Pos)
-}
-
-func (e *endNode) ValueType() types.Type {
-	return nil
-}
-
-// elseNode represents an {{else}} action. Does not appear in the final tree.
-type elseNode struct {
-	NodeType
-	Pos
-	tr   *Tree
-	Line int // The line number in the input. Deprecated: Kept for compatibility.
-}
-
-func (t *Tree) newElse(pos Pos, line int) *elseNode {
-	return &elseNode{tr: t, NodeType: nodeElse, Pos: pos, Line: line}
-}
-
-func (e *elseNode) Type() NodeType {
-	return nodeElse
-}
-
-func (e *elseNode) String() string {
-	return "{{else}}"
-}
-
-func (e *elseNode) writeTo(sb *strings.Builder) {
-	sb.WriteString(e.String())
-}
-
-func (e *elseNode) tree() *Tree {
-	return e.tr
-}
-
-func (e *elseNode) Copy() Node {
-	return e.tr.newElse(e.Pos, e.Line)
-}
-
-func (e *elseNode) ValueType() types.Type {
-	return nil
-}
-
 // BranchNode is the common representation of if, range, and with.
 type BranchNode struct {
 	NodeType
 	Pos
 	tr       *Tree
-	Line     int       // The line number in the input. Deprecated: Kept for compatibility.
-	Pipe     *PipeNode // The pipeline to be evaluated.
-	List     *ListNode // What to execute if the value is non-empty.
-	ElseList *ListNode // What to execute if the value is empty (nil if absent).
+	Line     int        // The line number in the input. Deprecated: Kept for compatibility.
+	Pipe     *PipeNode  // The pipeline to be evaluated.
+	List     *ListNode  // What to execute if the value is non-empty.
+	ElseList *ListNode  // What to execute if the value is empty (nil if absent).
+	typ      types.Type // Resolved type of the pipe output (set during analysis)
 }
 
 func (b *BranchNode) String() string {
@@ -963,7 +896,7 @@ func (b *BranchNode) Copy() Node {
 }
 
 func (b *BranchNode) ValueType() types.Type {
-	return nil
+	return b.typ
 }
 
 // IfNode represents an {{if}} action and its commands.
@@ -990,7 +923,7 @@ func (i *IfNode) Copy() Node {
 }
 
 func (i *IfNode) ValueType() types.Type {
-	return nil
+	return i.typ
 }
 
 // BreakNode represents a {{break}} action.
@@ -1053,7 +986,7 @@ func (r *RangeNode) Copy() Node {
 }
 
 func (r *RangeNode) ValueType() types.Type {
-	return nil
+	return r.typ
 }
 
 // WithNode represents a {{with}} action and its commands.
@@ -1080,7 +1013,7 @@ func (w *WithNode) Copy() Node {
 }
 
 func (w *WithNode) ValueType() types.Type {
-	return nil
+	return w.typ
 }
 
 // TemplateNode represents a {{template}} action.
