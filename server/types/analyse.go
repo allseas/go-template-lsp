@@ -14,17 +14,17 @@ import (
 // Tree represents a parsed template with type information.
 // It wraps the parse tree and enriches nodes with type annotations.
 type Tree struct {
-	Name      string           // name of the template represented by the tree.
-	ParseName string           // name of the top-level template during parsing, for error messages.
-	Root      *ListNode        // top-level root of the tree.
-	Errors    []error          // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
-	funcs     []map[string]any // available functions with their signatures
-	DotType   *types.Named     // optional: type of dot context (from gotype hint)
-	Pkg       *types.Package   // optional: package containing DotType
+	Name      string                   // name of the template represented by the tree.
+	ParseName string                   // name of the top-level template during parsing, for error messages.
+	Root      *ListNode                // top-level root of the tree.
+	Errors    []error                  // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
+	funcs     []map[string]*types.Func // available functions with their signatures
+	DotType   *types.Named             // optional: type of dot context (from gotype hint)
+	Pkg       *types.Package           // optional: package containing DotType
 }
 
 // NewTree creates a typed tree from a parse tree, optionally with type information.
-func NewTree(parseTree parse.Tree, funcs []map[string]any) Tree {
+func NewTree(parseTree parse.Tree, funcs []map[string]*types.Func) Tree {
 	typeTree := Tree{
 		Name:      parseTree.Name,
 		ParseName: parseTree.ParseName,
@@ -33,7 +33,7 @@ func NewTree(parseTree parse.Tree, funcs []map[string]any) Tree {
 	}
 
 	if parseTree.Root != nil {
-		typeTree.Root = analyseList(parseTree.Root, nil)
+		typeTree.Root = analyseList(parseTree.Root, &analysisCtx{funcs: funcs})
 	}
 
 	return typeTree
@@ -46,7 +46,7 @@ func NewTree(parseTree parse.Tree, funcs []map[string]any) Tree {
 // on nodes that depend on context (VariableNode, FieldNode, CommandNode, etc).
 func NewTreeWithType(
 	parseTree parse.Tree,
-	funcs []map[string]any,
+	funcs []map[string]*types.Func,
 	dotType *types.Named,
 	pkg *types.Package,
 ) Tree {
@@ -280,6 +280,23 @@ func analysePipe(pipeNode *parse.PipeNode, ctx *analysisCtx) *PipeNode {
 		typePipe.Cmds[i] = analyseCommand(cmd, ctx)
 	}
 
+	// The type of the pipe is literal
+	if len(typePipe.Decl) == 1 {
+		typePipe.typ = getNodeType(typePipe.Decl[0])
+		return typePipe
+	}
+
+	resType := getNodeType(typePipe.Cmds[len(typePipe.Cmds)-1])
+	switch resType.Underlying().(type) {
+	case *types.Signature:
+		typePipe.typ = resType.Underlying().(*types.Signature).Results().At(0).Type()
+	default:
+		// not sure how to handle this, should be impossible, do we return nil or invalid?
+		typePipe.typ = types.Typ[types.Invalid]
+	}
+
+	//TODO: update vars
+
 	return typePipe
 }
 
@@ -299,9 +316,41 @@ func analyseCommand(cmdNode *parse.CommandNode, ctx *analysisCtx) *CommandNode {
 		typeCmd.Args[i] = analyseNode(arg, ctx)
 	}
 
-	// TODO: get type of first arg, direct if literal,
+	resultType := getNodeType(typeCmd.Args[0])
 
-	return typeCmd
+	if resultType != nil {
+		switch t := resultType.Underlying().(type) {
+		case *types.Signature:
+			// If it's a function with all params provided, use the return type
+			// If one param is missing, use one step curried function type
+			// TODO: may be variadic ??
+			if t.Params().Len() == len(typeCmd.Args)-1 {
+				typeCmd.typ = t.Results().At(0).Type()
+			} else if t.Params().Len() == len(typeCmd.Args)-2 {
+				typeCmd.typ = types.NewSignatureType(
+					nil,
+					nil,
+					[]*types.TypeParam{t.TypeParams().At(t.TypeParams().Len() - 1)},
+					types.NewTuple(t.Params().At(t.Params().Len()-1)),
+					t.Results(),
+					false,
+				)
+			}
+		default:
+			typeCmd.typ = resultType
+		}
+
+		return typeCmd
+	}
+	return nil
+}
+
+// getNodeType returns the type of a node without modifying it.
+func getNodeType(node Node) types.Type {
+	if node == nil {
+		return nil
+	}
+	return node.ValueType()
 }
 
 // analysisCtx carries type information through the analysis.
@@ -309,9 +358,9 @@ func analyseCommand(cmdNode *parse.CommandNode, ctx *analysisCtx) *CommandNode {
 type analysisCtx struct {
 	// Future: Add fields for tracking type information during analysis
 	// For example:
-	// varTypes map[string]types.Type  // Type of each variable in scope
-	// dotType types.Type              // Current dot context type
-	// methods map[string]*types.Func  // Available methods
+	varTypes map[string]types.Type    // Type of each variable in scope
+	dotType  types.Type               // Current dot context type
+	funcs    []map[string]*types.Func // Available functions with their signatures
 }
 
 // resolveCtx carries context for resolving types on nodes.
@@ -322,13 +371,14 @@ type resolveCtx struct {
 
 // ResolveDotType resolves the type of a node within a given context.
 // This is useful for hover tooltips and completions.
-//
+
 // Example usage:
-//
-//	dotType := ResolveDotType(commandNode, typedTree)
-//	if dotType != nil {
-//	    // Show fields/methods of dotType in hover
-//	}
+
+// 	dotType := ResolveDotType(commandNode, typedTree)
+// 	if dotType != nil {
+// 	    // Show fields/methods of dotType in hover
+// 	}
+
 func ResolveDotType(node Node, tree *Tree) types.Type {
 	if tree.DotType == nil {
 		return nil
@@ -527,12 +577,4 @@ func resolveFieldChain(baseType types.Type, fieldChain []string) types.Type {
 	}
 
 	return currentType
-}
-
-// getNodeType returns the type of a node without modifying it.
-func getNodeType(node Node) types.Type {
-	if node == nil {
-		return nil
-	}
-	return node.ValueType()
 }
