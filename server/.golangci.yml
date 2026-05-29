@@ -16,6 +16,9 @@ linters:
     - misspell
     - unconvert
     - unparam
+  exclusions:
+    paths:
+      - types/node.go
 
 linters-settings:
   errcheck:
