@@ -13,6 +13,40 @@ type completionTestCase struct {
 }
 
 var completionTestCases = []completionTestCase{
+	{
+		name:        "field chain .Address. — Address fields suggested",
+		src:         `{{ .Address. }}`,
+		subStr:      ".",
+		occurrence:  1,
+		withType:    true,
+		contains:    []string{"Street", "City", "Country", "Zip"},
+		notContains: []string{"ID", "CustomerName", "len", "eq"},
+	},
+	{
+		name:        "field chain .Address. — Address methods suggested",
+		src:         `{{ .Address. }}`,
+		subStr:      ".",
+		occurrence:  1,
+		withType:    true,
+		contains:    []string{"Line", "IsLocal", "ZipCode"},
+		notContains: []string{"DisplayName", "ItemCount"},
+	},
+	{
+		name:        "field chain .Address. — no dot prefix on completions",
+		src:         `{{ .Address. }}`,
+		subStr:      ".",
+		occurrence:  1,
+		withType:    true,
+		notContains: []string{".Street", ".City", ".Line"},
+	},
+	{
+		name:        "field chain on primitive type — no suggestions",
+		src:         `{{ .CustomerName. }}`,
+		subStr:      ".",
+		occurrence:  1,
+		withType:    true,
+		notContains: []string{"ID", "CustomerName", "DisplayName", "Street", "len"},
+	},
 	// dot field completions
 	{
 		name:     "dot triggers Order field completions",
@@ -564,8 +598,6 @@ var completionTestCases = []completionTestCase{
 		contains: []string{"len", "eq"},
 	},
 }
-
-// nodeFind test cases
 
 type nodeFindTestCase struct {
 	name     string

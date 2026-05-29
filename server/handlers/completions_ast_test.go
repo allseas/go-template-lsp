@@ -41,9 +41,12 @@ func suggestAtWithType(
 	lt *LoadedType,
 ) []string {
 	t.Helper()
-	trees, err := parse.Parse("test", src, "", "", builtins())
+	typ := parse.New("test")
+	typ.Mode = parse.ParsePartial | parse.SkipFuncCheck
+	treeSet := map[string]*parse.Tree{}
+	_, err := typ.Parse(src, "{{", "}}", treeSet, builtins())
 	require.NoError(t, err)
-	root := trees["test"].Root
+	root := typ.Root
 	ctx := &Context{Vars: map[string]parse.Node{}, DotType: lt}
 	cur := nodeFind(root, parse.Pos(offset))
 	ok := buildPath(root, cur, ctx)
