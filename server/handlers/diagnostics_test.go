@@ -50,29 +50,6 @@ func assertDiagnosticCoversTextRange(
 	assert.Equal(t, wantEnd.Character, diag.Range.End.Character)
 }
 
-func TestIsUnparsedText(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  bool
-	}{
-		{"variable with dollar", "$myVar", false},
-		{"dot accessor", ".Field", false},
-		{"pipe separator", "funcA | funcB", false},
-		{"backtick string", "`raw string`", false},
-		{"colon-equals assign", "$x := 1", false},
-		{"pure number", "42", false},
-		{"pure spaces", "   ", false},
-		{"plain word", "something", true},
-		{"alpha only", "abc", true},
-		{"mixed non-special", "hello world", true},
-	}
-
-	for _, tc := range tests {
-		assert.Equal(t, tc.want, isUnparsedText(tc.input), tc.name)
-	}
-}
-
 func u32(v int) uint32 {
 	if v > math.MaxUint32 {
 		return math.MaxUint32
@@ -112,41 +89,6 @@ func TestExpandToFullBracketsFromOffset(t *testing.T) {
 		endOff := positionToOffset(text, rng.End)
 		assert.LessOrEqualf(t, startOff, endOff, "at pos %d", i)
 	}
-}
-
-func TestHasExactDiagnosticAtRange(t *testing.T) {
-	text := "line one\n{{ .Bad }}\nline three"
-
-	openIdx := strings.Index(text, "{{")
-	closeIdx := strings.Index(text, "}}") + 2
-
-	existingDiag := protocol.Diagnostic{
-		Range: protocol.Range{
-			Start: offsetToPosition(text, openIdx),
-			End:   offsetToPosition(text, closeIdx),
-		},
-		Message: "already reported",
-	}
-
-	found := hasExactDiagnosticAtRange(
-		[]protocol.Diagnostic{existingDiag},
-		openIdx,
-		closeIdx,
-		text,
-	)
-	assert.True(t, found)
-
-	found = hasExactDiagnosticAtRange(nil, openIdx, closeIdx, text)
-	assert.False(t, found)
-
-	otherStart := strings.Index(text, "line three")
-	found = hasExactDiagnosticAtRange(
-		[]protocol.Diagnostic{existingDiag},
-		otherStart,
-		otherStart+5,
-		text,
-	)
-	assert.False(t, found)
 }
 
 func TestCollectDiagnostics_EmptyAndTrivial(t *testing.T) {
@@ -194,8 +136,8 @@ func TestCollectDiagnostics_InvalidTokens(t *testing.T) {
 	diags := collectDiagnostics(text, "file:///test.tmpl")
 	require.NotEmpty(t, diags)
 
-	diag, ok := findDiagnosticContaining(diags, "unexpected token or unparseable")
-	require.True(t, ok, "expected syntax error diagnostic, got: %v", diagMessages(diags))
+	diag, ok := findDiagnosticContaining(diags, "unsupported function or unregistered command")
+	require.True(t, ok, "expected unsupported function diagnostic, got: %v", diagMessages(diags))
 
 	startIdx := strings.Index(text, "{{")
 	endIdx := strings.LastIndex(text, "}}") + 2
@@ -205,8 +147,13 @@ func TestCollectDiagnostics_InvalidTokens(t *testing.T) {
 	diags = collectDiagnostics(text, "file:///test.tmpl")
 	require.NotEmpty(t, diags)
 
-	diag, ok = findDiagnosticContaining(diags, "unexpected token or unparseable")
-	require.True(t, ok, "expected syntax error diagnostic, got: %v", diagMessages(diags))
+	diag, ok = findDiagnosticContaining(diags, "undefined")
+	require.True(
+		t,
+		ok,
+		"expected undefined or syntax error diagnostic, got: %v",
+		diagMessages(diags),
+	)
 
 	startIdx = strings.Index(text, "{{")
 	endIdx = strings.LastIndex(text, "}}") + 2
@@ -217,7 +164,7 @@ func TestCollectDiagnostics_InvalidTokens(t *testing.T) {
 
 	count := 0
 	for _, d := range diags {
-		if strings.Contains(d.Message, "unexpected token or unparseable") {
+		if strings.Contains(d.Message, "unsupported function") {
 			count++
 		}
 	}

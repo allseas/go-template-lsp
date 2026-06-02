@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"regexp"
 	"strings"
 	parse "text-template-parser"
 
@@ -10,12 +9,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-var (
-	templateBlockRegex      = regexp.MustCompile(`\{\{-?\s*(.*?)\s*-?\}\}`)
-	errorCleanPositionRegex = regexp.MustCompile(`\s*at position \d+`)
-)
-
-const undefinedVariableMessage = "undefined variable: "
+var undefinedVariableMessage = "undefined variable: "
 
 // publishDiagnostics analyzes the document and sends diagnostics to the client.
 func publishDiagnostics(ctx *glsp.Context, uri, text string) {
@@ -37,48 +31,25 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	})
 }
 
-// collectDiagnostics returns diagnostics from tree analysis and regex-based token checks.
+// collectDiagnostics returns diagnostics from AST analysis using the improved parser.
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
-	if doc, ok := store.Get(uri); ok && doc.tree != nil && doc.tree.Root != nil {
-		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-		diagnostics = walkAndAnalyze(doc.tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)
+	var tree *parse.Tree
+
+	if doc, ok := store.Get(uri); ok && doc.tree != nil {
+		tree = doc.tree
 	} else {
-		log.Debug().Msg("doc, tree, or root is nil")
+		var err error
+		tree, err = tryParse(text)
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to parse template")
+		}
 	}
-	for _, match := range templateBlockRegex.FindAllStringIndex(text, -1) {
-		if len(match) < 2 {
-			continue
-		}
-		start, end := match[0], match[1]
-		if start < 0 || end > len(text) || start >= end {
-			continue
-		}
-		inner := strings.TrimSpace(
-			strings.TrimSuffix(
-				strings.TrimPrefix(strings.TrimSpace(text[start:end]), "{{-"),
-				"-}}",
-			),
-		)
-		inner = strings.TrimSpace(
-			strings.TrimSuffix(
-				strings.TrimPrefix(inner, "{{"),
-				"}}",
-			),
-		)
-		if inner == "" || strings.HasPrefix(inner, "/*") || inner == "end" || inner == "else" ||
-			hasExactDiagnosticAtRange(diagnostics, start, end, text) {
-			continue
-		}
-		if isUnparsedText(inner) || strings.ContainsAny(inner, "[]") {
-			diagnostics = append(diagnostics, protocol.Diagnostic{
-				Range: protocol.Range{
-					Start: offsetToPosition(text, start),
-					End:   offsetToPosition(text, end),
-				},
-				Message:  "syntax error: unexpected token or unparseable action '" + inner + "'",
-				Severity: new(protocol.DiagnosticSeverityError),
-			})
-		}
+
+	if tree != nil && tree.Root != nil {
+		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+		diagnostics = walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)
+	} else {
+		log.Debug().Msg("tree or root is nil")
 	}
 	return diagnostics
 }
@@ -89,9 +60,7 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 
 	switch n := node.(type) {
 	case *parse.UndefinedNode:
-		name := strings.TrimSpace(
-			errorCleanPositionRegex.ReplaceAllString(n.String(), ""),
-		)
+		name := strings.TrimSpace(n.String())
 		msg := undefinedVariableMessage + name
 		if name == "" {
 			msg = "undefined node"
@@ -200,7 +169,11 @@ func collectDeclarations(
 				})
 				continue
 			}
-			ctx.Vars[ident] = pipe
+			if pipe.IsAssign {
+				ctx.Vars[ident] = pipe
+			} else {
+				ctx.Vars[ident] = decl
+			}
 		}
 	}
 	return diagnostics
@@ -270,28 +243,4 @@ func extractBranchNodes(node parse.Node) (*parse.PipeNode, *parse.ListNode, *par
 	default:
 		return nil, nil, nil
 	}
-}
-
-// isUnparsedText reports whether the content contains invalid template syntax.
-func isUnparsedText(content string) bool {
-	if strings.ContainsAny(content, `$.":|`+"`") || strings.Contains(content, ":=") {
-		return false
-	}
-	return strings.Trim(content, "0123456789 ") != ""
-}
-
-// hasExactDiagnosticAtRange reports whether a diagnostic already exists at the given range.
-func hasExactDiagnosticAtRange(
-	diagnostics []protocol.Diagnostic,
-	start, end int,
-	text string,
-) bool {
-	pStart, pEnd := offsetToPosition(text, start), offsetToPosition(text, end)
-	for _, d := range diagnostics {
-		if d.Range.Start.Line == pStart.Line && d.Range.Start.Character >= pStart.Character &&
-			d.Range.End.Character <= pEnd.Character {
-			return true
-		}
-	}
-	return false
 }
