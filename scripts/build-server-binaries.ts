@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const serverDirectory = join(__dirname, '..', 'server');
-const serverBinariesDirectory = join(__dirname, '..', 'server_binaries')
+const serverBinariesDirectory = join(__dirname, '..', 'dist', 'server')
 
 if (!existsSync(serverBinariesDirectory)){
     mkdirSync(serverBinariesDirectory, {recursive: true});
