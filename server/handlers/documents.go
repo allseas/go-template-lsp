@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	parse "text-template-parser"
+	servertypes "text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -14,7 +15,7 @@ import (
 type document struct {
 	text       string
 	tree       *parse.Tree
-	loadedType *LoadedType
+	loadedType *servertypes.Tree
 }
 
 type documentStore struct {
@@ -29,7 +30,7 @@ var store = &documentStore{
 func (s *documentStore) Set(uri, text string) {
 	tree, err := parseTemplate(uri, text)
 
-	var lt *LoadedType
+	var lt *servertypes.Tree
 	if workspaceRoot != "" {
 		hints := ParseTypeHints(strings.NewReader(text))
 		if len(hints) > 0 {

@@ -55,7 +55,7 @@ func (i Item) Describe() string {
 
 // Order is the top-level model.
 // Import path: text-template-server/src/model
-// gotype hint:  {{/*gotype: text-template-server/src/model.Order*/}}
+// gotype hint:  {{/*gotype: text-template-server/src/mm.Order*/}}
 type Order struct {
 	ID           string
 	CustomerName string

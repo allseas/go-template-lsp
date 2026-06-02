@@ -4,6 +4,7 @@ import (
 	"go/types"
 	"testing"
 	parse "text-template-parser"
+	servertypes "text-template-server/types"
 
 	"golang.org/x/tools/go/packages"
 
@@ -38,7 +39,7 @@ func suggestAtWithType(
 	src string,
 	offset int,
 	isInvoked bool,
-	lt *LoadedType,
+	lt *servertypes.Tree,
 ) []string {
 	t.Helper()
 	trees, err := parse.Parse("test", src, "", "", builtins())
@@ -88,7 +89,7 @@ func offsetOf(t *testing.T, s, substr string, n int) int {
 	return -1
 }
 
-func orderLoadedType(t *testing.T) *LoadedType {
+func orderLoadedType(t *testing.T) *servertypes.Tree {
 	t.Helper()
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax,
@@ -101,12 +102,8 @@ func orderLoadedType(t *testing.T) *LoadedType {
 	obj := pkg.Types.Scope().Lookup("Order")
 	require.NotNil(t, obj)
 	named := obj.Type().(*types.Named)
-	return &LoadedType{
-		Pkg:     pkg,
-		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
-	}
+	tree := servertypes.Tree{DotType: named, Pkg: pkg.Types}
+	return &tree
 }
 
 func TestCompletionSuggestions(t *testing.T) {
