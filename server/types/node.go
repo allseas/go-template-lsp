@@ -26,12 +26,11 @@ type Node interface {
 	// CopyXxx methods that return *XxxNode.
 	Copy() Node
 	Position() Pos // byte position of start of node in full original input string
-	// tree returns the containing *Tree.
-	// It is unexported so all implementations of Node are in this package.
-	tree() *Tree
+	Parent() *Node
 	// writeTo writes the String output to the builder.
 	writeTo(*strings.Builder)
 	ValueType() types.Type
+	IsElseList() bool
 }
 
 // NodeType identifies the type of a parse tree node.
@@ -86,13 +85,18 @@ const (
 type UndefinedNode struct {
 	NodeType
 	Pos
-	tr  *Tree
-	Err error  // the error that caused this node to be produced
-	str string // original source text
+	parent *Node
+	Err    error  // the error that caused this node to be produced
+	str    string // original source text
+	isElse bool   // whether this node is an else list
 }
 
-func (u *UndefinedNode) tree() *Tree {
-	return u.tr
+func (u *UndefinedNode) IsElseList() bool {
+	return u.isElse
+}
+
+func (u *UndefinedNode) Parent() *Node {
+	return u.parent
 }
 
 func (u *UndefinedNode) String() string {
@@ -109,10 +113,6 @@ func (u *UndefinedNode) Type() NodeType {
 	return NodeUndefined
 }
 
-func (t *Tree) newUndefined(pos Pos, err error, str string) *UndefinedNode {
-	return &UndefinedNode{NodeType: NodeUndefined, Pos: pos, tr: t, Err: err, str: str}
-}
-
 func (u *UndefinedNode) Copy() Node {
 	return u.CopyUndefined()
 }
@@ -121,7 +121,7 @@ func (u *UndefinedNode) CopyUndefined() *UndefinedNode {
 	if u == nil {
 		return nil
 	}
-	return &UndefinedNode{NodeType: NodeUndefined, Pos: u.Pos, tr: u.tr, Err: u.Err, str: u.str}
+	return &UndefinedNode{NodeType: NodeUndefined, Pos: u.Pos, parent: u.parent, Err: u.Err, str: u.str, isElse: u.isElse}
 }
 
 func (u *UndefinedNode) ValueType() types.Type {
@@ -132,20 +132,21 @@ func (u *UndefinedNode) ValueType() types.Type {
 type ListNode struct {
 	NodeType
 	Pos
-	tr    *Tree
-	Nodes []Node // The element nodes in lexical order.
+	parent *Node
+	Nodes  []Node // The element nodes in lexical order.
+	isElse bool   // Whether this is in an else list.
 }
 
-func (t *Tree) newList(pos Pos) *ListNode {
-	return &ListNode{tr: t, NodeType: NodeList, Pos: pos}
+func (l *ListNode) IsElseList() bool {
+	return l.isElse
 }
 
 func (l *ListNode) append(n Node) {
 	l.Nodes = append(l.Nodes, n)
 }
 
-func (l *ListNode) tree() *Tree {
-	return l.tr
+func (l *ListNode) Parent() *Node {
+	return l.parent
 }
 
 func (l *ListNode) String() string {
@@ -164,7 +165,7 @@ func (l *ListNode) CopyList() *ListNode {
 	if l == nil {
 		return l
 	}
-	n := l.tr.newList(l.Pos)
+	n := &ListNode{NodeType: NodeList, Pos: l.Pos, parent: l.parent}
 	for _, elem := range l.Nodes {
 		n.append(elem.Copy())
 	}
@@ -183,12 +184,13 @@ func (l *ListNode) ValueType() types.Type {
 type TextNode struct {
 	NodeType
 	Pos
-	tr   *Tree
-	Text []byte // The text; may span newlines.
+	parent *Node
+	Text   []byte // The text; may span newlines.
+	isElse bool   // Whether this is in an else list.
 }
 
-func (t *Tree) newText(pos Pos, text string) *TextNode {
-	return &TextNode{tr: t, NodeType: NodeText, Pos: pos, Text: []byte(text)}
+func (t *TextNode) IsElseList() bool {
+	return t.isElse
 }
 
 func (t *TextNode) String() string {
@@ -199,12 +201,12 @@ func (t *TextNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(t.String())
 }
 
-func (t *TextNode) tree() *Tree {
-	return t.tr
+func (t *TextNode) Parent() *Node {
+	return t.parent
 }
 
 func (t *TextNode) Copy() Node {
-	return &TextNode{tr: t.tr, NodeType: NodeText, Pos: t.Pos, Text: append([]byte{}, t.Text...)}
+	return &TextNode{NodeType: NodeText, Pos: t.Pos, parent: t.parent, Text: append([]byte{}, t.Text...), isElse: t.isElse}
 }
 
 func (t *TextNode) ValueType() types.Type {
@@ -215,12 +217,13 @@ func (t *TextNode) ValueType() types.Type {
 type CommentNode struct {
 	NodeType
 	Pos
-	tr   *Tree
-	Text string // Comment text.
+	parent *Node
+	Text   string // Comment text.
+	isElse bool   // Whether this is in an else list.
 }
 
-func (t *Tree) newComment(pos Pos, text string) *CommentNode {
-	return &CommentNode{tr: t, NodeType: NodeComment, Pos: pos, Text: text}
+func (c *CommentNode) IsElseList() bool {
+	return c.isElse
 }
 
 func (c *CommentNode) String() string {
@@ -235,12 +238,12 @@ func (c *CommentNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("}}")
 }
 
-func (c *CommentNode) tree() *Tree {
-	return c.tr
+func (c *CommentNode) Parent() *Node {
+	return c.parent
 }
 
 func (c *CommentNode) Copy() Node {
-	return &CommentNode{tr: c.tr, NodeType: NodeComment, Pos: c.Pos, Text: c.Text}
+	return &CommentNode{NodeType: NodeComment, Pos: c.Pos, parent: c.parent, Text: c.Text, isElse: c.isElse}
 }
 
 func (c *CommentNode) ValueType() types.Type {
@@ -251,16 +254,17 @@ func (c *CommentNode) ValueType() types.Type {
 type PipeNode struct {
 	NodeType
 	Pos
-	tr       *Tree
+	parent   *Node
 	Line     int             // The line number in the input. Deprecated: Kept for compatibility.
 	IsAssign bool            // The variables are being assigned, not declared.
 	Decl     []*VariableNode // Variables in lexical order.
 	Cmds     []*CommandNode  // The commands in lexical order.
 	typ      types.Type      // Resolved type of the pipe output (set during analysis)
+	isElse   bool            // Whether this is in an else list.
 }
 
-func (t *Tree) newPipeline(pos Pos, line int, vars []*VariableNode) *PipeNode {
-	return &PipeNode{tr: t, NodeType: NodePipe, Pos: pos, Line: line, Decl: vars}
+func (p *PipeNode) IsElseList() bool {
+	return p.isElse
 }
 
 func (p *PipeNode) append(command *CommandNode) {
@@ -301,8 +305,8 @@ func (p *PipeNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-func (p *PipeNode) tree() *Tree {
-	return p.tr
+func (p *PipeNode) Parent() *Node {
+	return p.parent
 }
 
 func (p *PipeNode) CopyPipe() *PipeNode {
@@ -313,7 +317,7 @@ func (p *PipeNode) CopyPipe() *PipeNode {
 	for i, d := range p.Decl {
 		vars[i] = d.Copy().(*VariableNode)
 	}
-	n := p.tr.newPipeline(p.Pos, p.Line, vars)
+	n := &PipeNode{NodeType: NodePipe, Pos: p.Pos, parent: p.parent, Line: p.Line, Decl: vars}
 	n.IsAssign = p.IsAssign
 	for _, c := range p.Cmds {
 		n.append(c.Copy().(*CommandNode))
@@ -335,13 +339,14 @@ func (p *PipeNode) ValueType() types.Type {
 type ActionNode struct {
 	NodeType
 	Pos
-	tr   *Tree
-	Line int       // The line number in the input. Deprecated: Kept for compatibility.
-	Pipe *PipeNode // The pipeline in the action.
+	parent *Node
+	Line   int       // The line number in the input. Deprecated: Kept for compatibility.
+	Pipe   *PipeNode // The pipeline in the action.
+	isElse bool      // Whether this is in an else list.
 }
 
-func (t *Tree) newAction(pos Pos, line int, pipe *PipeNode) *ActionNode {
-	return &ActionNode{tr: t, NodeType: NodeAction, Pos: pos, Line: line, Pipe: pipe}
+func (a *ActionNode) IsElseList() bool {
+	return a.isElse
 }
 
 func (a *ActionNode) String() string {
@@ -356,12 +361,12 @@ func (a *ActionNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("}}")
 }
 
-func (a *ActionNode) tree() *Tree {
-	return a.tr
+func (a *ActionNode) Parent() *Node {
+	return a.parent
 }
 
 func (a *ActionNode) Copy() Node {
-	return a.tr.newAction(a.Pos, a.Line, a.Pipe.CopyPipe())
+	return &ActionNode{NodeType: NodeAction, Pos: a.Pos, parent: a.parent, Line: a.Line, Pipe: a.Pipe.CopyPipe(), isElse: a.isElse}
 }
 
 func (a *ActionNode) ValueType() types.Type {
@@ -372,13 +377,14 @@ func (a *ActionNode) ValueType() types.Type {
 type CommandNode struct {
 	NodeType
 	Pos
-	tr   *Tree
-	Args []Node     // Arguments in lexical order: Identifier, field, or constant.
-	typ  types.Type // Resolved type of the command result (set during analysis)
+	parent *Node
+	Args   []Node     // Arguments in lexical order: Identifier, field, or constant.
+	typ    types.Type // Resolved type of the command result (set during analysis)
+	isElse bool       // Whether this is in an else list.
 }
 
-func (t *Tree) newCommand(pos Pos) *CommandNode {
-	return &CommandNode{tr: t, NodeType: NodeCommand, Pos: pos}
+func (c *CommandNode) IsElseList() bool {
+	return c.isElse
 }
 
 func (c *CommandNode) append(arg Node) {
@@ -406,15 +412,11 @@ func (c *CommandNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-func (c *CommandNode) tree() *Tree {
-	return c.tr
-}
-
 func (c *CommandNode) Copy() Node {
 	if c == nil {
 		return c
 	}
-	n := c.tr.newCommand(c.Pos)
+	n := &CommandNode{NodeType: NodeCommand, Pos: c.Pos, parent: c.parent, isElse: c.isElse}
 	for _, c := range c.Args {
 		n.append(c.Copy())
 	}
@@ -425,18 +427,23 @@ func (c *CommandNode) ValueType() types.Type {
 	return c.typ
 }
 
+func (c *CommandNode) Parent() *Node {
+	return c.parent
+}
+
 // IdentifierNode holds an identifier.
 type IdentifierNode struct {
 	NodeType
 	Pos
-	tr    *Tree
-	Ident string     // The identifier's name.
-	typ   types.Type // Resolved type if this is a function return type (set during analysis)
+	tr     *Tree
+	Ident  string     // The identifier's name.
+	typ    types.Type // Resolved type if this is a function return type (set during analysis)
+	parent *Node
+	isElse bool // Whether this is in an else list.
 }
 
-// NewIdentifier returns a new [IdentifierNode] with the given identifier name.
-func NewIdentifier(ident string) *IdentifierNode {
-	return &IdentifierNode{NodeType: NodeIdentifier, Ident: ident}
+func (i *IdentifierNode) IsElseList() bool {
+	return i.isElse
 }
 
 // SetPos sets the position. [NewIdentifier] is a public method so we can't modify its signature.
@@ -444,14 +451,6 @@ func NewIdentifier(ident string) *IdentifierNode {
 // TODO: fix one day?
 func (i *IdentifierNode) SetPos(pos Pos) *IdentifierNode {
 	i.Pos = pos
-	return i
-}
-
-// SetTree sets the parent tree for the node. [NewIdentifier] is a public method so we can't modify its signature.
-// Chained for convenience.
-// TODO: fix one day?
-func (i *IdentifierNode) SetTree(t *Tree) *IdentifierNode {
-	i.tr = t
 	return i
 }
 
@@ -463,14 +462,6 @@ func (i *IdentifierNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(i.String())
 }
 
-func (i *IdentifierNode) tree() *Tree {
-	return i.tr
-}
-
-func (i *IdentifierNode) Copy() Node {
-	return NewIdentifier(i.Ident).SetTree(i.tr).SetPos(i.Pos)
-}
-
 func (i *IdentifierNode) ValueType() types.Type {
 	return i.typ
 }
@@ -480,13 +471,14 @@ func (i *IdentifierNode) ValueType() types.Type {
 type VariableNode struct {
 	NodeType
 	Pos
-	tr    *Tree
-	Ident []string   // Variable name and fields in lexical order.
-	typ   types.Type // Resolved type of the variable (set during analysis)
+	Ident  []string   // Variable name and fields in lexical order.
+	typ    types.Type // Resolved type of the variable (set during analysis)
+	parent *Node
+	isElse bool // Whether this is in an else list.
 }
 
-func (t *Tree) newVariable(pos Pos, ident string) *VariableNode {
-	return &VariableNode{tr: t, NodeType: NodeVariable, Pos: pos, Ident: strings.Split(ident, ".")}
+func (v *VariableNode) IsElseList() bool {
+	return v.isElse
 }
 
 func (v *VariableNode) String() string {
@@ -504,16 +496,17 @@ func (v *VariableNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-func (v *VariableNode) tree() *Tree {
-	return v.tr
+func (v *VariableNode) Parent() *Node {
+	return v.parent
 }
 
 func (v *VariableNode) Copy() Node {
 	return &VariableNode{
-		tr:       v.tr,
+		parent:   v.parent,
 		NodeType: NodeVariable,
 		Pos:      v.Pos,
 		Ident:    append([]string{}, v.Ident...),
+		isElse:   v.isElse,
 	}
 }
 
@@ -525,12 +518,13 @@ func (v *VariableNode) ValueType() types.Type {
 type DotNode struct {
 	NodeType
 	Pos
-	tr  *Tree
-	typ types.Type
+	parent *Node
+	typ    types.Type
+	isElse bool // Whether this is in an else list.
 }
 
-func (t *Tree) newDot(pos Pos) *DotNode {
-	return &DotNode{tr: t, NodeType: NodeDot, Pos: pos}
+func (d *DotNode) IsElseList() bool {
+	return d.isElse
 }
 
 func (d *DotNode) Type() NodeType {
@@ -547,13 +541,12 @@ func (d *DotNode) String() string {
 func (d *DotNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(d.String())
 }
-
-func (d *DotNode) tree() *Tree {
-	return d.tr
+func (d *DotNode) Parent() *Node {
+	return d.parent
 }
 
 func (d *DotNode) Copy() Node {
-	return d.tr.newDot(d.Pos)
+	return &DotNode{NodeType: NodeDot, Pos: d.Pos, parent: d.parent, typ: d.typ, isElse: d.isElse}
 }
 
 func (d *DotNode) ValueType() types.Type {
@@ -564,11 +557,12 @@ func (d *DotNode) ValueType() types.Type {
 type NilNode struct {
 	NodeType
 	Pos
-	tr *Tree
+	parent *Node
+	isElse bool // Whether this is in an else list.
 }
 
-func (t *Tree) newNil(pos Pos) *NilNode {
-	return &NilNode{tr: t, NodeType: NodeNil, Pos: pos}
+func (n *NilNode) IsElseList() bool {
+	return n.isElse
 }
 
 func (n *NilNode) Type() NodeType {
@@ -585,13 +579,12 @@ func (n *NilNode) String() string {
 func (n *NilNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(n.String())
 }
-
-func (n *NilNode) tree() *Tree {
-	return n.tr
+func (n *NilNode) Parent() *Node {
+	return n.parent
 }
 
 func (n *NilNode) Copy() Node {
-	return n.tr.newNil(n.Pos)
+	return &NilNode{NodeType: NodeNil, Pos: n.Pos, parent: n.parent, isElse: n.isElse}
 }
 
 func (n *NilNode) ValueType() types.Type {
@@ -604,18 +597,14 @@ func (n *NilNode) ValueType() types.Type {
 type FieldNode struct {
 	NodeType
 	Pos
-	tr    *Tree
-	Ident []string   // The identifiers in lexical order.
-	typ   types.Type // Resolved type of the final field (set during analysis)
+	parent *Node
+	Ident  []string   // The identifiers in lexical order.
+	typ    types.Type // Resolved type of the final field (set during analysis)
+	isElse bool       // Whether this is in an else list.
 }
 
-func (t *Tree) newField(pos Pos, ident string) *FieldNode {
-	return &FieldNode{
-		tr:       t,
-		NodeType: NodeField,
-		Pos:      pos,
-		Ident:    strings.Split(ident[1:], "."),
-	} // [1:] to drop leading period
+func (f *FieldNode) IsElseList() bool {
+	return f.isElse
 }
 
 func (f *FieldNode) String() string {
@@ -631,17 +620,18 @@ func (f *FieldNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-func (f *FieldNode) tree() *Tree {
-	return f.tr
-}
-
 func (f *FieldNode) Copy() Node {
 	return &FieldNode{
-		tr:       f.tr,
+		parent:   f.parent,
 		NodeType: NodeField,
 		Pos:      f.Pos,
 		Ident:    append([]string{}, f.Ident...),
+		isElse:   f.isElse,
 	}
+}
+
+func (f *FieldNode) Parent() *Node {
+	return f.parent
 }
 
 func (f *FieldNode) ValueType() types.Type {
@@ -654,14 +644,11 @@ func (f *FieldNode) ValueType() types.Type {
 type ChainNode struct {
 	NodeType
 	Pos
-	tr    *Tree
-	Node  Node
-	Field []string   // The identifiers in lexical order.
-	typ   types.Type // Resolved type of the final field in chain (set during analysis)
-}
-
-func (t *Tree) newChain(pos Pos, node Node) *ChainNode {
-	return &ChainNode{tr: t, NodeType: NodeChain, Pos: pos, Node: node}
+	parent *Node
+	Node   Node
+	Field  []string   // The identifiers in lexical order.
+	typ    types.Type // Resolved type of the final field in chain (set during analysis)
+	isElse bool       // Whether this is in an else list.
 }
 
 // Add adds the named field (which should start with a period) to the end of the chain.
@@ -696,17 +683,22 @@ func (c *ChainNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-func (c *ChainNode) tree() *Tree {
-	return c.tr
+func (c *ChainNode) Parent() *Node {
+	return c.parent
+}
+
+func (c *ChainNode) IsElseList() bool {
+	return c.isElse
 }
 
 func (c *ChainNode) Copy() Node {
 	return &ChainNode{
-		tr:       c.tr,
 		NodeType: NodeChain,
 		Pos:      c.Pos,
 		Node:     c.Node,
 		Field:    append([]string{}, c.Field...),
+		parent:   c.parent,
+		isElse:   c.isElse,
 	}
 }
 
@@ -718,12 +710,17 @@ func (c *ChainNode) ValueType() types.Type {
 type BoolNode struct {
 	NodeType
 	Pos
-	tr   *Tree
-	True bool // The value of the boolean constant.
+	parent *Node
+	True   bool // The value of the boolean constant.
+	isElse bool // Whether this is in an else list.
 }
 
-func (t *Tree) newBool(pos Pos, true bool) *BoolNode {
-	return &BoolNode{tr: t, NodeType: NodeBool, Pos: pos, True: true}
+func (b *BoolNode) IsElseList() bool {
+	return b.isElse
+}
+
+func (b *BoolNode) Parent() *Node {
+	return b.parent
 }
 
 func (b *BoolNode) String() string {
@@ -737,12 +734,8 @@ func (b *BoolNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(b.String())
 }
 
-func (b *BoolNode) tree() *Tree {
-	return b.tr
-}
-
 func (b *BoolNode) Copy() Node {
-	return b.tr.newBool(b.Pos, b.True)
+	return &BoolNode{NodeType: NodeBool, Pos: b.Pos, True: b.True, parent: b.parent, isElse: b.isElse}
 }
 
 func (b *BoolNode) ValueType() types.Type {
@@ -755,7 +748,6 @@ func (b *BoolNode) ValueType() types.Type {
 type NumberNode struct {
 	NodeType
 	Pos
-	tr         *Tree
 	IsInt      bool       // Number has an integral value.
 	IsUint     bool       // Number has an unsigned integral value.
 	IsFloat    bool       // Number has a floating-point value.
@@ -765,6 +757,12 @@ type NumberNode struct {
 	Float64    float64    // The floating-point value.
 	Complex128 complex128 // The complex value.
 	Text       string     // The original textual representation from the input.
+	parent     *Node
+	isElse     bool // Whether this is in an else list.
+}
+
+func (n *NumberNode) IsElseList() bool {
+	return n.isElse
 }
 
 func (n *NumberNode) String() string {
@@ -775,14 +773,14 @@ func (n *NumberNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(n.String())
 }
 
-func (n *NumberNode) tree() *Tree {
-	return n.tr
-}
-
 func (n *NumberNode) Copy() Node {
 	nn := new(NumberNode)
 	*nn = *n // Easy, fast, correct.
 	return nn
+}
+
+func (n *NumberNode) Parent() *Node {
+	return n.parent
 }
 
 func (n *NumberNode) ValueType() types.Type {
@@ -806,13 +804,14 @@ func (n *NumberNode) ValueType() types.Type {
 type StringNode struct {
 	NodeType
 	Pos
-	tr     *Tree
 	Quoted string // The original text of the string, with quotes.
 	Text   string // The string, after quote processing.
+	parent *Node
+	isElse bool // Whether this is in an else list.
 }
 
-func (t *Tree) newString(pos Pos, orig, text string) *StringNode {
-	return &StringNode{tr: t, NodeType: NodeString, Pos: pos, Quoted: orig, Text: text}
+func (s *StringNode) IsElseList() bool {
+	return s.isElse
 }
 
 func (s *StringNode) String() string {
@@ -823,12 +822,12 @@ func (s *StringNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(s.String())
 }
 
-func (s *StringNode) tree() *Tree {
-	return s.tr
+func (s *StringNode) Parent() *Node {
+	return s.parent
 }
 
 func (s *StringNode) Copy() Node {
-	return s.tr.newString(s.Pos, s.Quoted, s.Text)
+	return &StringNode{NodeType: NodeString, Pos: s.Pos, Quoted: s.Quoted, Text: s.Text, parent: s.parent, isElse: s.isElse}
 }
 
 func (s *StringNode) ValueType() types.Type {
@@ -839,12 +838,18 @@ func (s *StringNode) ValueType() types.Type {
 type BranchNode struct {
 	NodeType
 	Pos
-	tr       *Tree
 	Line     int        // The line number in the input. Deprecated: Kept for compatibility.
 	Pipe     *PipeNode  // The pipeline to be evaluated.
 	List     *ListNode  // What to execute if the value is non-empty.
 	ElseList *ListNode  // What to execute if the value is empty (nil if absent).
 	typ      types.Type // Resolved type of the pipe output (set during analysis)
+	parent   *Node
+	Vars     map[string]types.Type // Variables available within the branch.
+	isElse   bool                  // Whether this is in an else list.
+}
+
+func (b *BranchNode) IsElseList() bool {
+	return b.isElse
 }
 
 func (b *BranchNode) String() string {
@@ -878,18 +883,18 @@ func (b *BranchNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("{{end}}")
 }
 
-func (b *BranchNode) tree() *Tree {
-	return b.tr
+func (b *BranchNode) Parent() *Node {
+	return b.parent
 }
 
 func (b *BranchNode) Copy() Node {
 	switch b.NodeType {
 	case NodeIf:
-		return b.tr.newIf(b.Pos, b.Line, b.Pipe, b.List, b.ElseList)
+		return &IfNode{BranchNode: BranchNode{NodeType: NodeIf, Pos: b.Pos, Line: b.Line, Pipe: b.Pipe, List: b.List, ElseList: b.ElseList, typ: b.typ, parent: b.parent, isElse: b.isElse}}
 	case NodeRange:
-		return b.tr.newRange(b.Pos, b.Line, b.Pipe, b.List, b.ElseList)
+		return &RangeNode{BranchNode: BranchNode{NodeType: NodeRange, Pos: b.Pos, Line: b.Line, Pipe: b.Pipe, List: b.List, ElseList: b.ElseList, typ: b.typ, parent: b.parent, isElse: b.isElse}}
 	case NodeWith:
-		return b.tr.newWith(b.Pos, b.Line, b.Pipe, b.List, b.ElseList)
+		return &WithNode{BranchNode: BranchNode{NodeType: NodeWith, Pos: b.Pos, Line: b.Line, Pipe: b.Pipe, List: b.List, ElseList: b.ElseList, typ: b.typ, parent: b.parent, isElse: b.isElse}}
 	default:
 		panic("unknown branch type")
 	}
@@ -904,22 +909,8 @@ type IfNode struct {
 	BranchNode
 }
 
-func (t *Tree) newIf(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode) *IfNode {
-	return &IfNode{
-		BranchNode{
-			tr:       t,
-			NodeType: NodeIf,
-			Pos:      pos,
-			Line:     line,
-			Pipe:     pipe,
-			List:     list,
-			ElseList: elseList,
-		},
-	}
-}
-
 func (i *IfNode) Copy() Node {
-	return i.tr.newIf(i.Pos, i.Line, i.Pipe.CopyPipe(), i.List.CopyList(), i.ElseList.CopyList())
+	return &IfNode{BranchNode: BranchNode{NodeType: NodeIf, Pos: i.Pos, Line: i.Line, Pipe: i.Pipe.CopyPipe(), List: i.List.CopyList(), ElseList: i.ElseList.CopyList(), typ: i.typ, parent: i.parent, isElse: i.isElse}}
 }
 
 func (i *IfNode) ValueType() types.Type {
@@ -928,61 +919,47 @@ func (i *IfNode) ValueType() types.Type {
 
 // BreakNode represents a {{break}} action.
 type BreakNode struct {
-	tr *Tree
 	NodeType
 	Pos
-	Line int
+	Line   int
+	parent *Node
+	isElse bool // Whether this is in an else list.
 }
 
-func (t *Tree) newBreak(pos Pos, line int) *BreakNode {
-	return &BreakNode{tr: t, NodeType: NodeBreak, Pos: pos, Line: line}
+func (b *BreakNode) Copy() Node {
+	return &BreakNode{NodeType: NodeBreak, Pos: b.Pos, Line: b.Line, parent: b.parent, isElse: b.isElse}
 }
-
-func (b *BreakNode) Copy() Node                  { return b.tr.newBreak(b.Pos, b.Line) }
 func (b *BreakNode) String() string              { return "{{break}}" }
-func (b *BreakNode) tree() *Tree                 { return b.tr }
+func (b *BreakNode) Parent() *Node               { return b.parent }
 func (b *BreakNode) writeTo(sb *strings.Builder) { sb.WriteString("{{break}}") }
 func (b *BreakNode) ValueType() types.Type       { return nil }
+func (b *BreakNode) IsElseList() bool            { return b.isElse }
 
 // ContinueNode represents a {{continue}} action.
 type ContinueNode struct {
-	tr *Tree
+	parent *Node
 	NodeType
 	Pos
-	Line int
+	Line   int
+	isElse bool // Whether this is in an else list.
 }
 
-func (t *Tree) newContinue(pos Pos, line int) *ContinueNode {
-	return &ContinueNode{tr: t, NodeType: NodeContinue, Pos: pos, Line: line}
+func (c *ContinueNode) Copy() Node {
+	return &ContinueNode{NodeType: NodeContinue, Pos: c.Pos, Line: c.Line, parent: c.parent, isElse: c.isElse}
 }
-
-func (c *ContinueNode) Copy() Node                  { return c.tr.newContinue(c.Pos, c.Line) }
 func (c *ContinueNode) String() string              { return "{{continue}}" }
-func (c *ContinueNode) tree() *Tree                 { return c.tr }
+func (c *ContinueNode) Parent() *Node               { return c.parent }
 func (c *ContinueNode) writeTo(sb *strings.Builder) { sb.WriteString("{{continue}}") }
 func (c *ContinueNode) ValueType() types.Type       { return nil }
+func (c *ContinueNode) IsElseList() bool            { return c.isElse }
 
 // RangeNode represents a {{range}} action and its commands.
 type RangeNode struct {
 	BranchNode
 }
 
-func (t *Tree) newRange(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode) *RangeNode {
-	return &RangeNode{
-		BranchNode{
-			tr:       t,
-			NodeType: NodeRange,
-			Pos:      pos,
-			Line:     line,
-			Pipe:     pipe,
-			List:     list,
-			ElseList: elseList,
-		},
-	}
-}
-
 func (r *RangeNode) Copy() Node {
-	return r.tr.newRange(r.Pos, r.Line, r.Pipe.CopyPipe(), r.List.CopyList(), r.ElseList.CopyList())
+	return &RangeNode{BranchNode: BranchNode{NodeType: NodeRange, Pos: r.Pos, Line: r.Line, Pipe: r.Pipe.CopyPipe(), List: r.List.CopyList(), ElseList: r.ElseList.CopyList(), typ: r.typ, parent: r.parent, isElse: r.isElse}}
 }
 
 func (r *RangeNode) ValueType() types.Type {
@@ -994,22 +971,8 @@ type WithNode struct {
 	BranchNode
 }
 
-func (t *Tree) newWith(pos Pos, line int, pipe *PipeNode, list, elseList *ListNode) *WithNode {
-	return &WithNode{
-		BranchNode{
-			tr:       t,
-			NodeType: NodeWith,
-			Pos:      pos,
-			Line:     line,
-			Pipe:     pipe,
-			List:     list,
-			ElseList: elseList,
-		},
-	}
-}
-
 func (w *WithNode) Copy() Node {
-	return w.tr.newWith(w.Pos, w.Line, w.Pipe.CopyPipe(), w.List.CopyList(), w.ElseList.CopyList())
+	return &WithNode{BranchNode: BranchNode{NodeType: NodeWith, Pos: w.Pos, Line: w.Line, Pipe: w.Pipe.CopyPipe(), List: w.List.CopyList(), ElseList: w.ElseList.CopyList(), typ: w.typ, parent: w.parent, isElse: w.isElse}}
 }
 
 func (w *WithNode) ValueType() types.Type {
@@ -1020,21 +983,15 @@ func (w *WithNode) ValueType() types.Type {
 type TemplateNode struct {
 	NodeType
 	Pos
-	tr   *Tree
-	Line int       // The line number in the input. Deprecated: Kept for compatibility.
-	Name string    // The name of the template (unquoted).
-	Pipe *PipeNode // The command to evaluate as dot for the template.
+	parent *Node
+	Line   int       // The line number in the input. Deprecated: Kept for compatibility.
+	Name   string    // The name of the template (unquoted).
+	Pipe   *PipeNode // The command to evaluate as dot for the template.
+	isElse bool      // Whether this is in an else list.
 }
 
-func (t *Tree) newTemplate(pos Pos, line int, name string, pipe *PipeNode) *TemplateNode {
-	return &TemplateNode{
-		tr:       t,
-		NodeType: NodeTemplate,
-		Pos:      pos,
-		Line:     line,
-		Name:     name,
-		Pipe:     pipe,
-	}
+func (t *TemplateNode) IsElseList() bool {
+	return t.isElse
 }
 
 func (t *TemplateNode) String() string {
@@ -1053,12 +1010,12 @@ func (t *TemplateNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("}}")
 }
 
-func (t *TemplateNode) tree() *Tree {
-	return t.tr
+func (t *TemplateNode) Parent() *Node {
+	return t.parent
 }
 
 func (t *TemplateNode) Copy() Node {
-	return t.tr.newTemplate(t.Pos, t.Line, t.Name, t.Pipe.CopyPipe())
+	return &TemplateNode{NodeType: NodeTemplate, Pos: t.Pos, Line: t.Line, Name: t.Name, Pipe: t.Pipe.CopyPipe(), parent: t.parent, isElse: t.isElse}
 }
 
 func (t *TemplateNode) ValueType() types.Type {
