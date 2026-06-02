@@ -3,11 +3,11 @@ import { after, before } from "mocha";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
-const timeout = 300;
+const waitTime = 300;
 
 suite("Diagnostics Test Suite", () => {
     before(async () => {
-        await new Promise((resolve) => setTimeout(resolve, timeout));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
     });
 
     after(() => {
@@ -21,7 +21,7 @@ suite("Diagnostics Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, timeout));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             const diagnostics = vscode.languages.getDiagnostics(tmplUri);
 
@@ -47,7 +47,7 @@ suite("Diagnostics Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, timeout));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             const diagnostics = vscode.languages.getDiagnostics(tmplUri);
 
@@ -68,7 +68,7 @@ suite("Diagnostics Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, timeout));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             const diagnostics = vscode.languages.getDiagnostics(tmplUri);
 
@@ -94,7 +94,7 @@ suite("Diagnostics Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, timeout));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             const diagnostics = vscode.languages.getDiagnostics(tmplUri);
 
@@ -125,7 +125,7 @@ suite("Diagnostics Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, timeout));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             const diagnostics = vscode.languages.getDiagnostics(tmplUri);
 
@@ -156,7 +156,7 @@ suite("Diagnostics Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, timeout));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             const diagnostics = vscode.languages.getDiagnostics(tmplUri);
 
