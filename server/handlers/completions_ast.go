@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"strings"
 	parse "text-template-parser"
+	servertypes "text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -21,7 +22,7 @@ type Context struct {
 	// used for the previous functions in the pipe to extract the context using Pipe.Cmds
 	Pipe *parse.PipeNode
 	// DotType is the resolved Go type of the current dot (.) object.
-	DotType *LoadedType
+	DotType *servertypes.Tree
 }
 
 type outputKind int
@@ -218,24 +219,24 @@ func pipeOutputType(ctx *Context, isInvoked bool) types.Type {
 	}
 	switch arg := preceding.Args[0].(type) {
 	case *parse.DotNode:
-		return ctx.DotType.Named
+		return ctx.DotType.DotType
 	case *parse.FieldNode:
 		if len(arg.Ident) != 1 {
 			return nil
 		}
 		name := arg.Ident[0]
-		for _, f := range ctx.DotType.Fields {
+		for _, f := range structFields(ctx.DotType.DotType) {
 			if f.Name == name {
 				return f.Type
 			}
 		}
-		for _, m := range ctx.DotType.Methods {
+		for _, m := range namedMethods(ctx.DotType.DotType) {
 			if m.Name == name {
 				return m.ReturnType
 			}
 		}
 	case *parse.IdentifierNode:
-		for _, m := range ctx.DotType.Methods {
+		for _, m := range namedMethods(ctx.DotType.DotType) {
 			if m.Name == arg.Ident {
 				return m.ReturnType
 			}
@@ -370,7 +371,7 @@ func suggest(
 		pipeInputType := pipeOutputType(ctx, isInvoked)
 		inputType := pipeInputType
 		if inputType == nil && kind == outputAny && ctx.DotType != nil {
-			inputType = ctx.DotType.Named
+			inputType = ctx.DotType.DotType
 		}
 		return pipeFilteredItems(kind, inputType, pipeInputType, ctx, wordRange)
 	}
@@ -428,10 +429,10 @@ func dotItem(
 		prefix = "."
 	}
 	if lt := ctx.DotType; lt != nil {
-		items = append(items, fieldCompletionItems(lt.Fields, prefix, wordRange)...)
+		items = append(items, fieldCompletionItems(structFields(lt.DotType), prefix, wordRange)...)
 		items = append(
 			items,
-			methodCompletionItems(lt.Methods, inputType, pipeKind, prefix, wordRange)...)
+			methodCompletionItems(namedMethods(lt.DotType), inputType, pipeKind, prefix, wordRange)...)
 	}
 	return items
 }
@@ -608,7 +609,7 @@ func buildPathBranch(
 }
 
 // resolvePipeDotType derives the dot type for the body of a range or with block.
-func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *LoadedType {
+func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *servertypes.Tree {
 	if ctx.DotType == nil || pipe == nil || len(pipe.Cmds) != 1 {
 		return ctx.DotType
 	}
@@ -622,7 +623,7 @@ func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *L
 	}
 	fieldName := field.Ident[0]
 	var fieldType types.Type
-	for _, f := range ctx.DotType.Fields {
+	for _, f := range structFields(ctx.DotType.DotType) {
 		if f.Name == fieldName {
 			fieldType = f.Type
 			break
@@ -655,12 +656,8 @@ func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *L
 			return ctx.DotType
 		}
 	}
-	return &LoadedType{
-		Pkg:     ctx.DotType.Pkg,
-		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
-	}
+	tree := servertypes.Tree{DotType: named, Pkg: ctx.DotType.Pkg}
+	return &tree
 }
 
 // main traversal logic
