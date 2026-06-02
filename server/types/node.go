@@ -26,7 +26,7 @@ type Node interface {
 	// CopyXxx methods that return *XxxNode.
 	Copy() Node
 	Position() Pos // byte position of start of node in full original input string
-	Parent() *Node
+	Parent() Node
 	// writeTo writes the String output to the builder.
 	writeTo(*strings.Builder)
 	ValueType() types.Type
@@ -85,7 +85,7 @@ const (
 type UndefinedNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Err    error  // the error that caused this node to be produced
 	str    string // original source text
 	isElse bool   // whether this node is an else list
@@ -95,7 +95,7 @@ func (u *UndefinedNode) IsElseList() bool {
 	return u.isElse
 }
 
-func (u *UndefinedNode) Parent() *Node {
+func (u *UndefinedNode) Parent() Node {
 	return u.parent
 }
 
@@ -132,7 +132,7 @@ func (u *UndefinedNode) ValueType() types.Type {
 type ListNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Nodes  []Node          // The element nodes in lexical order.
 	isElse bool            // Whether this is in an else list.
 	vars   []*VariableNode // Variables declared in this list, in appearance order. May be nil.
@@ -150,7 +150,7 @@ func (l *ListNode) append(n Node) {
 	l.Nodes = append(l.Nodes, n)
 }
 
-func (l *ListNode) Parent() *Node {
+func (l *ListNode) Parent() Node {
 	return l.parent
 }
 
@@ -195,7 +195,7 @@ func (l *ListNode) ValueType() types.Type {
 type TextNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Text   []byte // The text; may span newlines.
 	isElse bool   // Whether this is in an else list.
 }
@@ -212,7 +212,7 @@ func (t *TextNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(t.String())
 }
 
-func (t *TextNode) Parent() *Node {
+func (t *TextNode) Parent() Node {
 	return t.parent
 }
 
@@ -228,7 +228,7 @@ func (t *TextNode) ValueType() types.Type {
 type CommentNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Text   string // Comment text.
 	isElse bool   // Whether this is in an else list.
 }
@@ -249,7 +249,7 @@ func (c *CommentNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("}}")
 }
 
-func (c *CommentNode) Parent() *Node {
+func (c *CommentNode) Parent() Node {
 	return c.parent
 }
 
@@ -265,7 +265,7 @@ func (c *CommentNode) ValueType() types.Type {
 type PipeNode struct {
 	NodeType
 	Pos
-	parent   *Node
+	parent   Node
 	Line     int             // The line number in the input. Deprecated: Kept for compatibility.
 	IsAssign bool            // The variables are being assigned, not declared.
 	Decl     []*VariableNode // Variables in lexical order.
@@ -316,7 +316,7 @@ func (p *PipeNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-func (p *PipeNode) Parent() *Node {
+func (p *PipeNode) Parent() Node {
 	return p.parent
 }
 
@@ -350,7 +350,7 @@ func (p *PipeNode) ValueType() types.Type {
 type ActionNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Line   int       // The line number in the input. Deprecated: Kept for compatibility.
 	Pipe   *PipeNode // The pipeline in the action.
 	isElse bool      // Whether this is in an else list.
@@ -372,7 +372,7 @@ func (a *ActionNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("}}")
 }
 
-func (a *ActionNode) Parent() *Node {
+func (a *ActionNode) Parent() Node {
 	return a.parent
 }
 
@@ -388,7 +388,7 @@ func (a *ActionNode) ValueType() types.Type {
 type CommandNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Args   []Node     // Arguments in lexical order: Identifier, field, or constant.
 	typ    types.Type // Resolved type of the command result (set during analysis)
 	isElse bool       // Whether this is in an else list.
@@ -438,7 +438,7 @@ func (c *CommandNode) ValueType() types.Type {
 	return c.typ
 }
 
-func (c *CommandNode) Parent() *Node {
+func (c *CommandNode) Parent() Node {
 	return c.parent
 }
 
@@ -449,8 +449,16 @@ type IdentifierNode struct {
 	tr     *Tree
 	Ident  string     // The identifier's name.
 	typ    types.Type // Resolved type if this is a function return type (set during analysis)
-	parent *Node
+	parent Node
 	isElse bool // Whether this is in an else list.
+}
+
+func (i *IdentifierNode) Parent() Node {
+	return i.parent
+}
+
+func (i *IdentifierNode) Copy() Node {
+	return &IdentifierNode{NodeType: NodeIdentifier, Pos: i.Pos, tr: i.tr, Ident: i.Ident, typ: i.typ, parent: i.parent, isElse: i.isElse}
 }
 
 func (i *IdentifierNode) IsElseList() bool {
@@ -484,7 +492,7 @@ type VariableNode struct {
 	Pos
 	Ident  []string   // Variable name and fields in lexical order.
 	typ    types.Type // Resolved type of the variable (set during analysis)
-	parent *Node
+	parent Node
 	isElse bool // Whether this is in an else list.
 }
 
@@ -507,7 +515,7 @@ func (v *VariableNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-func (v *VariableNode) Parent() *Node {
+func (v *VariableNode) Parent() Node {
 	return v.parent
 }
 
@@ -529,7 +537,7 @@ func (v *VariableNode) ValueType() types.Type {
 type DotNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	typ    types.Type
 	isElse bool // Whether this is in an else list.
 }
@@ -552,7 +560,7 @@ func (d *DotNode) String() string {
 func (d *DotNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(d.String())
 }
-func (d *DotNode) Parent() *Node {
+func (d *DotNode) Parent() Node {
 	return d.parent
 }
 
@@ -568,7 +576,7 @@ func (d *DotNode) ValueType() types.Type {
 type NilNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	isElse bool // Whether this is in an else list.
 }
 
@@ -590,7 +598,7 @@ func (n *NilNode) String() string {
 func (n *NilNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(n.String())
 }
-func (n *NilNode) Parent() *Node {
+func (n *NilNode) Parent() Node {
 	return n.parent
 }
 
@@ -608,7 +616,7 @@ func (n *NilNode) ValueType() types.Type {
 type FieldNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Ident  []string   // The identifiers in lexical order.
 	typ    types.Type // Resolved type of the final field (set during analysis)
 	isElse bool       // Whether this is in an else list.
@@ -641,7 +649,7 @@ func (f *FieldNode) Copy() Node {
 	}
 }
 
-func (f *FieldNode) Parent() *Node {
+func (f *FieldNode) Parent() Node {
 	return f.parent
 }
 
@@ -655,7 +663,7 @@ func (f *FieldNode) ValueType() types.Type {
 type ChainNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Node   Node
 	Field  []string   // The identifiers in lexical order.
 	typ    types.Type // Resolved type of the final field in chain (set during analysis)
@@ -694,7 +702,7 @@ func (c *ChainNode) writeTo(sb *strings.Builder) {
 	}
 }
 
-func (c *ChainNode) Parent() *Node {
+func (c *ChainNode) Parent() Node {
 	return c.parent
 }
 
@@ -721,7 +729,7 @@ func (c *ChainNode) ValueType() types.Type {
 type BoolNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	True   bool // The value of the boolean constant.
 	isElse bool // Whether this is in an else list.
 }
@@ -730,7 +738,7 @@ func (b *BoolNode) IsElseList() bool {
 	return b.isElse
 }
 
-func (b *BoolNode) Parent() *Node {
+func (b *BoolNode) Parent() Node {
 	return b.parent
 }
 
@@ -768,7 +776,7 @@ type NumberNode struct {
 	Float64    float64    // The floating-point value.
 	Complex128 complex128 // The complex value.
 	Text       string     // The original textual representation from the input.
-	parent     *Node
+	parent     Node
 	isElse     bool // Whether this is in an else list.
 }
 
@@ -790,7 +798,7 @@ func (n *NumberNode) Copy() Node {
 	return nn
 }
 
-func (n *NumberNode) Parent() *Node {
+func (n *NumberNode) Parent() Node {
 	return n.parent
 }
 
@@ -817,7 +825,7 @@ type StringNode struct {
 	Pos
 	Quoted string // The original text of the string, with quotes.
 	Text   string // The string, after quote processing.
-	parent *Node
+	parent Node
 	isElse bool // Whether this is in an else list.
 }
 
@@ -833,7 +841,7 @@ func (s *StringNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(s.String())
 }
 
-func (s *StringNode) Parent() *Node {
+func (s *StringNode) Parent() Node {
 	return s.parent
 }
 
@@ -854,7 +862,7 @@ type BranchNode struct {
 	List     *ListNode  // What to execute if the value is non-empty.
 	ElseList *ListNode  // What to execute if the value is empty (nil if absent).
 	typ      types.Type // Resolved type of the pipe output (set during analysis)
-	parent   *Node
+	parent   Node
 	isElse   bool // Whether this is in an else list.
 }
 
@@ -893,7 +901,7 @@ func (b *BranchNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("{{end}}")
 }
 
-func (b *BranchNode) Parent() *Node {
+func (b *BranchNode) Parent() Node {
 	return b.parent
 }
 
@@ -932,7 +940,7 @@ type BreakNode struct {
 	NodeType
 	Pos
 	Line   int
-	parent *Node
+	parent Node
 	isElse bool // Whether this is in an else list.
 }
 
@@ -940,14 +948,14 @@ func (b *BreakNode) Copy() Node {
 	return &BreakNode{NodeType: NodeBreak, Pos: b.Pos, Line: b.Line, parent: b.parent, isElse: b.isElse}
 }
 func (b *BreakNode) String() string              { return "{{break}}" }
-func (b *BreakNode) Parent() *Node               { return b.parent }
+func (b *BreakNode) Parent() Node                { return b.parent }
 func (b *BreakNode) writeTo(sb *strings.Builder) { sb.WriteString("{{break}}") }
 func (b *BreakNode) ValueType() types.Type       { return nil }
 func (b *BreakNode) IsElseList() bool            { return b.isElse }
 
 // ContinueNode represents a {{continue}} action.
 type ContinueNode struct {
-	parent *Node
+	parent Node
 	NodeType
 	Pos
 	Line   int
@@ -958,7 +966,7 @@ func (c *ContinueNode) Copy() Node {
 	return &ContinueNode{NodeType: NodeContinue, Pos: c.Pos, Line: c.Line, parent: c.parent, isElse: c.isElse}
 }
 func (c *ContinueNode) String() string              { return "{{continue}}" }
-func (c *ContinueNode) Parent() *Node               { return c.parent }
+func (c *ContinueNode) Parent() Node                { return c.parent }
 func (c *ContinueNode) writeTo(sb *strings.Builder) { sb.WriteString("{{continue}}") }
 func (c *ContinueNode) ValueType() types.Type       { return nil }
 func (c *ContinueNode) IsElseList() bool            { return c.isElse }
@@ -993,7 +1001,7 @@ func (w *WithNode) ValueType() types.Type {
 type TemplateNode struct {
 	NodeType
 	Pos
-	parent *Node
+	parent Node
 	Line   int       // The line number in the input. Deprecated: Kept for compatibility.
 	Name   string    // The name of the template (unquoted).
 	Pipe   *PipeNode // The command to evaluate as dot for the template.
@@ -1020,7 +1028,7 @@ func (t *TemplateNode) writeTo(sb *strings.Builder) {
 	sb.WriteString("}}")
 }
 
-func (t *TemplateNode) Parent() *Node {
+func (t *TemplateNode) Parent() Node {
 	return t.parent
 }
 
