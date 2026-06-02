@@ -1,4 +1,4 @@
-package mm
+package model
 
 import "fmt"
 
