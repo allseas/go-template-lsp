@@ -135,6 +135,11 @@ type ListNode struct {
 	parent *Node
 	Nodes  []Node // The element nodes in lexical order.
 	isElse bool   // Whether this is in an else list.
+	vars   map[string]*VariableNode
+}
+
+func (l *ListNode) Vars() map[string]*VariableNode {
+	return l.vars
 }
 
 func (l *ListNode) IsElseList() bool {
@@ -165,9 +170,15 @@ func (l *ListNode) CopyList() *ListNode {
 	if l == nil {
 		return l
 	}
-	n := &ListNode{NodeType: NodeList, Pos: l.Pos, parent: l.parent}
+	n := &ListNode{NodeType: NodeList, Pos: l.Pos, parent: l.parent, isElse: l.isElse}
 	for _, elem := range l.Nodes {
 		n.append(elem.Copy())
+	}
+	if l.vars != nil {
+		n.vars = make(map[string]*VariableNode, len(l.vars))
+		for k, v := range l.vars {
+			n.vars[k] = v.Copy().(*VariableNode)
+		}
 	}
 	return n
 }
@@ -844,8 +855,7 @@ type BranchNode struct {
 	ElseList *ListNode  // What to execute if the value is empty (nil if absent).
 	typ      types.Type // Resolved type of the pipe output (set during analysis)
 	parent   *Node
-	Vars     map[string]types.Type // Variables available within the branch.
-	isElse   bool                  // Whether this is in an else list.
+	isElse   bool // Whether this is in an else list.
 }
 
 func (b *BranchNode) IsElseList() bool {
