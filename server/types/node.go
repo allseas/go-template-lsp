@@ -133,12 +133,12 @@ type ListNode struct {
 	NodeType
 	Pos
 	parent *Node
-	Nodes  []Node // The element nodes in lexical order.
-	isElse bool   // Whether this is in an else list.
-	vars   map[string]*VariableNode
+	Nodes  []Node          // The element nodes in lexical order.
+	isElse bool            // Whether this is in an else list.
+	vars   []*VariableNode // Variables declared in this list, in appearance order. May be nil.
 }
 
-func (l *ListNode) Vars() map[string]*VariableNode {
+func (l *ListNode) Vars() []*VariableNode {
 	return l.vars
 }
 
@@ -175,9 +175,9 @@ func (l *ListNode) CopyList() *ListNode {
 		n.append(elem.Copy())
 	}
 	if l.vars != nil {
-		n.vars = make(map[string]*VariableNode, len(l.vars))
-		for k, v := range l.vars {
-			n.vars[k] = v.Copy().(*VariableNode)
+		n.vars = make([]*VariableNode, len(l.vars))
+		for i, v := range l.vars {
+			n.vars[i] = v.Copy().(*VariableNode)
 		}
 	}
 	return n
