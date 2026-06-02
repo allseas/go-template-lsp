@@ -217,6 +217,9 @@ func walkAndAnalyze(
 	if node == nil || visited[node] {
 		return nil
 	}
+	if ctx == nil {
+		ctx = &Context{Vars: make(map[string]parse.Node)}
+	}
 	visited[node] = true
 	defer delete(visited, node)
 
@@ -232,8 +235,11 @@ func walkAndAnalyze(
 			diagnostics = append(diagnostics, walkAndAnalyze(n.Pipe, text, ctx, visited, fn)...)
 		}
 	case *parse.PipeNode:
+		if ctx.Vars == nil {
+			ctx.Vars = make(map[string]parse.Node)
+		}
 		for _, v := range n.Decl {
-			if len(v.Ident) > 0 {
+			if v != nil && len(v.Ident) > 0 {
 				ctx.Vars[v.Ident[0]] = n
 			}
 		}
@@ -249,13 +255,20 @@ func walkAndAnalyze(
 		}
 	case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
 		pipe, list, elseList := extractBranchNodes(n)
+		if ctx.Vars == nil {
+			ctx.Vars = make(map[string]parse.Node)
+		}
 		snapshot := snapshotVars(ctx.Vars)
 		if pipe != nil {
 			diagnostics = append(diagnostics, walkAndAnalyze(pipe, text, ctx, visited, fn)...)
 		}
-		diagnostics = append(diagnostics, walkAndAnalyze(list, text, ctx, visited, fn)...)
+		if list != nil {
+			diagnostics = append(diagnostics, walkAndAnalyze(list, text, ctx, visited, fn)...)
+		}
 		ctx.Vars = snapshot
-		diagnostics = append(diagnostics, walkAndAnalyze(elseList, text, ctx, visited, fn)...)
+		if elseList != nil {
+			diagnostics = append(diagnostics, walkAndAnalyze(elseList, text, ctx, visited, fn)...)
+		}
 		ctx.Vars = snapshot
 	}
 

@@ -178,6 +178,22 @@ func TestCollectDiagnostics_MalformedMatch(t *testing.T) {
 	})
 }
 
+func TestCollectDiagnostics_MalformedVariable(t *testing.T) {
+	// Test for issue: malformed variable syntax like {{ $????? should not panic
+	text := `SELECT
+{{- if .Columns }}
+	{{- range $i, $col := .Columns }}
+		{{- if gt $i 0 }}, {{ end }}{{ $col }}
+		{{ $?????
+	{{- end }}
+{{- else }}
+	*
+{{- end }}`
+	assert.NotPanics(t, func() {
+		collectDiagnostics(text, "file:///test.sql.tmpl")
+	})
+}
+
 func TestPublishDiagnostics_NilContext(t *testing.T) {
 	assert.NotPanics(t, func() {
 		publishDiagnostics(nil, "file:///test.tmpl", "{{ .Name }}")
