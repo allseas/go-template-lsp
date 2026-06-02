@@ -136,6 +136,7 @@ type ListNode struct {
 	Nodes  []Node          // The element nodes in lexical order.
 	isElse bool            // Whether this is in an else list.
 	vars   []*VariableNode // Variables declared in this list, in appearance order. May be nil.
+	typ    types.Type      // Resolved type of the dot in this list (set during analysis)
 }
 
 func (l *ListNode) Vars() []*VariableNode {
@@ -188,7 +189,7 @@ func (l *ListNode) Copy() Node {
 }
 
 func (l *ListNode) ValueType() types.Type {
-	return nil
+	return l.typ
 }
 
 // TextNode holds plain text.
