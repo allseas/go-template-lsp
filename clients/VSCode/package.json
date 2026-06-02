@@ -24,7 +24,7 @@
         "lint:check": "npx eslint .",
         "format:fix": "npx prettier --write .",
         "format:check": "npx prettier --check .",
-        "test": "npm run compile && ts-node --esm ../../scripts/build-server-binaries.ts --vscode && shx mkdir -p out/server/bin && shx cp ../../dist/server/* out/server/bin/ && vscode-test",
+        "test": "npm run compile && ts-node --esm ../../scripts/build-server-binaries.ts && shx mkdir -p out/server/bin && shx cp ../../dist/server/* out/server/bin/ && vscode-test",
         "verify": "npm run lint:check && npm run format:check && npm test",
         "package": "npm run verify && node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../",
         "package:no-verify": "node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../"
