@@ -147,11 +147,11 @@ func TestCollectDiagnostics_InvalidTokens(t *testing.T) {
 	diags = collectDiagnostics(text, "file:///test.tmpl")
 	require.NotEmpty(t, diags)
 
-	diag, ok = findDiagnosticContaining(diags, "undefined")
+	diag, ok = findDiagnosticContaining(diags, "unexpected")
 	require.True(
 		t,
 		ok,
-		"expected undefined or syntax error diagnostic, got: %v",
+		"expected syntax error diagnostic, got: %v",
 		diagMessages(diags),
 	)
 
@@ -280,7 +280,7 @@ func TestCheckPipeUsage(t *testing.T) {
 	pipeUndef := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdUndef}}
 	diags := checkPipeUsage(pipeUndef, "{{ $undef }}", ctx)
 	require.Len(t, diags, 1)
-	assert.Contains(t, diags[0].Message, "undefined variable: $undef")
+	assert.Contains(t, diags[0].Message, "undeclared variable: $undef")
 }
 
 func TestDeclareNode(t *testing.T) {
@@ -366,7 +366,7 @@ func TestAnalyzeNode_PipeWrappers(t *testing.T) {
 	for _, tc := range tests {
 		diags := analyzeNode(tc.node, tc.text, ctx)
 		require.Len(t, diags, 1, tc.name)
-		assert.Contains(t, diags[0].Message, "undefined variable: $undef", tc.name)
+		assert.Contains(t, diags[0].Message, "undeclared variable: $undef", tc.name)
 	}
 }
 

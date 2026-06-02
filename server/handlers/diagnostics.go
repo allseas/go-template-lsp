@@ -9,8 +9,6 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-var undefinedVariableMessage = "undefined variable: "
-
 // publishDiagnostics analyzes the document and sends diagnostics to the client.
 func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	if ctx == nil {
@@ -69,19 +67,15 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 
 	switch n := node.(type) {
 	case *parse.UndefinedNode:
-		name := strings.TrimSpace(n.String())
+		if n.Err == nil && strings.TrimSpace(n.String()) == "" {
+			// Structural artifact with no attached error: skip.
+			break
+		}
 		var msg string
-		if name != "" {
-			// Real error token: bad character, unexpected token, etc.
-			msg = undefinedVariableMessage + name
-		} else if n.Err != nil && strings.Contains(n.Err.Error(), "missing value") {
-			// checkPipeline inserts an empty-str node when a pipeline has no
-			// commands (e.g. {{ }} or {{ $x := }}).
+		if n.Err != nil {
 			msg = n.Err.Error()
 		} else {
-			// Recovery marker: itemList creates an empty-str UndefinedNode when it
-			// stops due to EOF or a lex error. These are structural artifacts, so skip.
-			break
+			msg = msgParseError(text, int(n.Position()), strings.TrimSpace(n.String()))
 		}
 		diagnostics = append(diagnostics, protocol.Diagnostic{
 			Range:    expandToFullBracketsFromOffset(int(n.Position()), text),
@@ -114,10 +108,11 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 			if identNode, ok := n.Args[0].(*parse.IdentifierNode); ok {
 				funcName := identNode.Ident
 				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
+				offset := int(identNode.Position())
 				if _, exists := builtinOutput[funcName]; !exists {
 					diagnostics = append(diagnostics, protocol.Diagnostic{
 						Range:    rng,
-						Message:  "unsupported function or unregistered command: " + funcName,
+						Message:  msgUnknownFunction(text, offset, funcName),
 						Severity: new(protocol.DiagnosticSeverityError),
 					})
 				} else if currentKind := pipeOutputKind(ctx, false); currentKind != outputAny && currentKind != outputUntyped {
@@ -131,7 +126,7 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 					if !isMatch {
 						diagnostics = append(diagnostics, protocol.Diagnostic{
 							Range:    rng,
-							Message:  "type mismatch: function '" + funcName + "' does not accept piped data of this output kind",
+							Message:  msgTypeMismatch(text, offset, funcName),
 							Severity: new(protocol.DiagnosticSeverityError),
 						})
 					}
@@ -188,7 +183,7 @@ func collectDeclarations(
 			if ctx.Vars[ident] != nil && !pipe.IsAssign {
 				diagnostics = append(diagnostics, protocol.Diagnostic{
 					Range:    nodeToRange(decl, text),
-					Message:  "duplicate variable declaration: " + ident,
+					Message:  msgDuplicateDeclaration(text, int(decl.Position()), ident),
 					Severity: new(protocol.DiagnosticSeverityWarning),
 				})
 				continue
@@ -224,7 +219,7 @@ func checkPipeUsage(
 				if name := vnode.Ident[0]; name != "" && name != "$" && ctx.Vars[name] == nil {
 					diagnostics = append(diagnostics, protocol.Diagnostic{
 						Range:    nodeToRange(vnode, text),
-						Message:  undefinedVariableMessage + name,
+						Message:  msgUndeclaredVariable(text, int(vnode.Position()), name),
 						Severity: new(protocol.DiagnosticSeverityError),
 					})
 				}
