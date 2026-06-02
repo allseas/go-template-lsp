@@ -462,6 +462,22 @@ func TestAnalyzeNode_UndefinedNodeEmptyName(t *testing.T) {
 	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
 	undefNode := &parse.UndefinedNode{}
 	diags := analyzeNode(undefNode, "{{ }}", ctx)
+	assert.Empty(t, diags)
+}
+
+func TestCollectDiagnostics_EmptyAction(t *testing.T) {
+	text := `{{ }}`
+	diags := collectDiagnostics(text, "file:///test.tmpl")
 	require.Len(t, diags, 1)
-	assert.Equal(t, "undefined node", diags[0].Message)
+	assert.Contains(t, diags[0].Message, "missing value")
+	// Range should cover the full {{ }} action.
+	assert.Equal(t, u32(0), diags[0].Range.Start.Character)
+	assert.Equal(t, u32(len(text)), diags[0].Range.End.Character)
+}
+
+func TestDiagnostics_OnlyDollar(t *testing.T) {
+	text := `{{ $ }}`
+	diags := collectDiagnostics(text, "file:///test.tmpl")
+
+	assert.Empty(t, diags)
 }

@@ -25,6 +25,12 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 			diagnostics[i].Message = "unknown diagnostic"
 		}
 	}
+
+	log.Debug().
+		Int("num diagnostics", len(diagnostics)).
+		Any("diagnostics", diagnostics).
+		Msg("publishDiagnostics")
+
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, &protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,
@@ -64,9 +70,18 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 	switch n := node.(type) {
 	case *parse.UndefinedNode:
 		name := strings.TrimSpace(n.String())
-		msg := undefinedVariableMessage + name
-		if name == "" {
-			msg = "undefined node"
+		var msg string
+		if name != "" {
+			// Real error token: bad character, unexpected token, etc.
+			msg = undefinedVariableMessage + name
+		} else if n.Err != nil && strings.Contains(n.Err.Error(), "missing value") {
+			// checkPipeline inserts an empty-str node when a pipeline has no
+			// commands (e.g. {{ }} or {{ $x := }}).
+			msg = n.Err.Error()
+		} else {
+			// Recovery marker: itemList creates an empty-str UndefinedNode when it
+			// stops due to EOF or a lex error. These are structural artifacts, so skip.
+			break
 		}
 		diagnostics = append(diagnostics, protocol.Diagnostic{
 			Range:    expandToFullBracketsFromOffset(int(n.Position()), text),
