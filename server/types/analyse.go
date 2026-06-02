@@ -24,7 +24,7 @@ type Tree struct {
 }
 
 // NewTree creates a typed tree from a parse tree, optionally with type information.
-func NewTree(parseTree parse.Tree, funcs []map[string]*types.Func) Tree {
+func NewTree(parseTree parse.Tree, funcs []map[string]*types.Func, dotType types.Type) Tree {
 	typeTree := Tree{
 		Name:      parseTree.Name,
 		ParseName: parseTree.ParseName,
@@ -33,7 +33,18 @@ func NewTree(parseTree parse.Tree, funcs []map[string]*types.Func) Tree {
 	}
 
 	if parseTree.Root != nil {
-		typeTree.Root = analyseList(parseTree.Root, &analysisCtx{funcs: funcs})
+		typeTree.Root = analyseList(parseTree.Root, nil, &analysisCtx{
+			funcs:   funcs,
+			dotType: dotType,
+			vars: []*VariableNode{
+				{
+					Pos:      0,
+					NodeType: NodeVariable,
+					Ident:    []string{"$"},
+					typ:      dotType,
+				},
+			},
+		})
 	}
 
 	return typeTree
@@ -50,7 +61,7 @@ func NewTreeWithType(
 	dotType *types.Named,
 	pkg *types.Package,
 ) Tree {
-	typeTree := NewTree(parseTree, funcs)
+	typeTree := NewTree(parseTree, funcs, dotType)
 	typeTree.DotType = dotType
 	typeTree.Pkg = pkg
 
@@ -64,7 +75,7 @@ func NewTreeWithType(
 
 // analyseList converts a parse ListNode to a typed ListNode.
 // ctx contains type information that flows through the analysis.
-func analyseList(listNode *parse.ListNode, ctx *analysisCtx) *ListNode {
+func analyseList(listNode *parse.ListNode, parent Node, ctx *analysisCtx) *ListNode {
 	if listNode == nil {
 		return nil
 	}
@@ -73,177 +84,84 @@ func analyseList(listNode *parse.ListNode, ctx *analysisCtx) *ListNode {
 		NodeType: NodeList,
 		Pos:      Pos(listNode.Position()),
 		Nodes:    make([]Node, len(listNode.Nodes)),
+		parent:   parent,
+		vars:     ctx.vars,
 	}
 
 	for i, node := range listNode.Nodes {
-		typeList.Nodes[i] = analyseNode(node, ctx)
+		typeList.Nodes[i] = analyseNode(node, typeList, ctx)
 	}
 
 	return typeList
 }
 
 // analyseNode converts a parse Node to a typed Node.
-func analyseNode(node parse.Node, ctx *analysisCtx) Node {
+func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 	if node == nil {
 		return nil
 	}
 
 	switch n := node.(type) {
 	case *parse.ListNode:
-		return analyseList(n, ctx)
+		return analyseList(n, parent, ctx)
 
 	case *parse.TextNode:
-		return &TextNode{
-			NodeType: NodeText,
-			Pos:      Pos(n.Position()),
-			Text:     n.Text,
-		}
+		return analyseText(n, parent)
 
 	case *parse.ActionNode:
-		return &ActionNode{
-			NodeType: NodeAction,
-			Pos:      Pos(n.Position()),
-			Line:     n.Line,
-			Pipe:     analysePipe(n.Pipe, ctx),
-		}
+
+		return analyseAction(n, parent, ctx)
 
 	case *parse.CommandNode:
-		return analyseCommand(n, ctx)
+		return analyseCommand(n, parent, ctx)
 
 	case *parse.FieldNode:
-		return &FieldNode{
-			NodeType: NodeField,
-			Pos:      Pos(n.Position()),
-			Ident:    n.Ident,
-			// TODO: add typ logic here
-		}
+		return analyseField(n, parent, ctx)
 
 	case *parse.VariableNode:
-		return &VariableNode{
-			NodeType: NodeVariable,
-			Pos:      Pos(n.Position()),
-			Ident:    n.Ident,
-			// TODO: add typ logic here
-		}
+		return analyseVariable(n, parent, ctx)
 
 	case *parse.IdentifierNode:
-		return NewIdentifier(n.Ident).SetPos(Pos(n.Position()))
+		return analyseIdentifier(n, parent, ctx)
 
 	case *parse.ChainNode:
-		return &ChainNode{
-			NodeType: NodeChain,
-			Pos:      Pos(n.Position()),
-			Node:     analyseNode(n.Node, ctx),
-			Field:    n.Field,
-		}
+		return analyseChain(n, parent, ctx)
 
 	case *parse.DotNode:
-		return &DotNode{
-			NodeType: NodeDot,
-			Pos:      Pos(n.Position()),
-		}
+		return analyseDot(n, parent, ctx)
 
 	case *parse.NilNode:
-		return &NilNode{
-			NodeType: NodeNil,
-			Pos:      Pos(n.Position()),
-		}
+		return analyseNil(n, parent, ctx)
 
 	case *parse.BoolNode:
-		return &BoolNode{
-			NodeType: NodeBool,
-			Pos:      Pos(n.Position()),
-			True:     n.True,
-		}
+		return analyseBool(n, parent, ctx)
 
 	case *parse.NumberNode:
-		return &NumberNode{
-			NodeType:   NodeNumber,
-			Pos:        Pos(n.Position()),
-			IsInt:      n.IsInt,
-			IsUint:     n.IsUint,
-			IsFloat:    n.IsFloat,
-			IsComplex:  n.IsComplex,
-			Int64:      n.Int64,
-			Uint64:     n.Uint64,
-			Float64:    n.Float64,
-			Complex128: n.Complex128,
-			Text:       n.Text,
-		}
+		return analyseNumber(n, parent, ctx)
 
 	case *parse.StringNode:
-		return &StringNode{
-			NodeType: NodeString,
-			Pos:      Pos(n.Position()),
-			Quoted:   n.Quoted,
-			Text:     n.Text,
-		}
+		return analyseString(n, parent, ctx)
 
 	case *parse.CommentNode:
-		return &CommentNode{
-			NodeType: NodeComment,
-			Pos:      Pos(n.Position()),
-			Text:     n.Text,
-		}
+		return analyseComment(n, parent, ctx)
 
 	case *parse.IfNode:
-		return &IfNode{
-			BranchNode{
-				NodeType: NodeIf,
-				Pos:      Pos(n.Position()),
-				Line:     n.Line,
-				Pipe:     analysePipe(n.Pipe, ctx),
-				List:     analyseList(n.List, ctx),
-				ElseList: analyseList(n.ElseList, ctx),
-			},
-		}
+		return analyseIf(n, parent, ctx)
 
 	case *parse.RangeNode:
-		return &RangeNode{
-			BranchNode{
-				NodeType: NodeRange,
-				Pos:      Pos(n.Position()),
-				Line:     n.Line,
-				Pipe:     analysePipe(n.Pipe, ctx),
-				List:     analyseList(n.List, ctx),
-				ElseList: analyseList(n.ElseList, ctx),
-			},
-		}
+		return analyseRange(n, parent, ctx)
 
 	case *parse.WithNode:
-		return &WithNode{
-			BranchNode{
-				NodeType: NodeWith,
-				Pos:      Pos(n.Position()),
-				Line:     n.Line,
-				Pipe:     analysePipe(n.Pipe, ctx),
-				List:     analyseList(n.List, ctx),
-				ElseList: analyseList(n.ElseList, ctx),
-			},
-		}
+		return analyseWith(n, parent, ctx)
 
 	case *parse.TemplateNode:
-		return &TemplateNode{
-			NodeType: NodeTemplate,
-			Pos:      Pos(n.Position()),
-			Line:     n.Line,
-			Name:     n.Name,
-			Pipe:     analysePipe(n.Pipe, ctx),
-		}
+		return analyseTemplate(n, parent, ctx)
 
 	case *parse.BreakNode:
-		return &BreakNode{
-			NodeType: NodeBreak,
-			Pos:      Pos(n.Position()),
-			Line:     n.Line,
-		}
+		return analyseBreak(n, parent, ctx)
 
 	case *parse.ContinueNode:
-		return &ContinueNode{
-			NodeType: NodeContinue,
-			Pos:      Pos(n.Position()),
-			Line:     n.Line,
-		}
+		return analyseContinue(n, parent, ctx)
 
 	default:
 		// Unknown node type
@@ -251,8 +169,196 @@ func analyseNode(node parse.Node, ctx *analysisCtx) Node {
 	}
 }
 
+func analyseContinue(n *parse.ContinueNode, parent Node, ctx *analysisCtx) Node {
+	return &ContinueNode{
+		NodeType: NodeContinue,
+		Pos:      Pos(n.Position()),
+		Line:     n.Line,
+		parent:   parent,
+	}
+}
+
+func analyseBreak(n *parse.BreakNode, parent Node, ctx *analysisCtx) Node {
+	return &BreakNode{
+		NodeType: NodeBreak,
+		Pos:      Pos(n.Position()),
+		Line:     n.Line,
+		parent:   parent,
+	}
+}
+
+func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node {
+	return &TemplateNode{
+		NodeType: NodeTemplate,
+		Pos:      Pos(n.Position()),
+		Line:     n.Line,
+		Name:     n.Name,
+		Pipe:     analysePipe(n.Pipe, parent, ctx),
+		parent:   parent,
+	}
+}
+
+func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
+	return &WithNode{
+		BranchNode{
+			NodeType: NodeWith,
+			Pos:      Pos(n.Position()),
+			Line:     n.Line,
+			Pipe:     analysePipe(n.Pipe, parent, ctx),
+			List:     analyseList(n.List, parent, ctx),
+			ElseList: analyseList(n.ElseList, parent, ctx),
+		},
+	}
+}
+
+func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
+	return &RangeNode{
+		BranchNode{
+			NodeType: NodeRange,
+			Pos:      Pos(n.Position()),
+			Line:     n.Line,
+			Pipe:     analysePipe(n.Pipe, parent, ctx),
+			List:     analyseList(n.List, parent, ctx),
+			ElseList: analyseList(n.ElseList, parent, ctx),
+		},
+	}
+}
+
+func analyseIf(n *parse.IfNode, parent Node, ctx *analysisCtx) Node {
+	return &IfNode{
+		BranchNode{
+			NodeType: NodeIf,
+			Pos:      Pos(n.Position()),
+			Line:     n.Line,
+			Pipe:     analysePipe(n.Pipe, parent, ctx),
+			List:     analyseList(n.List, parent, ctx),
+			ElseList: analyseList(n.ElseList, parent, ctx),
+		},
+	}
+}
+
+func analyseComment(n *parse.CommentNode, parent Node, ctx *analysisCtx) Node {
+	return &CommentNode{
+		NodeType: NodeComment,
+		Pos:      Pos(n.Position()),
+		Text:     n.Text,
+		parent:   parent,
+	}
+}
+
+func analyseString(n *parse.StringNode, parent Node, ctx *analysisCtx) Node {
+	return &StringNode{
+		NodeType: NodeString,
+		Pos:      Pos(n.Position()),
+		Quoted:   n.Quoted,
+		Text:     n.Text,
+		parent:   parent,
+	}
+}
+
+func analyseNumber(n *parse.NumberNode, parent Node, ctx *analysisCtx) Node {
+	return &NumberNode{
+		NodeType:   NodeNumber,
+		Pos:        Pos(n.Position()),
+		IsInt:      n.IsInt,
+		IsUint:     n.IsUint,
+		IsFloat:    n.IsFloat,
+		IsComplex:  n.IsComplex,
+		Int64:      n.Int64,
+		Uint64:     n.Uint64,
+		Float64:    n.Float64,
+		Complex128: n.Complex128,
+		Text:       n.Text,
+		parent:     parent,
+	}
+}
+
+func analyseBool(n *parse.BoolNode, parent Node, _ *analysisCtx) Node {
+	return &BoolNode{
+		NodeType: NodeBool,
+		Pos:      Pos(n.Position()),
+		True:     n.True,
+		parent:   parent,
+	}
+}
+
+func analyseNil(n *parse.NilNode, parent Node, _ *analysisCtx) Node {
+	return &NilNode{
+		NodeType: NodeNil,
+		Pos:      Pos(n.Position()),
+		parent:   parent,
+	}
+}
+
+func analyseDot(n *parse.DotNode, parent Node, ctx *analysisCtx) Node {
+	return &DotNode{
+		NodeType: NodeDot,
+		Pos:      Pos(n.Position()),
+		parent:   parent,
+	}
+}
+
+func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
+	return &ChainNode{
+		NodeType: NodeChain,
+		Pos:      Pos(n.Position()),
+		Node:     analyseNode(n.Node, parent, ctx),
+		Field:    n.Field,
+		parent:   parent,
+	}
+}
+
+func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
+	return &IdentifierNode{
+		NodeType: NodeIdentifier,
+		Pos:      Pos(n.Position()),
+		Ident:    n.Ident,
+		parent:   parent,
+	}
+}
+
+func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) Node {
+	return &VariableNode{
+		NodeType: NodeVariable,
+		Pos:      Pos(n.Position()),
+		Ident:    n.Ident,
+		parent:   parent,
+		// TODO: add typ logic here
+	}
+}
+
+func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
+	return &FieldNode{
+		NodeType: NodeField,
+		Pos:      Pos(n.Position()),
+		Ident:    n.Ident,
+		parent:   parent,
+		// TODO: add typ logic here
+	}
+}
+
+func analyseAction(n *parse.ActionNode, parent Node, ctx *analysisCtx) Node {
+	action := &ActionNode{
+		NodeType: NodeAction,
+		Pos:      Pos(n.Position()),
+		Line:     n.Line,
+		parent:   parent,
+	}
+	action.Pipe = analysePipe(n.Pipe, action, ctx)
+	return action
+}
+
+func analyseText(n *parse.TextNode, parent Node) *TextNode {
+	return &TextNode{
+		NodeType: NodeText,
+		Pos:      Pos(n.Position()),
+		Text:     n.Text,
+		parent:   parent,
+	}
+}
+
 // analysePipe converts a parse PipeNode to a typed PipeNode.
-func analysePipe(pipeNode *parse.PipeNode, ctx *analysisCtx) *PipeNode {
+func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeNode {
 	if pipeNode == nil {
 		return nil
 	}
@@ -266,18 +372,9 @@ func analysePipe(pipeNode *parse.PipeNode, ctx *analysisCtx) *PipeNode {
 		Cmds:     make([]*CommandNode, len(pipeNode.Cmds)),
 	}
 
-	// Convert declarations
-	for i, decl := range pipeNode.Decl {
-		typePipe.Decl[i] = &VariableNode{
-			NodeType: NodeVariable,
-			Pos:      Pos(decl.Position()),
-			Ident:    decl.Ident,
-		}
-	}
-
 	// Convert commands
 	for i, cmd := range pipeNode.Cmds {
-		typePipe.Cmds[i] = analyseCommand(cmd, ctx)
+		typePipe.Cmds[i] = analyseCommand(cmd, typePipe, ctx)
 	}
 
 	// The type of the pipe is literal
@@ -295,13 +392,21 @@ func analysePipe(pipeNode *parse.PipeNode, ctx *analysisCtx) *PipeNode {
 		typePipe.typ = types.Typ[types.Invalid]
 	}
 
+	// Convert declarations
+	for i, decl := range pipeNode.Decl {
+		typePipe.Decl[i] = &VariableNode{
+			NodeType: NodeVariable,
+			Pos:      Pos(decl.Position()),
+			Ident:    decl.Ident,
+		}
+	}
 	//TODO: update vars
 
 	return typePipe
 }
 
 // analyseCommand converts a parse CommandNode to a typed CommandNode.
-func analyseCommand(cmdNode *parse.CommandNode, ctx *analysisCtx) *CommandNode {
+func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx) *CommandNode {
 	if cmdNode == nil {
 		return nil
 	}
@@ -313,7 +418,7 @@ func analyseCommand(cmdNode *parse.CommandNode, ctx *analysisCtx) *CommandNode {
 	}
 
 	for i, arg := range cmdNode.Args {
-		typeCmd.Args[i] = analyseNode(arg, ctx)
+		typeCmd.Args[i] = analyseNode(arg, typeCmd, ctx)
 	}
 
 	resultType := getNodeType(typeCmd.Args[0])
@@ -358,9 +463,9 @@ func getNodeType(node Node) types.Type {
 type analysisCtx struct {
 	// Future: Add fields for tracking type information during analysis
 	// For example:
-	varTypes map[string]types.Type    // Type of each variable in scope
-	dotType  types.Type               // Current dot context type
-	funcs    []map[string]*types.Func // Available functions with their signatures
+	vars    []*VariableNode          // Type of each variable in scope
+	dotType types.Type               // Current dot context type
+	funcs   []map[string]*types.Func // Available functions with their signatures
 }
 
 // resolveCtx carries context for resolving types on nodes.
