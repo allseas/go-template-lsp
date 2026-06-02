@@ -9,6 +9,28 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+func createDiagnostic(
+	msg string,
+	rang protocol.Range,
+	isError bool,
+) (diagnostic protocol.Diagnostic) {
+	sev := new(protocol.DiagnosticSeverityError)
+	if !isError {
+		sev = new(protocol.DiagnosticSeverityWarning)
+	}
+
+	source := "text-template-support"
+
+	diagnostic = protocol.Diagnostic{
+		Range:    rang,
+		Message:  msg,
+		Severity: sev,
+		Source:   &source,
+	}
+
+	return
+}
+
 // publishDiagnostics analyzes the document and sends diagnostics to the client.
 func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	if ctx == nil {
@@ -77,11 +99,10 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 		} else {
 			msg = msgParseError(text, int(n.Position()), strings.TrimSpace(n.String()))
 		}
-		diagnostics = append(diagnostics, protocol.Diagnostic{
-			Range:    expandToFullBracketsFromOffset(int(n.Position()), text),
-			Message:  msg,
-			Severity: new(protocol.DiagnosticSeverityError),
-		})
+		diagnostics = append(
+			diagnostics,
+			createDiagnostic(msg, expandToFullBracketsFromOffset(int(n.Position()), text), true),
+		)
 
 	case *parse.ActionNode:
 		if n.Pipe != nil {
@@ -110,11 +131,10 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
 				offset := int(identNode.Position())
 				if _, exists := builtinOutput[funcName]; !exists {
-					diagnostics = append(diagnostics, protocol.Diagnostic{
-						Range:    rng,
-						Message:  msgUnknownFunction(text, offset, funcName),
-						Severity: new(protocol.DiagnosticSeverityError),
-					})
+					diagnostics = append(
+						diagnostics,
+						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
+					)
 				} else if currentKind := pipeOutputKind(ctx, false); currentKind != outputAny && currentKind != outputUntyped {
 					isMatch := false
 					for _, allowed := range functionsAccepting[currentKind] {
@@ -124,11 +144,10 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 						}
 					}
 					if !isMatch {
-						diagnostics = append(diagnostics, protocol.Diagnostic{
-							Range:    rng,
-							Message:  msgTypeMismatch(text, offset, funcName),
-							Severity: new(protocol.DiagnosticSeverityError),
-						})
+						diagnostics = append(
+							diagnostics,
+							createDiagnostic(msgTypeMismatch(text, offset, funcName), rng, true),
+						)
 					}
 				}
 			}
@@ -181,11 +200,14 @@ func collectDeclarations(
 				continue
 			}
 			if ctx.Vars[ident] != nil && !pipe.IsAssign {
-				diagnostics = append(diagnostics, protocol.Diagnostic{
-					Range:    nodeToRange(decl, text),
-					Message:  msgDuplicateDeclaration(text, int(decl.Position()), ident),
-					Severity: new(protocol.DiagnosticSeverityWarning),
-				})
+				diagnostics = append(
+					diagnostics,
+					createDiagnostic(
+						msgDuplicateDeclaration(text, int(decl.Position()), ident),
+						nodeToRange(decl, text),
+						false,
+					),
+				)
 				continue
 			}
 			if pipe.IsAssign {
@@ -217,11 +239,14 @@ func checkPipeUsage(
 		for _, arg := range cmd.Args {
 			if vnode, ok := arg.(*parse.VariableNode); ok && len(vnode.Ident) > 0 {
 				if name := vnode.Ident[0]; name != "" && name != "$" && ctx.Vars[name] == nil {
-					diagnostics = append(diagnostics, protocol.Diagnostic{
-						Range:    nodeToRange(vnode, text),
-						Message:  msgUndeclaredVariable(text, int(vnode.Position()), name),
-						Severity: new(protocol.DiagnosticSeverityError),
-					})
+					diagnostics = append(
+						diagnostics,
+						createDiagnostic(
+							msgUndeclaredVariable(text, int(vnode.Position()), name),
+							nodeToRange(vnode, text),
+							true,
+						),
+					)
 				}
 			}
 		}
