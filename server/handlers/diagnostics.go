@@ -56,6 +56,9 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 
 // analyzeNode is the visitor passed to walkAndAnalyze; it declares variables then validates the node.
 func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
+	if ctx == nil || node == nil {
+		return nil
+	}
 	diagnostics = append(diagnostics, declareNode(node, text, ctx)...)
 
 	switch n := node.(type) {
@@ -127,6 +130,9 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 
 // declareNode registers variable declarations into ctx.Vars before validation runs.
 func declareNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
+	if ctx == nil || node == nil {
+		return nil
+	}
 	switch n := node.(type) {
 	case *parse.ActionNode:
 		if n.Pipe != nil {
@@ -150,8 +156,11 @@ func collectDeclarations(
 	text string,
 	ctx *Context,
 ) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil {
+	if pipe == nil || ctx == nil {
 		return nil
+	}
+	if ctx.Vars == nil {
+		ctx.Vars = make(map[string]parse.Node)
 	}
 	for _, decl := range pipe.Decl {
 		if decl == nil {
@@ -185,8 +194,11 @@ func checkPipeUsage(
 	text string,
 	ctx *Context,
 ) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil {
+	if pipe == nil || ctx == nil {
 		return nil
+	}
+	if ctx.Vars == nil {
+		ctx.Vars = make(map[string]parse.Node)
 	}
 	for _, cmd := range pipe.Cmds {
 		if cmd == nil {
