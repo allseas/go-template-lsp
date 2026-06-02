@@ -388,13 +388,46 @@ func analyseDot(n *parse.DotNode, parent Node, ctx *analysisCtx) Node {
 }
 
 func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
-	return &ChainNode{
+	base := analyseNode(n.Node, parent, ctx)
+	cn := &ChainNode{
 		NodeType: NodeChain,
 		Pos:      Pos(n.Position()),
-		Node:     analyseNode(n.Node, parent, ctx),
+		Node:     base,
 		Field:    n.Field,
 		parent:   parent,
 	}
+
+	baseType := getNodeType(base)
+	if baseType == nil || len(n.Field) == 0 {
+		return cn
+	}
+
+	pkg := ctx.tree.Pkg
+	currentType := baseType
+	for _, fieldName := range n.Field {
+		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, fieldName)
+		if obj == nil {
+			ctx.errorf(cn, ErrorTypeInvalidField, "type %s has no field or method %q", currentType.String(), fieldName)
+			return cn
+		}
+		switch o := obj.(type) {
+		case *types.Var:
+			currentType = o.Type()
+		case *types.Func:
+			sig, ok := o.Type().Underlying().(*types.Signature)
+			if !ok || sig.Results().Len() == 0 {
+				ctx.errorf(cn, ErrorTypeInvalidField, "method %q on type %s returns no values", fieldName, currentType.String())
+				return cn
+			}
+			currentType = sig.Results().At(0).Type()
+		default:
+			ctx.errorf(cn, ErrorTypeInvalidField, "unexpected object type for %q on %s", fieldName, currentType.String())
+			return cn
+		}
+	}
+	cn.typ = currentType
+
+	return cn
 }
 
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
@@ -429,13 +462,47 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 }
 
 func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
-	return &FieldNode{
+	fn := &FieldNode{
 		NodeType: NodeField,
 		Pos:      Pos(n.Position()),
 		Ident:    n.Ident,
 		parent:   parent,
-		// TODO: add typ logic here
 	}
+
+	if ctx.dotType == nil || len(n.Ident) == 0 {
+		return fn
+	}
+
+	pkg := ctx.tree.Pkg
+	currentType := ctx.dotType
+	for _, fieldName := range n.Ident {
+		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, fieldName)
+		if obj == nil {
+			ctx.errorf(fn, ErrorTypeInvalidField, "type %s has no field or method %q", currentType.String(), fieldName)
+			return fn
+		}
+		switch o := obj.(type) {
+		case *types.Var:
+			currentType = o.Type()
+		case *types.Func:
+			sig, ok := o.Type().Underlying().(*types.Signature)
+			if !ok || sig.Results().Len() == 0 {
+				ctx.errorf(fn, ErrorTypeInvalidField, "method %q on type %s returns no values", fieldName, currentType.String())
+				return fn
+			}
+			if sig.Results().Len() > 2 {
+				ctx.errorf(fn, ErrorTypeInvalidField, "method %q on type %s returns more than 2 parameters", fieldName, currentType.String())
+			}
+			// At(1) can be an error
+			currentType = sig.Results().At(0).Type()
+		default:
+			ctx.errorf(fn, ErrorTypeInvalidField, "unexpected object type for %q on %s", fieldName, currentType.String())
+			return fn
+		}
+	}
+	fn.typ = currentType
+
+	return fn
 }
 
 func analyseAction(n *parse.ActionNode, parent Node, ctx *analysisCtx) Node {
