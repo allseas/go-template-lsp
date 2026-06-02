@@ -93,18 +93,21 @@ func (s *documentStore) Remove(uri string) {
 }
 
 // didOpen is an LSP notification handler that registers a new document in the store when it is opened.
-func didOpen(_ *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
+func didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 	if !GetConfig().EnableServer {
 		log.Debug().Msg("didOpen received but server is disabled by config")
 		return nil
 	}
 
 	store.Set(params.TextDocument.URI, params.TextDocument.Text)
+	if ctx != nil {
+		publishDiagnostics(ctx, params.TextDocument.URI, params.TextDocument.Text)
+	}
 	return nil
 }
 
 // didChange is an LSP notification handler that updates the stored document content when the user edits the file.
-func didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
+func didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
 	log.Debug().
 		Str("uri", params.TextDocument.URI).
 		Msg("document changed")
@@ -115,8 +118,17 @@ func didChange(_ *glsp.Context, params *protocol.DidChangeTextDocumentParams) er
 	}
 
 	for _, change := range params.ContentChanges {
-		if c, ok := change.(protocol.TextDocumentContentChangeEventWhole); ok {
+		switch c := change.(type) {
+		case protocol.TextDocumentContentChangeEventWhole:
 			store.Set(params.TextDocument.URI, c.Text)
+			if ctx != nil {
+				publishDiagnostics(ctx, params.TextDocument.URI, c.Text)
+			}
+		case protocol.TextDocumentContentChangeEvent:
+			store.Set(params.TextDocument.URI, c.Text)
+			if ctx != nil {
+				publishDiagnostics(ctx, params.TextDocument.URI, c.Text)
+			}
 		}
 	}
 	return nil
@@ -192,4 +204,73 @@ func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 
 	walk(root)
 	return best
+}
+
+// walkAndAnalyze recursively walks the node tree, maintaining scope context, and calls fn on every node.
+func walkAndAnalyze(
+	node parse.Node,
+	text string,
+	ctx *Context,
+	visited map[parse.Node]bool,
+	fn func(parse.Node, string, *Context) []protocol.Diagnostic,
+) (diagnostics []protocol.Diagnostic) {
+	if node == nil || visited[node] {
+		return nil
+	}
+	if ctx == nil {
+		ctx = &Context{Vars: make(map[string]parse.Node)}
+	}
+	visited[node] = true
+	defer delete(visited, node)
+
+	diagnostics = append(diagnostics, fn(node, text, ctx)...)
+
+	switch n := node.(type) {
+	case *parse.ListNode:
+		for _, child := range n.Nodes {
+			diagnostics = append(diagnostics, walkAndAnalyze(child, text, ctx, visited, fn)...)
+		}
+	case *parse.ActionNode:
+		if n.Pipe != nil {
+			diagnostics = append(diagnostics, walkAndAnalyze(n.Pipe, text, ctx, visited, fn)...)
+		}
+	case *parse.PipeNode:
+		if ctx.Vars == nil {
+			ctx.Vars = make(map[string]parse.Node)
+		}
+		for _, v := range n.Decl {
+			if v != nil && len(v.Ident) > 0 {
+				ctx.Vars[v.Ident[0]] = n
+			}
+		}
+		prevPipe := ctx.Pipe
+		ctx.Pipe = n
+		for _, cmd := range n.Cmds {
+			diagnostics = append(diagnostics, walkAndAnalyze(cmd, text, ctx, visited, fn)...)
+		}
+		ctx.Pipe = prevPipe
+	case *parse.CommandNode:
+		for _, arg := range n.Args {
+			diagnostics = append(diagnostics, walkAndAnalyze(arg, text, ctx, visited, fn)...)
+		}
+	case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
+		pipe, list, elseList := extractBranchNodes(n)
+		if ctx.Vars == nil {
+			ctx.Vars = make(map[string]parse.Node)
+		}
+		snapshot := snapshotVars(ctx.Vars)
+		if pipe != nil {
+			diagnostics = append(diagnostics, walkAndAnalyze(pipe, text, ctx, visited, fn)...)
+		}
+		if list != nil {
+			diagnostics = append(diagnostics, walkAndAnalyze(list, text, ctx, visited, fn)...)
+		}
+		ctx.Vars = snapshot
+		if elseList != nil {
+			diagnostics = append(diagnostics, walkAndAnalyze(elseList, text, ctx, visited, fn)...)
+		}
+		ctx.Vars = snapshot
+	}
+
+	return diagnostics
 }
