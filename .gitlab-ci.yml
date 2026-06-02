@@ -25,6 +25,7 @@ trigger-jetbrains:
   rules:
     - changes:
         - clients/JetBrains/**/*
+        - server/**/*
 
 trigger-vscode:
   stage: triggers
@@ -34,6 +35,7 @@ trigger-vscode:
   rules:
     - changes:
         - clients/VSCode/**/*
+        - server/**/*
 
 trigger-server:
   stage: triggers
