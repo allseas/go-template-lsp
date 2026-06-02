@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
+	servertypes "text-template-server/types"
 )
 
 // TypeHint represents a `gotype:` type hint found in a template file.
@@ -72,17 +73,9 @@ type ParamType struct {
 	TypeName string
 }
 
-// LoadedType is the result of resolving a type hint against a real Go package.
-type LoadedType struct {
-	Pkg     *packages.Package
-	Named   *types.Named
-	Fields  []TypeField
-	Methods []MethodType
-}
-
-// LoadTypeFromHint loads the Go package identified by the hint and returns the
-// named type together with its struct fields (if any).
-func LoadTypeFromHint(hint, workspaceRoot string) (*LoadedType, error) {
+// LoadTypeFromHint loads the Go package identified by the hint and returns a
+// types.Tree with DotType and Pkg set.
+func LoadTypeFromHint(hint, workspaceRoot string) (*servertypes.Tree, error) {
 	importPath, typeName := splitTypeHint(hint)
 
 	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
@@ -114,12 +107,8 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*LoadedType, error) {
 		return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
 	}
 
-	return &LoadedType{
-		Pkg:     pkg,
-		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
-	}, nil
+	tree := servertypes.Tree{DotType: named, Pkg: pkg.Types}
+	return &tree, nil
 }
 
 // splitTypeHint splits a raw gotype hint into (importPath, typeName).
