@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"go/types"
 
 	parse "text-template-parser"
@@ -14,17 +15,38 @@ import (
 // Tree represents a parsed template with type information.
 // It wraps the parse tree and enriches nodes with type annotations.
 type Tree struct {
-	Name      string                   // name of the template represented by the tree.
-	ParseName string                   // name of the top-level template during parsing, for error messages.
-	Root      *ListNode                // top-level root of the tree.
-	Errors    []error                  // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
-	funcs     []map[string]*types.Func // available functions with their signatures
-	DotType   *types.Named             // optional: type of dot context (from gotype hint)
-	Pkg       *types.Package           // optional: package containing DotType
+	Name       string                 // name of the template represented by the tree.
+	ParseName  string                 // name of the top-level template during parsing, for error messages.
+	Root       *ListNode              // top-level root of the tree.
+	Errors     []error                // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
+	funcs      map[string]*types.Func // available functions with their signatures
+	DotType    *types.Named           // optional: type of dot context (from gotype hint)
+	Pkg        *types.Package         // optional: package containing DotType
+	TypeErrors []TError               // scary
+}
+
+type ErrorType int
+
+const (
+	ErrorTypeInvalidField = iota
+	ErrorTypeInvalidFunction
+	ErrorTypeInvalidCommand
+	ErrorTypeInvalidRange
+	ErrorTypeInvalidIf
+	ErrorTypeInvalidWith
+	ErrorUndeclaredVariable
+	ErrorDoubleDeclaredVariable
+	// Add more error types as needed
+)
+
+type TError struct {
+	Node Node
+	Err  string
+	typ  ErrorType // for categorization
 }
 
 // NewTree creates a typed tree from a parse tree, optionally with type information.
-func NewTree(parseTree parse.Tree, funcs []map[string]*types.Func, dotType types.Type) Tree {
+func NewTree(parseTree parse.Tree, funcs map[string]*types.Func, dotType types.Type) Tree {
 	typeTree := Tree{
 		Name:      parseTree.Name,
 		ParseName: parseTree.ParseName,
@@ -57,7 +79,7 @@ func NewTree(parseTree parse.Tree, funcs []map[string]*types.Func, dotType types
 // on nodes that depend on context (VariableNode, FieldNode, CommandNode, etc).
 func NewTreeWithType(
 	parseTree parse.Tree,
-	funcs []map[string]*types.Func,
+	funcs map[string]*types.Func,
 	dotType *types.Named,
 	pkg *types.Package,
 ) Tree {
@@ -79,18 +101,23 @@ func analyseList(listNode *parse.ListNode, parent Node, ctx *analysisCtx) *ListN
 	if listNode == nil {
 		return nil
 	}
+	keepVars := len(ctx.vars)
 
 	typeList := &ListNode{
 		NodeType: NodeList,
 		Pos:      Pos(listNode.Position()),
 		Nodes:    make([]Node, len(listNode.Nodes)),
 		parent:   parent,
-		vars:     ctx.vars,
+		vars:     make([]*VariableNode, keepVars),
+		typ:      ctx.dotType,
 	}
+	copy(typeList.vars, ctx.vars) // Preserve current variables in scope
 
 	for i, node := range listNode.Nodes {
 		typeList.Nodes[i] = analyseNode(node, typeList, ctx)
 	}
+
+	ctx.vars = ctx.vars[:keepVars] // Pop any variables declared in this list
 
 	return typeList
 }
@@ -169,7 +196,7 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 	}
 }
 
-func analyseContinue(n *parse.ContinueNode, parent Node, ctx *analysisCtx) Node {
+func analyseContinue(n *parse.ContinueNode, parent Node, _ *analysisCtx) Node {
 	return &ContinueNode{
 		NodeType: NodeContinue,
 		Pos:      Pos(n.Position()),
@@ -178,7 +205,7 @@ func analyseContinue(n *parse.ContinueNode, parent Node, ctx *analysisCtx) Node 
 	}
 }
 
-func analyseBreak(n *parse.BreakNode, parent Node, ctx *analysisCtx) Node {
+func analyseBreak(n *parse.BreakNode, parent Node, _ *analysisCtx) Node {
 	return &BreakNode{
 		NodeType: NodeBreak,
 		Pos:      Pos(n.Position()),
@@ -187,6 +214,7 @@ func analyseBreak(n *parse.BreakNode, parent Node, ctx *analysisCtx) Node {
 	}
 }
 
+// TODO
 func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node {
 	return &TemplateNode{
 		NodeType: NodeTemplate,
@@ -199,33 +227,90 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 }
 
 func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
+	keepDot := ctx.dotType
+	keepVars := len(ctx.vars)
+	pipe := analysePipe(n.Pipe, parent, ctx)
+	ctx.dotType = pipe.typ
+	list := analyseList(n.List, parent, ctx)
+	ctx.dotType = keepDot
+	ctx.vars = ctx.vars[:keepVars]
+	elseList := analyseList(n.ElseList, parent, ctx)
+
 	return &WithNode{
 		BranchNode{
 			NodeType: NodeWith,
 			Pos:      Pos(n.Position()),
 			Line:     n.Line,
-			Pipe:     analysePipe(n.Pipe, parent, ctx),
-			List:     analyseList(n.List, parent, ctx),
-			ElseList: analyseList(n.ElseList, parent, ctx),
+			Pipe:     pipe,
+			List:     list,
+			ElseList: elseList,
 		},
 	}
 }
 
+func getRangeableType(typ types.Type) types.Type {
+	switch t := typ.Underlying().(type) {
+	case *types.Pointer:
+		return getRangeableType(types.Unalias(t.Elem()))
+	case *types.Array:
+		return t.Elem()
+	case *types.Slice:
+		return t.Elem()
+	case *types.Map:
+		return t.Elem()
+	case *types.Chan:
+		return t.Elem()
+	case *types.Basic:
+		if t.Info()&types.IsInteger != 0 {
+			return t
+		}
+		return nil
+	default:
+		//TODO: handle Seq
+		return nil
+	}
+}
+
+func (ctx *analysisCtx) errorf(node Node, typ ErrorType, format string, args ...any) {
+	ctx.tree.TypeErrors = append(
+		ctx.tree.TypeErrors,
+		TError{
+			Node: node,
+			Err:  fmt.Sprintf(format, args...),
+			typ:  typ, // TODO: set appropriate error type based on context
+		},
+	)
+}
+
 func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
+	keepDot := ctx.dotType
+	keepVars := len(ctx.vars)
+	pipe := analysePipe(n.Pipe, parent, ctx)
+	typ := getRangeableType(pipe.typ)
+	if typ == nil {
+		ctx.errorf(pipe, ErrorTypeInvalidRange, "cannot range over type %s", pipe.typ.String())
+		ctx.dotType = nil
+	}
+	list := analyseList(n.List, parent, ctx)
+	ctx.dotType = keepDot
+	ctx.vars = ctx.vars[:keepVars]
+	elseList := analyseList(n.ElseList, parent, ctx)
+
 	return &RangeNode{
 		BranchNode{
 			NodeType: NodeRange,
 			Pos:      Pos(n.Position()),
 			Line:     n.Line,
-			Pipe:     analysePipe(n.Pipe, parent, ctx),
-			List:     analyseList(n.List, parent, ctx),
-			ElseList: analyseList(n.ElseList, parent, ctx),
+			Pipe:     pipe,
+			List:     list,
+			ElseList: elseList,
 		},
 	}
 }
 
 func analyseIf(n *parse.IfNode, parent Node, ctx *analysisCtx) Node {
-	return &IfNode{
+	keepVars := len(ctx.vars)
+	i := &IfNode{
 		BranchNode{
 			NodeType: NodeIf,
 			Pos:      Pos(n.Position()),
@@ -235,6 +320,9 @@ func analyseIf(n *parse.IfNode, parent Node, ctx *analysisCtx) Node {
 			ElseList: analyseList(n.ElseList, parent, ctx),
 		},
 	}
+
+	ctx.vars = ctx.vars[:keepVars] // Pop any variables declared in this if block
+	return i
 }
 
 func analyseComment(n *parse.CommentNode, parent Node, ctx *analysisCtx) Node {
@@ -295,6 +383,7 @@ func analyseDot(n *parse.DotNode, parent Node, ctx *analysisCtx) Node {
 		NodeType: NodeDot,
 		Pos:      Pos(n.Position()),
 		parent:   parent,
+		typ:      ctx.dotType,
 	}
 }
 
@@ -309,15 +398,27 @@ func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
 }
 
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
-	return &IdentifierNode{
+	ident := &IdentifierNode{
 		NodeType: NodeIdentifier,
 		Pos:      Pos(n.Position()),
 		Ident:    n.Ident,
 		parent:   parent,
 	}
+
+	name := (string)(n.Ident[0])
+	typ := ctx.funcs[name]
+
+	if typ != nil {
+		ident.typ = typ.Type()
+	} else {
+		ctx.errorf(ident, ErrorTypeInvalidFunction, "undefined function: %s", name)
+	}
+
+	return ident
 }
 
-func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) Node {
+func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *VariableNode {
+
 	return &VariableNode{
 		NodeType: NodeVariable,
 		Pos:      Pos(n.Position()),
@@ -383,6 +484,12 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 		return typePipe
 	}
 
+	// f :: int -> string
+	// g :: string -> bool
+	// h :: bool -> String
+	// {{ . | | h }}
+
+	//TODO: type checking between pipe segments
 	resType := getNodeType(typePipe.Cmds[len(typePipe.Cmds)-1])
 	switch resType.Underlying().(type) {
 	case *types.Signature:
@@ -394,13 +501,43 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 
 	// Convert declarations
 	for i, decl := range pipeNode.Decl {
-		typePipe.Decl[i] = &VariableNode{
-			NodeType: NodeVariable,
-			Pos:      Pos(decl.Position()),
-			Ident:    decl.Ident,
+		typePipe.Decl[i] = analyseVariable(decl, typePipe, ctx)
+	}
+
+	if !typePipe.IsAssign {
+
+		if len(typePipe.Decl) == 1 {
+			typePipe.Decl[0].typ = typePipe.typ
+			for i := len(ctx.vars) - 1; i >= 0; i-- {
+				if ctx.vars[i].Ident[0] == typePipe.Decl[0].Ident[0] {
+					ctx.errorf(typePipe.Decl[0], ErrorDoubleDeclaredVariable, "variable %s already declared in this scope", ctx.vars[i].Ident[0])
+				}
+			}
+			ctx.vars = append(ctx.vars, typePipe.Decl[0])
+		}
+
+		if len(typePipe.Decl) == 2 {
+			typePipe.Decl[0].typ = typePipe.typ
+			ctx.vars = append(ctx.vars, typePipe.Decl[0])
+			typePipe.Decl[1].typ = types.Typ[types.Uint] //unsigned int for index
+			ctx.vars = append(ctx.vars, typePipe.Decl[1])
+		}
+
+	} else {
+		if len(typePipe.Decl) == 1 {
+			// find the variable in the context and update its type
+			for i := len(ctx.vars) - 1; i >= 0; i-- {
+				if ctx.vars[i].Ident[0] == typePipe.Decl[0].Ident[0] {
+					if ctx.vars[i].typ != nil && !types.Identical(ctx.vars[i].typ, typePipe.typ) {
+						ctx.errorf(typePipe.Decl[0], ErrorTypeInvalidCommand, "type mismatch: variable %s already has type %s, cannot assign type %s", ctx.vars[i].Ident[0], ctx.vars[i].typ.String(), typePipe.typ.String())
+					}
+					ctx.vars[i].typ = typePipe.typ
+					return typePipe
+				}
+			}
+			ctx.errorf(typePipe, ErrorUndeclaredVariable, "undeclared variable: %s is assigned to", typePipe.Decl[0].Ident[0])
 		}
 	}
-	//TODO: update vars
 
 	return typePipe
 }
@@ -422,6 +559,12 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx) *
 	}
 
 	resultType := getNodeType(typeCmd.Args[0])
+
+	//TODO: special case for `call` builtin
+
+	//TODO: Typecheck between the command and its arguments to see errors
+
+	// call :: (... -> a) -> ... -> a
 
 	if resultType != nil {
 		switch t := resultType.Underlying().(type) {
@@ -463,9 +606,10 @@ func getNodeType(node Node) types.Type {
 type analysisCtx struct {
 	// Future: Add fields for tracking type information during analysis
 	// For example:
-	vars    []*VariableNode          // Type of each variable in scope
-	dotType types.Type               // Current dot context type
-	funcs   []map[string]*types.Func // Available functions with their signatures
+	vars    []*VariableNode        // Type of each variable in scope
+	dotType types.Type             // Current dot context type
+	funcs   map[string]*types.Func // Available functions with their signatures
+	tree    *Tree                  // Reference to the tree being built, for error reporting
 }
 
 // resolveCtx carries context for resolving types on nodes.
