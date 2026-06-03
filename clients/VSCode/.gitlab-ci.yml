@@ -3,12 +3,30 @@ workflow:
         - when: always
 
 stages:
+    - build
     - lint
     - test
 #  - deploy
 
 default:
     interruptible: true
+
+build-image:
+    stage: build
+    image: docker:latest
+    services:
+        - docker:dind
+    variables:
+        IMAGE_TAG: $CI_REGISTRY_IMAGE/vscode-ci:latest
+    script:
+        - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+        - docker build -t $IMAGE_TAG clients/VSCode/
+        - docker push $IMAGE_TAG
+    rules:
+        - changes:
+              - clients/VSCode/Dockerfile
+        - when: manual
+          allow_failure: true
 
 linting:
     stage: lint
@@ -30,16 +48,9 @@ formatting:
 
 testing:
     stage: test
-    image: golang:tip-trixie
+    image:
+        name: $CI_REGISTRY_IMAGE/vscode-ci:latest
     before_script:
-        - apt -q --yes update
-        - apt -q --yes upgrade
-        - apt -q --yes install xvfb
-        - apt -q --yes install chromium
-        - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash #NVM https://nodejs.org/en/download
-        - \. "$HOME/.nvm/nvm.sh"
-        - nvm install 24
-        - npm install npm -g
         - npm ci
     script:
         - echo "running tests"
