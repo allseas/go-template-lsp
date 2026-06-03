@@ -405,7 +405,7 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 		parent:   parent,
 	}
 
-	name := (string)(n.Ident[0])
+	name := (string)(n.Ident)
 	typ := ctx.funcs[name]
 
 	if typ != nil {
@@ -574,11 +574,11 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx) *
 			// TODO: may be variadic ??
 			if t.Params().Len() == len(typeCmd.Args)-1 {
 				typeCmd.typ = t.Results().At(0).Type()
-			} else if t.Params().Len() == len(typeCmd.Args)-2 {
+			} else if t.Params().Len() == len(typeCmd.Args) {
 				typeCmd.typ = types.NewSignatureType(
 					nil,
 					nil,
-					[]*types.TypeParam{t.TypeParams().At(t.TypeParams().Len() - 1)},
+					nil,
 					types.NewTuple(t.Params().At(t.Params().Len()-1)),
 					t.Results(),
 					false,
