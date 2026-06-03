@@ -162,6 +162,50 @@ class VariableCompletionTest : CustomPlatformTestCase() {
         assertDoesntContain(suggestedCompletions!!, $$"$x", $$"$y")
     }
 
+    fun testVariablesAreSuggestedInElseBlocksOfIfWithRange() {
+        myFixture.configureByText(
+            "test_else_blocks_with.txt.tmpl",
+            $$"""
+            {{with $x := .Field}}
+            {{else}}
+                {{<caret>}}
+            {{end}}
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+        var suggestedCompletions = myFixture.lookupElementStrings
+        assertNotNull(suggestedCompletions)
+        assertContainsElements(suggestedCompletions!!, $$"$x")
+
+        myFixture.configureByText(
+            "test_else_blocks_if.txt.tmpl",
+            $$"""
+            {{if $y := .Field}}
+            {{else}}
+                {{<caret>}}
+            {{end}}
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+        suggestedCompletions = myFixture.lookupElementStrings
+        assertNotNull(suggestedCompletions)
+        assertContainsElements(suggestedCompletions!!, $$"$y")
+
+        myFixture.configureByText(
+            "test_else_blocks_range.txt.tmpl",
+            $$"""
+            {{range $k, $v := .Field}}
+            {{else}}
+                {{<caret>}}
+            {{end}}
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+        suggestedCompletions = myFixture.lookupElementStrings
+        assertNotNull(suggestedCompletions)
+        assertContainsElements(suggestedCompletions!!, $$"$k", $$"$v")
+    }
+
     fun testMultiAssignmentVariables() {
         myFixture.configureByText(
             "test_multi_assignment.txt.tmpl",
@@ -215,7 +259,32 @@ class VariableCompletionTest : CustomPlatformTestCase() {
             "test_pipeline_args.txt.tmpl",
             $$"""
             {{$myVar := 123}}
-            {{ "foo" | myFunc $<caret> }}
+            {{ "foo" | myFunc $<caret> }}VariableCompletionTest > testVariablesAreNotSuggestedInElseBlocksOfIfWithRange FAILED
+    java.lang.AssertionError: $
+    $x
+    .
+    and
+    call
+    eq
+    ge
+    gt
+    html
+    if
+    index
+    js
+    le
+    len
+    lt
+    ne
+    not
+    or
+    print
+    printf
+    println
+    range
+    slice
+    urlquery
+     expected:<[$, ., and, call, eq, ge, gt, html, if, index, js, le, len, lt, ne, not, or, print, printf, println, range, slice, urlquery]> but was:<[$, $x, ., and, call, eq, ge, gt, html, if, index, js, le, len, lt, ne, not, or, print, printf, println, range, slice, urlquery]>
             """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)

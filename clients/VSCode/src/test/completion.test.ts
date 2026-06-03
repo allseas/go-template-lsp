@@ -201,6 +201,46 @@ suite("Completion Test Suite", () => {
         }
     });
 
+    test("Variables are suggested in else blocks of if, with, and range", async () => {
+        const { tmplUri } = await createDocument(
+            "completion-else-blocks.tmpl",
+            "{{with $x := .Field}}\n{{else}}\n{{}}\n{{end}}\n{{if $y := .Field}}\n{{else}}\n{{}}\n{{end}}\n{{range $k, $v := .Field}}\n{{else}}\n{{}}\n{{end}}",
+        );
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+
+            // Check 'else' block of 'with'
+            let list = await getCompletions(tmplUri, new vscode.Position(2, 2));
+            let labels = getLabels(list);
+            assert.ok(
+                labels.includes("$x"),
+                "Expected $x to be inside 'else' block of 'with'",
+            );
+
+            // Check 'else' block of 'if'
+            list = await getCompletions(tmplUri, new vscode.Position(6, 2));
+            labels = getLabels(list);
+            assert.ok(
+                labels.includes("$y"),
+                "Expected $y to be inside 'else' block of 'if'",
+            );
+
+            // Check 'else' block of 'range'
+            list = await getCompletions(tmplUri, new vscode.Position(10, 2));
+            labels = getLabels(list);
+            assert.ok(
+                labels.includes("$k"),
+                "Expected $k to be inside 'else' block of 'range'",
+            );
+            assert.ok(
+                labels.includes("$v"),
+                "Expected $v to be inside 'else' block of 'range'",
+            );
+        } finally {
+            await cleanupDocument(tmplUri);
+        }
+    });
+
     test("Multi assignment variables", async () => {
         const { tmplUri } = await createDocument(
             "completion-multi-assign.tmpl",
