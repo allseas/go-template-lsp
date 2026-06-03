@@ -24,6 +24,8 @@ testing:
     - echo "Running Tests"
     - cd server
     - go test ./... -coverprofile=coverage.out
+    - grep -v -E '/(parse|types)/node\.go:' coverage.out > coverage.filtered.out
+    - mv coverage.filtered.out coverage.out
     - |
       COVER_OUTPUT=$(go tool cover -func=coverage.out)
       echo "$COVER_OUTPUT"

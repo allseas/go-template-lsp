@@ -12,13 +12,24 @@ func TestAnalyze(t *testing.T) {
 	for _, tc := range analyseTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tree := NewTreeWithType(tc.parseTree, tc.funcs, tc.dotType, tc.pkg)
-			if len(tree.Errors) != len(tc.expectedErrors) {
+			if len(tree.TypeErrors) != len(tc.expectedErrors) {
 				t.Fatalf(
-					"Expected %d errors, got %d: %v",
+					"Expected %d type errors, got %d: %v",
 					len(tc.expectedErrors),
-					len(tree.Errors),
-					tree.Errors,
+					len(tree.TypeErrors),
+					tree.TypeErrors,
 				)
+			}
+			for i, want := range tc.expectedErrors {
+				if tree.TypeErrors[i].typ != want.typ {
+					t.Fatalf(
+						"type error [%d]: got category %d (%q), want category %d",
+						i,
+						tree.TypeErrors[i].typ,
+						tree.TypeErrors[i].Err,
+						want.typ,
+					)
+				}
 			}
 			if diff := CompareTypeTrees(tree, tc.resTree); diff != "" {
 				t.Fatalf("type tree mismatch: %s", diff)

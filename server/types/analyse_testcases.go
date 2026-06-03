@@ -232,6 +232,41 @@ func chain(base parse.Node, fields ...string) *parse.ChainNode {
 	}
 }
 
+func text(s string) *parse.TextNode {
+	return &parse.TextNode{
+		NodeType: parse.NodeText,
+		Text:     []byte(s),
+	}
+}
+
+func boolN(b bool) *parse.BoolNode {
+	return &parse.BoolNode{
+		NodeType: parse.NodeBool,
+		True:     b,
+	}
+}
+
+func nilN() *parse.NilNode {
+	return &parse.NilNode{
+		NodeType: parse.NodeNil,
+	}
+}
+
+func str(s string) *parse.StringNode {
+	return &parse.StringNode{
+		NodeType: parse.NodeString,
+		Quoted:   "\"" + s + "\"",
+		Text:     s,
+	}
+}
+
+func comment(s string) *parse.CommentNode {
+	return &parse.CommentNode{
+		NodeType: parse.NodeComment,
+		Text:     s,
+	}
+}
+
 func tree(name string, root *parse.ListNode) parse.Tree {
 	return parse.Tree{
 		Name: name,
@@ -362,6 +397,41 @@ func tchain(typ types.Type, base Node, fields ...string) *ChainNode {
 		Node:     base,
 		Field:    fields,
 		typ:      typ,
+	}
+}
+
+func ttext(s string) *TextNode {
+	return &TextNode{
+		NodeType: NodeText,
+		Text:     []byte(s),
+	}
+}
+
+func tboolN(b bool) *BoolNode {
+	return &BoolNode{
+		NodeType: NodeBool,
+		True:     b,
+	}
+}
+
+func tnilN() *NilNode {
+	return &NilNode{
+		NodeType: NodeNil,
+	}
+}
+
+func tstr(s string) *StringNode {
+	return &StringNode{
+		NodeType: NodeString,
+		Quoted:   "\"" + s + "\"",
+		Text:     s,
+	}
+}
+
+func tcomment(s string) *CommentNode {
+	return &CommentNode{
+		NodeType: NodeComment,
+		Text:     s,
 	}
 }
 
@@ -752,6 +822,101 @@ var analyseTestCases = []analyseTestCase{
 		funcs:          funcs,
 		dotType:        mockDotType,
 		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// "hello"  -- a bare text node in the root list.
+		name:      "text node",
+		parseTree: tree("test", list(text("hello"))),
+		resTree:   ttree("test", tlist(nil, ttext("hello"))),
+		funcs:     funcs,
+		// TextNode itself has no type; ListNode dot type stays nil with no dotType.
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ true }}  -- boolean literal as an action.
+		name:      "bool node literal",
+		parseTree: tree("test", list(actpipe(nil, coms(com(boolN(true)))))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Bool], nil, tcoms(
+			tcom(types.Typ[types.Bool], tboolN(true)),
+		)))),
+		funcs:          funcs,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ nil }}  -- nil literal as an action; typed as untyped nil.
+		name:      "nil node literal",
+		parseTree: tree("test", list(actpipe(nil, coms(com(nilN()))))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.UntypedNil], nil, tcoms(
+			tcom(types.Typ[types.UntypedNil], tnilN()),
+		)))),
+		funcs:          funcs,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ range .X }}{{ end }}  -- .X is string, not rangeable.
+		// Expect a single ErrorTypeInvalidRange diagnostic on the pipe.
+		name: "range over non-iterable type",
+		parseTree: tree("test", list(rangeN(
+			pipe(nil, coms(com(field("X")))),
+			list(),
+		))),
+		resTree: ttree("test", tlist(mockDotType, trangeN(
+			tpipe(
+				types.Typ[types.String],
+				nil,
+				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
+			),
+			tlist(nil),
+		))),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidRange},
+		},
+	},
+	{
+		// {{ range 5 }}{{ . }}{{ end }}  -- range over an integer: dot becomes int64.
+		name: "range over int",
+		parseTree: tree("test", list(rangeN(
+			pipe(nil, coms(com(num(5)))),
+			list(actpipe(nil, coms(com(&parse.DotNode{})))),
+		))),
+		resTree: ttree("test", tlist(nil, trangeN(
+			tpipe(
+				types.Typ[types.Int64],
+				nil,
+				tcoms(tcom(types.Typ[types.Int64], tnum(5))),
+			),
+			tlist(
+				types.Typ[types.Int64],
+				tactpipe(
+					types.Typ[types.Int64],
+					nil,
+					tcoms(tcom(types.Typ[types.Int64], &DotNode{typ: types.Typ[types.Int64]})),
+				),
+			),
+		))),
+		funcs:          funcs,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ "hi" }}  -- string literal as an action.
+		name:      "string node literal",
+		parseTree: tree("test", list(actpipe(nil, coms(com(str("hi")))))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tstr("hi")),
+		)))),
+		funcs:          funcs,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{/* a comment */}}  -- comment node in the root list; carries no type.
+		name:           "comment node",
+		parseTree:      tree("test", list(comment("/* a comment */"))),
+		resTree:        ttree("test", tlist(nil, tcomment("/* a comment */"))),
+		funcs:          funcs,
 		expectedErrors: []TError{},
 	},
 }
