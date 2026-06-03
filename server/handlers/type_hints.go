@@ -9,8 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"golang.org/x/tools/go/packages"
 	servertypes "text-template-server/types"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // TypeHint represents a `gotype:` type hint found in a template file.

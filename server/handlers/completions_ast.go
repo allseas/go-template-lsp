@@ -432,7 +432,13 @@ func dotItem(
 		items = append(items, fieldCompletionItems(structFields(lt.DotType), prefix, wordRange)...)
 		items = append(
 			items,
-			methodCompletionItems(namedMethods(lt.DotType), inputType, pipeKind, prefix, wordRange)...)
+			methodCompletionItems(
+				namedMethods(lt.DotType),
+				inputType,
+				pipeKind,
+				prefix,
+				wordRange,
+			)...)
 	}
 	return items
 }
