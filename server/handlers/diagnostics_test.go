@@ -481,3 +481,32 @@ func TestDiagnostics_OnlyDollar(t *testing.T) {
 
 	assert.Empty(t, diags)
 }
+
+func TestCollectDiagnostics_Comments(t *testing.T) {
+	comments := []struct {
+		name string
+		text string
+	}{
+		{"simple comment", `{{/* simple comment */}}`},
+		{"comment with newlines", `{{/*
+multi-line
+comment
+*/}}`},
+		{"comment with trim left", `{{- /* comment */ }}`},
+		{"comment with trim both", `{{- /* comment */ -}}`},
+		{"comment with template syntax", `{{/* {{ .Field }} */}}`},
+		{"comment in range", `{{range .Items}}{{/* iteration comment */}}{{end}}`},
+		{"comment before field", `{{/* comment */}}{{ .Name }}`},
+		{"comment after field", `{{ .Name }}{{/* comment */}}`},
+		{"comment with if", `{{if .Cond}}{{/* comment */}}{{end}}`},
+		{"long comment", `{{- /* \n\n  # {{ .ProjectName }} \n {{- if .Tagline }} \n */ -}}`},
+	}
+
+	for _, tc := range comments {
+		t.Run(tc.name, func(t *testing.T) {
+			diags := collectDiagnostics(tc.text, "file:///test.tmpl")
+
+			assert.Empty(t, diags)
+		})
+	}
+}
