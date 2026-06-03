@@ -1,3 +1,4 @@
+// Package utils implements various utils for the server
 package utils
 
 import (

@@ -57,7 +57,7 @@ var builtinOutput = map[string]outputKind{
 	"slice":    outputUntyped,
 }
 
-// Completion entry point that has a fallback option
+// CompletionWithFallback is an entry point that has a fallback option
 func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	result := completionAst(nil, params)
 	if result == nil {

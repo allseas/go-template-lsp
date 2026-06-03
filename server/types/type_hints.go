@@ -1,3 +1,4 @@
+// Package types implements utils for types and the type tree
 package types
 
 import (

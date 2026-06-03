@@ -13,9 +13,9 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+// Hover handles providing the hover message
 func Hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
 	// Get document content
-
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !ok || doc.tree == nil {
 		err = errors.New("document not found or failed to parse")

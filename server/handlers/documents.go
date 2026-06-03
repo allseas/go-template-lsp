@@ -13,6 +13,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+// WorkspaceRoot is the path to the workspace root
 var WorkspaceRoot string
 
 type document struct {
