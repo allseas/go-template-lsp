@@ -2,7 +2,6 @@ import com.intellij.codeInsight.completion.CompletionType
 import com.intellij.codeInsight.lookup.Lookup
 
 class VariableCompletionTest : CustomPlatformTestCase() {
-
     fun testDollarSignAlwaysSuggested() {
         myFixture.configureByText("test1.txt.tmpl", "{{<caret>}}")
         myFixture.complete(CompletionType.BASIC)
@@ -21,13 +20,15 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testMultipleVariablesSuggested() {
         myFixture.configureByText(
-            "test3.txt.tmpl", $$"""{{$a := a}}
+            "test3.txt.tmpl",
+            $$"""
+            {{$a := a}}
             {{$b := b}}
             {{$c := c}}
             {{$d := d}}
             {{$e := e}}
             {{<caret>}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -37,11 +38,12 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testVariablesAreSuggestedInScope() {
         myFixture.configureByText(
-            "test4.txt.tmpl", $$"""
+            "test4.txt.tmpl",
+            $$"""
             {{range $a, $b := .}}
             {{<caret>}}
             {{end}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -51,12 +53,13 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testVariablesAreNotSuggestedOutsideScope() {
         myFixture.configureByText(
-            "test5.txt.tmpl", $$"""
+            "test5.txt.tmpl",
+            $$"""
             
             {{range $a, $b := .}}
             {{end}}
             {{<caret>}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -66,11 +69,12 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testVariableIsSuggestedWithDollarSignExclusivelyAndFilledCorrectlyOnPartialMatch() {
         myFixture.configureByText(
-            "test6.txt.tmpl", $$"""
+            "test6.txt.tmpl",
+            $$"""
             {{$variable := 123}}
             {{$b := b}}
             {{$va<caret>}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -80,20 +84,23 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
         myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
 
-        myFixture.checkResult($$"""
+        myFixture.checkResult(
+            $$"""
             {{$variable := 123}}
             {{$b := b}}
             {{$variable}}
-        """.trimIndent())
+            """.trimIndent(),
+        )
     }
 
     fun testVariableIsSuggestedExclusivelyWithoutDollarSignAndFilledCorrectlyOnPartialMatch() {
         myFixture.configureByText(
-            "test7.txt.tmpl", $$"""
+            "test7.txt.tmpl",
+            $$"""
             {{$variable := 123}}
             {{$b := b}}
             {{va<caret>}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -103,20 +110,23 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
         myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
 
-        myFixture.checkResult($$"""
+        myFixture.checkResult(
+            $$"""
             {{$variable := 123}}
             {{$b := b}}
             {{$variable}}
-        """.trimIndent())
+            """.trimIndent(),
+        )
     }
 
     fun testVariablesAreSuggestedInWithAndIfScopes() {
         myFixture.configureByText(
-            "test_with_if.txt.tmpl", $$"""
+            "test_with_if.txt.tmpl",
+            $$"""
             {{with $x := .Field}}
                 {{<caret>}}
             {{end}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         var suggestedCompletions = myFixture.lookupElementStrings
@@ -124,11 +134,12 @@ class VariableCompletionTest : CustomPlatformTestCase() {
         assertContainsElements(suggestedCompletions!!, $$"$x")
 
         myFixture.configureByText(
-            "test_with_if2.txt.tmpl", $$"""
+            "test_with_if2.txt.tmpl",
+            $$"""
             {{if $y := .Field}}
                 {{<caret>}}
             {{end}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         suggestedCompletions = myFixture.lookupElementStrings
@@ -138,11 +149,12 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testVariablesAreNotSuggestedOutsideWithAndIfScopes() {
         myFixture.configureByText(
-            "test_with_if_outside.txt.tmpl", $$"""
+            "test_with_if_outside.txt.tmpl",
+            $$"""
             {{with $x := .Field}}{{end}}
             {{if $y := .Field}}{{end}}
             {{<caret>}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -152,10 +164,11 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testMultiAssignmentVariables() {
         myFixture.configureByText(
-            "test_multi_assignment.txt.tmpl", $$"""
+            "test_multi_assignment.txt.tmpl",
+            $$"""
             {{$a, $b := myFunc}}
             {{<caret>}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -165,10 +178,11 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testVariablesAreNotSuggestedInsideComments() {
         myFixture.configureByText(
-            "test_comments.txt.tmpl", $$"""
+            "test_comments.txt.tmpl",
+            $$"""
             {{$va := 1}}
             {{/* {{$v<caret>}} */}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -180,13 +194,14 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testNestedScopeDeduplication() {
         myFixture.configureByText(
-            "test_nested_scope.txt.tmpl", $$"""
+            "test_nested_scope.txt.tmpl",
+            $$"""
             {{$a := 1}}
             {{range .}}
                 {{$a := 2}}
                 {{<caret>}}
             {{end}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings
@@ -197,10 +212,11 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testPipelineAndFunctionArgumentCompletions() {
         myFixture.configureByText(
-            "test_pipeline_args.txt.tmpl", $$"""
+            "test_pipeline_args.txt.tmpl",
+            $$"""
             {{$myVar := 123}}
             {{ "foo" | myFunc $<caret> }}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         var suggestedCompletions = myFixture.lookupElementStrings
@@ -208,10 +224,11 @@ class VariableCompletionTest : CustomPlatformTestCase() {
         assertContainsElements(suggestedCompletions!!, "myVar")
 
         myFixture.configureByText(
-            "test_func_args.txt.tmpl", $$"""
+            "test_func_args.txt.tmpl",
+            $$"""
             {{$myVar := 123}}
             {{ myFunc 123 "test" $<caret> }}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         suggestedCompletions = myFixture.lookupElementStrings
@@ -221,7 +238,8 @@ class VariableCompletionTest : CustomPlatformTestCase() {
 
     fun testGlobalVsLocalIsolationInDefineBlocks() {
         myFixture.configureByText(
-            "test_define_blocks.txt.tmpl", $$"""
+            "test_define_blocks.txt.tmpl",
+            $$"""
             {{define "foo"}}
                {{$fooVar := 1}}
             {{end}}
@@ -229,7 +247,7 @@ class VariableCompletionTest : CustomPlatformTestCase() {
             {{define "bar"}}
                {{<caret>}}
             {{end}}
-        """.trimIndent()
+            """.trimIndent(),
         )
         myFixture.complete(CompletionType.BASIC)
         val suggestedCompletions = myFixture.lookupElementStrings

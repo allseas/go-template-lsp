@@ -146,7 +146,8 @@ tasks.register<Copy>("copyServerBin") {
             .resolve("..")
             .resolve("..")
             .resolve("..")
-            .resolve("server_binaries"),
+            .resolve("dist")
+            .resolve("server"),
     )
     include("**")
 

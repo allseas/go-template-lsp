@@ -215,9 +215,6 @@ func (l *lexer) acceptRun(valid string) {
 // back a nil pointer that will be the next state, terminating l.nextItem.
 func (l *lexer) errorf(format string, args ...any) stateFn {
 	l.item = item{itemError, l.start, fmt.Sprintf(format, args...), l.startLine}
-	l.start = 0
-	l.pos = 0
-	l.input = l.input[:0]
 	return nil
 }
 
