@@ -10,8 +10,6 @@ import (
 	"regexp"
 	"strings"
 
-	servertypes "text-template-server/types"
-
 	"golang.org/x/tools/go/packages"
 )
 
@@ -76,8 +74,8 @@ type ParamType struct {
 }
 
 // LoadTypeFromHint loads the Go package identified by the hint and returns a
-// types.Tree with DotType and Pkg set.
-func LoadTypeFromHint(hint, workspaceRoot string) (*servertypes.Tree, error) {
+// Tree with DotType and Pkg set.
+func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 	importPath, typeName := splitTypeHint(hint)
 
 	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
@@ -109,8 +107,8 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*servertypes.Tree, error) {
 		return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
 	}
 
-	tree := servertypes.Tree{DotType: named, Pkg: pkg.Types}
-	return &tree, nil
+	tree := &Tree{DotType: named, Pkg: pkg.Types}
+	return tree, nil
 }
 
 // splitTypeHint splits a raw gotype hint into (importPath, typeName).

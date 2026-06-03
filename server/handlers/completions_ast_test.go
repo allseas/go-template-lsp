@@ -39,7 +39,7 @@ func suggestAtWithType(
 	src string,
 	offset int,
 	isInvoked bool,
-	lt *serverTypes.LoadedType,
+	lt *serverTypes.Tree,
 ) []string {
 	t.Helper()
 	typ := parse.New("test")
@@ -92,7 +92,7 @@ func offsetOf(t *testing.T, s, substr string, n int) int {
 	return -1
 }
 
-func orderLoadedType(t *testing.T) *serverTypes.LoadedType {
+func orderLoadedType(t *testing.T) *serverTypes.Tree {
 	t.Helper()
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax,
@@ -105,7 +105,7 @@ func orderLoadedType(t *testing.T) *serverTypes.LoadedType {
 	obj := pkg.Types.Scope().Lookup("Order")
 	require.NotNil(t, obj)
 	named := obj.Type().(*types.Named)
-	tree := servertypes.Tree{DotType: named, Pkg: pkg.Types}
+	tree := serverTypes.Tree{DotType: named, Pkg: pkg.Types}
 	return &tree
 }
 

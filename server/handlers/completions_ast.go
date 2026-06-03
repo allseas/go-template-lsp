@@ -22,7 +22,7 @@ type Context struct {
 	// used for the previous functions in the pipe to extract the context using Pipe.Cmds
 	Pipe *parse.PipeNode
 	// DotType is the resolved Go type of the current dot (.) object.
-	DotType *serverTypes.LoadedType
+	DotType *serverTypes.Tree
 }
 
 type outputKind int
@@ -225,18 +225,18 @@ func pipeOutputType(ctx *Context, isInvoked bool) types.Type {
 			return nil
 		}
 		name := arg.Ident[0]
-		for _, f := range structFields(ctx.DotType.DotType) {
+		for _, f := range serverTypes.StructFields(ctx.DotType.DotType) {
 			if f.Name == name {
 				return f.Type
 			}
 		}
-		for _, m := range namedMethods(ctx.DotType.DotType) {
+		for _, m := range serverTypes.NamedMethods(ctx.DotType.DotType) {
 			if m.Name == name {
 				return m.ReturnType
 			}
 		}
 	case *parse.IdentifierNode:
-		for _, m := range namedMethods(ctx.DotType.DotType) {
+		for _, m := range serverTypes.NamedMethods(ctx.DotType.DotType) {
 			if m.Name == arg.Ident {
 				return m.ReturnType
 			}
@@ -439,11 +439,13 @@ func dotItem(
 		prefix = "."
 	}
 	if lt := ctx.DotType; lt != nil {
-		items = append(items, fieldCompletionItems(structFields(lt.DotType), prefix, wordRange)...)
+		items = append(
+			items,
+			fieldCompletionItems(serverTypes.StructFields(lt.DotType), prefix, wordRange)...)
 		items = append(
 			items,
 			methodCompletionItems(
-				namedMethods(lt.DotType),
+				serverTypes.NamedMethods(lt.DotType),
 				inputType,
 				pipeKind,
 				prefix,
@@ -634,22 +636,22 @@ func buildPathBranch(
 }
 
 // resolveFieldChain walks lt following each name in idents and returns the final
-// LoadedType, or nil if any step cannot be resolved.
-func resolveFieldChain(lt *serverTypes.LoadedType, idents []string) *serverTypes.LoadedType {
+// Tree, or nil if any step cannot be resolved.
+func resolveFieldChain(lt *serverTypes.Tree, idents []string) *serverTypes.Tree {
 	if lt == nil {
 		return nil
 	}
 	cur := lt
 	for _, name := range idents {
-		var next *serverTypes.LoadedType
-		for _, f := range lt.Fields {
+		var next *serverTypes.Tree
+		for _, f := range serverTypes.StructFields(lt.DotType) {
 			if f.Name == name {
-				next = typeAsLoadedType(f.Type, lt)
+				next = typeAsTree(f.Type, lt)
 			}
 		}
-		for _, m := range lt.Methods {
+		for _, m := range serverTypes.NamedMethods(lt.DotType) {
 			if m.Name == name {
-				next = typeAsLoadedType(m.ReturnType, lt)
+				next = typeAsTree(m.ReturnType, lt)
 			}
 		}
 		cur = next
@@ -657,9 +659,9 @@ func resolveFieldChain(lt *serverTypes.LoadedType, idents []string) *serverTypes
 	return cur
 }
 
-// typeAsLoadedType converts a Go type into a *LoadedType, reusing pkg from base.
+// typeAsTree converts a Go type into a *Tree, reusing pkg from base.
 // Returns nil for non-navigable types (primitives, slices, etc.).
-func typeAsLoadedType(t types.Type, base *serverTypes.LoadedType) *serverTypes.LoadedType {
+func typeAsTree(t types.Type, base *serverTypes.Tree) *serverTypes.Tree {
 	if ptr, ok := t.(*types.Pointer); ok {
 		t = ptr.Elem()
 	}
@@ -667,23 +669,31 @@ func typeAsLoadedType(t types.Type, base *serverTypes.LoadedType) *serverTypes.L
 	if !ok {
 		return nil
 	}
-	return &serverTypes.LoadedType{
+	return &serverTypes.Tree{
 		Pkg:     base.Pkg,
-		Named:   named,
-		Fields:  serverTypes.StructFields(named),
-		Methods: serverTypes.NamedMethods(named),
+		DotType: named,
 	}
 }
 
 // fieldChainCompletionItems returns fields and methods of a chain-resolved type,
 // without a dot prefix (the dot was already consumed as the trigger character).
 func fieldChainCompletionItems(
-	lt *serverTypes.LoadedType,
+	lt *serverTypes.Tree,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
-	items := make([]protocol.CompletionItem, 0, len(lt.Fields)+len(lt.Methods))
-	items = append(items, fieldCompletionItems(lt.Fields, "", wordRange)...)
-	items = append(items, methodCompletionItems(lt.Methods, nil, outputAny, "", wordRange)...)
+	items := make([]protocol.CompletionItem, 0)
+	items = append(
+		items,
+		fieldCompletionItems(serverTypes.StructFields(lt.DotType), "", wordRange)...)
+	items = append(
+		items,
+		methodCompletionItems(
+			serverTypes.NamedMethods(lt.DotType),
+			nil,
+			outputAny,
+			"",
+			wordRange,
+		)...)
 	return items
 }
 
@@ -706,7 +716,7 @@ func resolvePipeDotType(
 	}
 	fieldName := field.Ident[0]
 	var fieldType types.Type
-	for _, f := range structFields(ctx.DotType.DotType) {
+	for _, f := range serverTypes.StructFields(ctx.DotType.DotType) {
 		if f.Name == fieldName {
 			fieldType = f.Type
 			break
@@ -739,8 +749,10 @@ func resolvePipeDotType(
 			return ctx.DotType
 		}
 	}
-	tree := serverTypes.Tree{DotType: named, Pkg: ctx.DotType.Pkg}
-	return &tree
+	return &serverTypes.Tree{
+		DotType: named,
+		Pkg:     ctx.DotType.Pkg,
+	}
 }
 
 // main traversal logic

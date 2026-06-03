@@ -45,7 +45,7 @@ func TestLoadTypeFromHint(t *testing.T) {
 				assert.Equal(t, tc.wantTypeName, lt.DotType.Obj().Name())
 			}
 
-			fields := structFields(lt.DotType)
+			fields := StructFields(lt.DotType)
 			fieldNames := make([]string, len(fields))
 			for i, f := range fields {
 				fieldNames[i] = f.Name
@@ -54,7 +54,7 @@ func TestLoadTypeFromHint(t *testing.T) {
 				assert.Contains(t, fieldNames, want)
 			}
 
-			methods := namedMethods(lt.DotType)
+			methods := NamedMethods(lt.DotType)
 			methodNames := make([]string, len(methods))
 			for i, m := range methods {
 				methodNames[i] = m.Name
