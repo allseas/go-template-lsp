@@ -147,7 +147,7 @@ func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 
 	var walk func(n parse.Node)
 	walk = func(n parse.Node) {
-		if n == nil {
+		if isNilNode(n) {
 			return
 		}
 
