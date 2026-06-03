@@ -6,7 +6,7 @@ import { cleanupDocument, createDocument } from "./utils";
 
 suite("Completion Test Suite", () => {
     before(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
     });
 
     after(() => {
@@ -36,7 +36,7 @@ suite("Completion Test Suite", () => {
             "{{}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(0, 2),
@@ -51,7 +51,7 @@ suite("Completion Test Suite", () => {
     test("Dot always suggested", async () => {
         const { tmplUri } = await createDocument("completion-dot.tmpl", "{{}}");
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(0, 2),
@@ -69,7 +69,7 @@ suite("Completion Test Suite", () => {
             "{{$a := a}}\n{{$b := b}}\n{{$c := c}}\n{{$d := d}}\n{{$e := e}}\n{{}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(5, 2),
@@ -91,7 +91,7 @@ suite("Completion Test Suite", () => {
             "{{range $a, $b := .}}\n{{}}\n{{end}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(1, 2),
@@ -110,7 +110,7 @@ suite("Completion Test Suite", () => {
             "{{range $a, $b := .}}\n{{end}}\n{{}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(2, 2),
@@ -129,7 +129,7 @@ suite("Completion Test Suite", () => {
             "{{$variable := 123}}\n{{$b := b}}\n{{$va}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(2, 5),
@@ -149,7 +149,7 @@ suite("Completion Test Suite", () => {
             "{{$variable := 123}}\n{{$b := b}}\n{{va}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(2, 4),
@@ -167,7 +167,7 @@ suite("Completion Test Suite", () => {
             "{{with $x := .Field}}\n    {{}}\n{{end}}\n{{if $y := .Field}}\n    {{}}\n{{end}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             // Check 'with' block
             let list = await getCompletions(tmplUri, new vscode.Position(1, 6));
             let labels = getLabels(list);
@@ -188,7 +188,7 @@ suite("Completion Test Suite", () => {
             "{{with $x := .Field}}{{end}}\n{{if $y := .Field}}{{end}}\n{{}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(2, 2),
@@ -209,7 +209,7 @@ suite("Completion Test Suite", () => {
             "{{with $x := .Field}}\n{{else}}\n{{}}\n{{end}}\n{{if $y := .Field}}\n{{else}}\n{{}}\n{{end}}\n{{range $k, $v := .Field}}\n{{else}}\n{{}}\n{{end}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
 
             // Check 'else' block of 'with'
             let list = await getCompletions(tmplUri, new vscode.Position(2, 2));
@@ -249,7 +249,7 @@ suite("Completion Test Suite", () => {
             "{{$a, $b := myFunc}}\n{{}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(1, 2),
@@ -268,7 +268,7 @@ suite("Completion Test Suite", () => {
             "{{$va := 1}}\n{{/* {{$v}} */}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(1, 9),
@@ -286,7 +286,7 @@ suite("Completion Test Suite", () => {
             "{{$a := 1}}\n{{range .}}\n    {{$a := 2}}\n    {{}}\n{{end}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(3, 6),
@@ -305,7 +305,7 @@ suite("Completion Test Suite", () => {
             "{{$user := .}}\n{{$user.}}",
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(1, 8),
@@ -323,7 +323,7 @@ suite("Completion Test Suite", () => {
             '{{$myVar := 123}}\n{{ "foo" | myFunc $ }}\n{{ myFunc 123 "test" $ }}',
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             // Check pipeline
             let list = await getCompletions(
                 tmplUri,
@@ -347,7 +347,7 @@ suite("Completion Test Suite", () => {
             '{{define "foo"}}\n   {{$fooVar := 1}}\n{{end}}\n\n{{define "bar"}}\n   {{}}\n{{end}}',
         );
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
                 new vscode.Position(5, 5),
