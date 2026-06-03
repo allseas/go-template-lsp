@@ -1,11 +1,12 @@
-package handlers
+// Package utils implements various utils for the server
+package utils
 
 import (
 	parse "text-template-parser"
 )
 
-// isNilNode checks if a parse.Node is nil or contains nil pointers in its concrete type.
-func isNilNode(n parse.Node) bool {
+// IsNilNode checks if a parse.Node is nil or contains nil pointers in its concrete type.
+func IsNilNode(n parse.Node) bool {
 	if n == nil {
 		return true
 	}

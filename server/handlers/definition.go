@@ -8,7 +8,8 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-func definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error) {
+// Definition handles finding the definition to jump to
+func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error) {
 	uri := params.TextDocument.URI
 	position := params.Position
 	doc, ok := store.Get(uri)

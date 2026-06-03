@@ -34,7 +34,7 @@ func TestHover(t *testing.T) {
 				}
 
 				// Call the hover handler
-				hoverResult, err := hover(nil, params)
+				hoverResult, err := Hover(nil, params)
 
 				if tc.expectingError {
 					require.Error(t, err)

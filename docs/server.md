@@ -69,7 +69,7 @@ The server tracks open documents using the `documents` handler:
 - **didClose** — Document closed
 
 ```go
-func didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
+func DidOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
     // Parse and analyze the document
     // Store in internal cache
     return nil
@@ -97,7 +97,7 @@ func completion(ctx *glsp.Context, params *protocol.CompletionParams) (any, erro
 Finds all usages of a symbol in the workspace.
 
 ```go
-func references(ctx *glsp.Context, params *protocol.ReferenceParams) (any, error) {
+func References(ctx *glsp.Context, params *protocol.ReferenceParams) (any, error) {
     // 1. Identify the symbol at cursor position
     // 2. Search all open documents for references
     // 3. Return []protocol.Location
@@ -132,7 +132,7 @@ import (
     protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-func hover(ctx *glsp.Context, params *protocol.HoverParams) (any, error) {
+func Hover(ctx *glsp.Context, params *protocol.HoverParams) (any, error) {
     // 1. Extract document URI and position
     uri := params.TextDocument.URI
     position := params.Position

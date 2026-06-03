@@ -42,7 +42,7 @@ func TestReferencesFindsAllOccurrences(t *testing.T) {
 		Context: protocol.ReferenceContext{IncludeDeclaration: true},
 	}
 
-	results, err := references(nil, params)
+	results, err := References(nil, params)
 	require.NoError(t, err)
 	assert.Len(t, results, 3)
 }
@@ -61,7 +61,7 @@ func TestReferencesIdentifier(t *testing.T) {
 		Context: protocol.ReferenceContext{IncludeDeclaration: true},
 	}
 
-	results, err := references(nil, params)
+	results, err := References(nil, params)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 	store.Delete(uri)
@@ -80,7 +80,7 @@ func TestReferencesCursorOnNonNode(t *testing.T) {
 		Context: protocol.ReferenceContext{IncludeDeclaration: true},
 	}
 
-	results, err := references(nil, params)
+	results, err := References(nil, params)
 	require.NoError(t, err)
 	assert.Empty(t, results)
 	store.Delete(uri)
@@ -101,7 +101,7 @@ func TestReferencesMultiline(t *testing.T) {
 		Context: protocol.ReferenceContext{IncludeDeclaration: true},
 	}
 
-	results, err := references(nil, params)
+	results, err := References(nil, params)
 	require.NoError(t, err)
 	assert.Len(t, results, 2)
 }

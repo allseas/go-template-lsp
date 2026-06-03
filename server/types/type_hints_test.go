@@ -1,4 +1,4 @@
-package handlers
+package types
 
 import (
 	"go/token"
@@ -66,7 +66,10 @@ func TestLoadTypeFromHint(t *testing.T) {
 
 func TestNamedMethods(t *testing.T) {
 	t.Run("extracts Order methods and params", func(t *testing.T) {
-		cfg := &packages.Config{Mode: packages.NeedTypes, Dir: "testdata"}
+		cfg := &packages.Config{
+			Mode: packages.NeedTypes,
+			Dir:  "../../test/resources/typehints-tests",
+		}
 		pkgs, err := packages.Load(cfg, "text-template-server/src/model")
 		require.NoError(t, err)
 		require.NotEmpty(t, pkgs)
@@ -77,7 +80,7 @@ func TestNamedMethods(t *testing.T) {
 		named, ok := obj.Type().(*types.Named)
 		require.True(t, ok)
 
-		methods := namedMethods(named)
+		methods := NamedMethods(named)
 		names := make([]string, len(methods))
 		for i, m := range methods {
 			names[i] = m.Name
@@ -142,7 +145,7 @@ func TestNamedMethods(t *testing.T) {
 			types.NewFunc(token.NoPos, pkg, "TooMany", threeResultsSig),
 		})
 
-		methods := namedMethods(named)
+		methods := NamedMethods(named)
 		require.Len(t, methods, 1)
 		assert.Equal(t, "Good", methods[0].Name)
 	})
@@ -156,7 +159,7 @@ func TestStructFields(t *testing.T) {
 			types.Typ[types.Int],
 			nil,
 		)
-		assert.Nil(t, structFields(named))
+		assert.Nil(t, StructFields(named))
 	})
 
 	t.Run("returns only exported fields and preserves embedded flag", func(t *testing.T) {
@@ -174,7 +177,7 @@ func TestStructFields(t *testing.T) {
 		}, nil)
 
 		named := types.NewNamed(types.NewTypeName(token.NoPos, pkg, "Container", nil), st, nil)
-		fields := structFields(named)
+		fields := StructFields(named)
 
 		require.Len(t, fields, 2)
 		assert.Equal(t, "Public", fields[0].Name)

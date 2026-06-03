@@ -1,4 +1,5 @@
-package handlers
+// Package types implements utils for types and the type tree
+package types
 
 import (
 	"bufio"
@@ -117,8 +118,8 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*LoadedType, error) {
 	return &LoadedType{
 		Pkg:     pkg,
 		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
+		Fields:  StructFields(named),
+		Methods: NamedMethods(named),
 	}, nil
 }
 
@@ -131,8 +132,8 @@ func splitTypeHint(hint string) (importPath, typeName string) {
 	return hint[:idx], hint[idx+1:]
 }
 
-// namedMethods extracts the methods from the model
-func namedMethods(named *types.Named) []MethodType {
+// NamedMethods extracts the methods from the model
+func NamedMethods(named *types.Named) []MethodType {
 	var methods []MethodType
 	for i := range named.NumMethods() {
 		fn := named.Method(i)
@@ -171,8 +172,8 @@ func namedMethods(named *types.Named) []MethodType {
 	return methods
 }
 
-// structFields returns the exported fields of the struct
-func structFields(named *types.Named) []TypeField {
+// StructFields returns the exported fields of the struct
+func StructFields(named *types.Named) []TypeField {
 	// Underlying returns structs fields and types
 	st, ok := named.Underlying().(*types.Struct)
 	if !ok {
