@@ -46,18 +46,20 @@ type TError struct {
 }
 
 // NewTree creates a typed tree from a parse tree, optionally with type information.
-func NewTree(parseTree parse.Tree, funcs map[string]*types.Func, dotType types.Type) Tree {
+func NewTree(parseTree parse.Tree, funcs map[string]*types.Func, dotType types.Type, pkg *types.Package) Tree {
 	typeTree := Tree{
 		Name:      parseTree.Name,
 		ParseName: parseTree.ParseName,
 		Errors:    parseTree.Errors,
 		funcs:     funcs,
+		Pkg:       pkg,
 	}
 
 	if parseTree.Root != nil {
 		typeTree.Root = analyseList(parseTree.Root, nil, &analysisCtx{
 			funcs:   funcs,
 			dotType: dotType,
+			tree:    &typeTree,
 			vars: []*VariableNode{
 				{
 					Pos:      0,
@@ -83,15 +85,7 @@ func NewTreeWithType(
 	dotType *types.Named,
 	pkg *types.Package,
 ) Tree {
-	typeTree := NewTree(parseTree, funcs, dotType)
-	typeTree.DotType = dotType
-	typeTree.Pkg = pkg
-
-	// Populate types on context-dependent nodes
-	if typeTree.Root != nil && dotType != nil {
-		resolveNodeTypes(typeTree.Root, dotType, &resolveCtx{pkg: pkg})
-	}
-
+	typeTree := NewTree(parseTree, funcs, dotType, pkg)
 	return typeTree
 }
 
@@ -189,7 +183,8 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 
 	case *parse.ContinueNode:
 		return analyseContinue(n, parent, ctx)
-
+	case *parse.PipeNode:
+		return analysePipe(n, parent, ctx)
 	default:
 		// Unknown node type
 		return nil
@@ -290,6 +285,14 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 	if typ == nil {
 		ctx.errorf(pipe, ErrorTypeInvalidRange, "cannot range over type %s", pipe.typ.String())
 		ctx.dotType = nil
+	} else {
+		ctx.dotType = typ
+		//override the range var if it was set
+		if len(pipe.Decl) == 1 {
+			pipe.Decl[0].typ = typ
+		} else if len(pipe.Decl) == 2 {
+			pipe.Decl[1].typ = typ
+		}
 	}
 	list := analyseList(n.List, parent, ctx)
 	ctx.dotType = keepDot
@@ -388,7 +391,9 @@ func analyseDot(n *parse.DotNode, parent Node, ctx *analysisCtx) Node {
 }
 
 func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
+	keepVars := len(ctx.vars)
 	base := analyseNode(n.Node, parent, ctx)
+	ctx.vars = ctx.vars[:keepVars] // Pop any variables declared in the base node
 	cn := &ChainNode{
 		NodeType: NodeChain,
 		Pos:      Pos(n.Position()),
@@ -402,13 +407,23 @@ func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
 		return cn
 	}
 
+	if typ, ok := walkFieldChain(ctx, cn, baseType, n.Field); ok {
+		cn.typ = typ
+	}
+	return cn
+}
+
+// walkFieldChain walks a chain of field/method names from a starting type,
+// reporting any lookup errors on errNode. It returns the final type and a
+// bool indicating whether the entire chain resolved successfully.
+func walkFieldChain(ctx *analysisCtx, errNode Node, base types.Type, path []string) (types.Type, bool) {
 	pkg := ctx.tree.Pkg
-	currentType := baseType
-	for _, fieldName := range n.Field {
-		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, fieldName)
+	currentType := base
+	for _, name := range path {
+		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
 		if obj == nil {
-			ctx.errorf(cn, ErrorTypeInvalidField, "type %s has no field or method %q", currentType.String(), fieldName)
-			return cn
+			ctx.errorf(errNode, ErrorTypeInvalidField, "type %s has no field or method %q", currentType.String(), name)
+			return nil, false
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -416,18 +431,20 @@ func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
 		case *types.Func:
 			sig, ok := o.Type().Underlying().(*types.Signature)
 			if !ok || sig.Results().Len() == 0 {
-				ctx.errorf(cn, ErrorTypeInvalidField, "method %q on type %s returns no values", fieldName, currentType.String())
-				return cn
+				ctx.errorf(errNode, ErrorTypeInvalidField, "method %q on type %s returns no values", name, currentType.String())
+				return nil, false
 			}
+			if sig.Results().Len() > 2 {
+				ctx.errorf(errNode, ErrorTypeInvalidField, "method %q on type %s returns more than 2 parameters", name, currentType.String())
+			}
+			// At(1) can be an error
 			currentType = sig.Results().At(0).Type()
 		default:
-			ctx.errorf(cn, ErrorTypeInvalidField, "unexpected object type for %q on %s", fieldName, currentType.String())
-			return cn
+			ctx.errorf(errNode, ErrorTypeInvalidField, "unexpected object type for %q on %s", name, currentType.String())
+			return nil, false
 		}
 	}
-	cn.typ = currentType
-
-	return cn
+	return currentType, true
 }
 
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
@@ -452,13 +469,40 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 
 func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *VariableNode {
 
-	return &VariableNode{
+	v := &VariableNode{
 		NodeType: NodeVariable,
 		Pos:      Pos(n.Position()),
 		Ident:    n.Ident,
 		parent:   parent,
-		// TODO: add typ logic here
 	}
+	// Look up base variable in context
+	var baseType types.Type
+	found := false
+	for i := len(ctx.vars) - 1; i >= 0; i-- {
+		if ctx.vars[i].Ident[0] == n.Ident[0] {
+			baseType = ctx.vars[i].typ
+			found = true
+			break
+		}
+	}
+	if !found {
+		return v
+	}
+
+	// $var with no field path -- type is the variable's type.
+	if len(n.Ident) == 1 {
+		v.typ = baseType
+		return v
+	}
+
+	// $var.A.B... -- walk the field/method chain from the variable's type.
+	if baseType == nil {
+		return v
+	}
+	if typ, ok := walkFieldChain(ctx, v, baseType, n.Ident[1:]); ok {
+		v.typ = typ
+	}
+	return v
 }
 
 func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
@@ -473,35 +517,9 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		return fn
 	}
 
-	pkg := ctx.tree.Pkg
-	currentType := ctx.dotType
-	for _, fieldName := range n.Ident {
-		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, fieldName)
-		if obj == nil {
-			ctx.errorf(fn, ErrorTypeInvalidField, "type %s has no field or method %q", currentType.String(), fieldName)
-			return fn
-		}
-		switch o := obj.(type) {
-		case *types.Var:
-			currentType = o.Type()
-		case *types.Func:
-			sig, ok := o.Type().Underlying().(*types.Signature)
-			if !ok || sig.Results().Len() == 0 {
-				ctx.errorf(fn, ErrorTypeInvalidField, "method %q on type %s returns no values", fieldName, currentType.String())
-				return fn
-			}
-			if sig.Results().Len() > 2 {
-				ctx.errorf(fn, ErrorTypeInvalidField, "method %q on type %s returns more than 2 parameters", fieldName, currentType.String())
-			}
-			// At(1) can be an error
-			currentType = sig.Results().At(0).Type()
-		default:
-			ctx.errorf(fn, ErrorTypeInvalidField, "unexpected object type for %q on %s", fieldName, currentType.String())
-			return fn
-		}
+	if typ, ok := walkFieldChain(ctx, fn, ctx.dotType, n.Ident); ok {
+		fn.typ = typ
 	}
-	fn.typ = currentType
-
 	return fn
 }
 
@@ -546,24 +564,24 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 	}
 
 	// The type of the pipe is literal
-	if len(typePipe.Decl) == 1 {
-		typePipe.typ = getNodeType(typePipe.Decl[0])
-		return typePipe
-	}
+	if len(typePipe.Cmds) == 1 {
+		typePipe.typ = getNodeType(typePipe.Cmds[0])
+	} else {
 
-	// f :: int -> string
-	// g :: string -> bool
-	// h :: bool -> String
-	// {{ . | | h }}
+		// f :: int -> string
+		// g :: string -> bool
+		// h :: bool -> String
+		// {{ . | | h }}
 
-	//TODO: type checking between pipe segments
-	resType := getNodeType(typePipe.Cmds[len(typePipe.Cmds)-1])
-	switch resType.Underlying().(type) {
-	case *types.Signature:
-		typePipe.typ = resType.Underlying().(*types.Signature).Results().At(0).Type()
-	default:
-		// not sure how to handle this, should be impossible, do we return nil or invalid?
-		typePipe.typ = types.Typ[types.Invalid]
+		//TODO: type checking between pipe segments
+		resType := getNodeType(typePipe.Cmds[len(typePipe.Cmds)-1])
+		switch resType.Underlying().(type) {
+		case *types.Signature:
+			typePipe.typ = resType.Underlying().(*types.Signature).Results().At(0).Type()
+		default:
+			// not sure how to handle this, should be impossible, do we return nil or invalid?
+			typePipe.typ = types.Typ[types.Invalid]
+		}
 	}
 
 	// Convert declarations
@@ -584,9 +602,9 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 		}
 
 		if len(typePipe.Decl) == 2 {
-			typePipe.Decl[0].typ = typePipe.typ
+			typePipe.Decl[1].typ = typePipe.typ
 			ctx.vars = append(ctx.vars, typePipe.Decl[0])
-			typePipe.Decl[1].typ = types.Typ[types.Uint] //unsigned int for index
+			typePipe.Decl[0].typ = types.Typ[types.Uint] //unsigned int for index
 			ctx.vars = append(ctx.vars, typePipe.Decl[1])
 		}
 
@@ -657,7 +675,7 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx) *
 
 		return typeCmd
 	}
-	return nil
+	return typeCmd
 }
 
 // getNodeType returns the type of a node without modifying it.
