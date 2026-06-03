@@ -8,7 +8,10 @@ export default defineConfig([
         version: "stable",
         workspaceFolder: "../../test/resources/templ-tests",
         extensionDevelopmentPath: "./",
-        launchArgs: ["--extensionDevelopmentPath=.", "--user-data-dir=/tmp/vscode-test-userdata"],
+        launchArgs: [
+            "--extensionDevelopmentPath=.",
+            "--user-data-dir=/tmp/vscode-test-userdata",
+        ],
         mocha: {
             ui: "tdd",
             timeout: 20000,
