@@ -11,6 +11,8 @@ export default defineConfig([
         launchArgs: [
             "--extensionDevelopmentPath=.",
             "--user-data-dir=/tmp/vscode-test-userdata",
+            "--no-sandbox",
+            "--disable-gpu",
         ],
         mocha: {
             ui: "tdd",
