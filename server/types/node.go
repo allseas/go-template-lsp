@@ -121,7 +121,14 @@ func (u *UndefinedNode) CopyUndefined() *UndefinedNode {
 	if u == nil {
 		return nil
 	}
-	return &UndefinedNode{NodeType: NodeUndefined, Pos: u.Pos, parent: u.parent, Err: u.Err, str: u.str, isElse: u.isElse}
+	return &UndefinedNode{
+		NodeType: NodeUndefined,
+		Pos:      u.Pos,
+		parent:   u.parent,
+		Err:      u.Err,
+		str:      u.str,
+		isElse:   u.isElse,
+	}
 }
 
 func (u *UndefinedNode) ValueType() types.Type {
@@ -218,7 +225,13 @@ func (t *TextNode) Parent() Node {
 }
 
 func (t *TextNode) Copy() Node {
-	return &TextNode{NodeType: NodeText, Pos: t.Pos, parent: t.parent, Text: append([]byte{}, t.Text...), isElse: t.isElse}
+	return &TextNode{
+		NodeType: NodeText,
+		Pos:      t.Pos,
+		parent:   t.parent,
+		Text:     append([]byte{}, t.Text...),
+		isElse:   t.isElse,
+	}
 }
 
 func (t *TextNode) ValueType() types.Type {
@@ -255,7 +268,13 @@ func (c *CommentNode) Parent() Node {
 }
 
 func (c *CommentNode) Copy() Node {
-	return &CommentNode{NodeType: NodeComment, Pos: c.Pos, parent: c.parent, Text: c.Text, isElse: c.isElse}
+	return &CommentNode{
+		NodeType: NodeComment,
+		Pos:      c.Pos,
+		parent:   c.parent,
+		Text:     c.Text,
+		isElse:   c.isElse,
+	}
 }
 
 func (c *CommentNode) ValueType() types.Type {
@@ -378,7 +397,14 @@ func (a *ActionNode) Parent() Node {
 }
 
 func (a *ActionNode) Copy() Node {
-	return &ActionNode{NodeType: NodeAction, Pos: a.Pos, parent: a.parent, Line: a.Line, Pipe: a.Pipe.CopyPipe(), isElse: a.isElse}
+	return &ActionNode{
+		NodeType: NodeAction,
+		Pos:      a.Pos,
+		parent:   a.parent,
+		Line:     a.Line,
+		Pipe:     a.Pipe.CopyPipe(),
+		isElse:   a.isElse,
+	}
 }
 
 func (a *ActionNode) ValueType() types.Type {
@@ -459,7 +485,15 @@ func (i *IdentifierNode) Parent() Node {
 }
 
 func (i *IdentifierNode) Copy() Node {
-	return &IdentifierNode{NodeType: NodeIdentifier, Pos: i.Pos, tr: i.tr, Ident: i.Ident, typ: i.typ, parent: i.parent, isElse: i.isElse}
+	return &IdentifierNode{
+		NodeType: NodeIdentifier,
+		Pos:      i.Pos,
+		tr:       i.tr,
+		Ident:    i.Ident,
+		typ:      i.typ,
+		parent:   i.parent,
+		isElse:   i.isElse,
+	}
 }
 
 func (i *IdentifierNode) IsElseList() bool {
@@ -561,6 +595,7 @@ func (d *DotNode) String() string {
 func (d *DotNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(d.String())
 }
+
 func (d *DotNode) Parent() Node {
 	return d.parent
 }
@@ -599,6 +634,7 @@ func (n *NilNode) String() string {
 func (n *NilNode) writeTo(sb *strings.Builder) {
 	sb.WriteString(n.String())
 }
+
 func (n *NilNode) Parent() Node {
 	return n.parent
 }
@@ -755,7 +791,13 @@ func (b *BoolNode) writeTo(sb *strings.Builder) {
 }
 
 func (b *BoolNode) Copy() Node {
-	return &BoolNode{NodeType: NodeBool, Pos: b.Pos, True: b.True, parent: b.parent, isElse: b.isElse}
+	return &BoolNode{
+		NodeType: NodeBool,
+		Pos:      b.Pos,
+		True:     b.True,
+		parent:   b.parent,
+		isElse:   b.isElse,
+	}
 }
 
 func (b *BoolNode) ValueType() types.Type {
@@ -847,7 +889,14 @@ func (s *StringNode) Parent() Node {
 }
 
 func (s *StringNode) Copy() Node {
-	return &StringNode{NodeType: NodeString, Pos: s.Pos, Quoted: s.Quoted, Text: s.Text, parent: s.parent, isElse: s.isElse}
+	return &StringNode{
+		NodeType: NodeString,
+		Pos:      s.Pos,
+		Quoted:   s.Quoted,
+		Text:     s.Text,
+		parent:   s.parent,
+		isElse:   s.isElse,
+	}
 }
 
 func (s *StringNode) ValueType() types.Type {
@@ -909,11 +958,47 @@ func (b *BranchNode) Parent() Node {
 func (b *BranchNode) Copy() Node {
 	switch b.NodeType {
 	case NodeIf:
-		return &IfNode{BranchNode: BranchNode{NodeType: NodeIf, Pos: b.Pos, Line: b.Line, Pipe: b.Pipe, List: b.List, ElseList: b.ElseList, typ: b.typ, parent: b.parent, isElse: b.isElse}}
+		return &IfNode{
+			BranchNode: BranchNode{
+				NodeType: NodeIf,
+				Pos:      b.Pos,
+				Line:     b.Line,
+				Pipe:     b.Pipe,
+				List:     b.List,
+				ElseList: b.ElseList,
+				typ:      b.typ,
+				parent:   b.parent,
+				isElse:   b.isElse,
+			},
+		}
 	case NodeRange:
-		return &RangeNode{BranchNode: BranchNode{NodeType: NodeRange, Pos: b.Pos, Line: b.Line, Pipe: b.Pipe, List: b.List, ElseList: b.ElseList, typ: b.typ, parent: b.parent, isElse: b.isElse}}
+		return &RangeNode{
+			BranchNode: BranchNode{
+				NodeType: NodeRange,
+				Pos:      b.Pos,
+				Line:     b.Line,
+				Pipe:     b.Pipe,
+				List:     b.List,
+				ElseList: b.ElseList,
+				typ:      b.typ,
+				parent:   b.parent,
+				isElse:   b.isElse,
+			},
+		}
 	case NodeWith:
-		return &WithNode{BranchNode: BranchNode{NodeType: NodeWith, Pos: b.Pos, Line: b.Line, Pipe: b.Pipe, List: b.List, ElseList: b.ElseList, typ: b.typ, parent: b.parent, isElse: b.isElse}}
+		return &WithNode{
+			BranchNode: BranchNode{
+				NodeType: NodeWith,
+				Pos:      b.Pos,
+				Line:     b.Line,
+				Pipe:     b.Pipe,
+				List:     b.List,
+				ElseList: b.ElseList,
+				typ:      b.typ,
+				parent:   b.parent,
+				isElse:   b.isElse,
+			},
+		}
 	default:
 		panic("unknown branch type")
 	}
@@ -929,7 +1014,19 @@ type IfNode struct {
 }
 
 func (i *IfNode) Copy() Node {
-	return &IfNode{BranchNode: BranchNode{NodeType: NodeIf, Pos: i.Pos, Line: i.Line, Pipe: i.Pipe.CopyPipe(), List: i.List.CopyList(), ElseList: i.ElseList.CopyList(), typ: i.typ, parent: i.parent, isElse: i.isElse}}
+	return &IfNode{
+		BranchNode: BranchNode{
+			NodeType: NodeIf,
+			Pos:      i.Pos,
+			Line:     i.Line,
+			Pipe:     i.Pipe.CopyPipe(),
+			List:     i.List.CopyList(),
+			ElseList: i.ElseList.CopyList(),
+			typ:      i.typ,
+			parent:   i.parent,
+			isElse:   i.isElse,
+		},
+	}
 }
 
 func (i *IfNode) ValueType() types.Type {
@@ -946,7 +1043,13 @@ type BreakNode struct {
 }
 
 func (b *BreakNode) Copy() Node {
-	return &BreakNode{NodeType: NodeBreak, Pos: b.Pos, Line: b.Line, parent: b.parent, isElse: b.isElse}
+	return &BreakNode{
+		NodeType: NodeBreak,
+		Pos:      b.Pos,
+		Line:     b.Line,
+		parent:   b.parent,
+		isElse:   b.isElse,
+	}
 }
 func (b *BreakNode) String() string              { return "{{break}}" }
 func (b *BreakNode) Parent() Node                { return b.parent }
@@ -964,7 +1067,13 @@ type ContinueNode struct {
 }
 
 func (c *ContinueNode) Copy() Node {
-	return &ContinueNode{NodeType: NodeContinue, Pos: c.Pos, Line: c.Line, parent: c.parent, isElse: c.isElse}
+	return &ContinueNode{
+		NodeType: NodeContinue,
+		Pos:      c.Pos,
+		Line:     c.Line,
+		parent:   c.parent,
+		isElse:   c.isElse,
+	}
 }
 func (c *ContinueNode) String() string              { return "{{continue}}" }
 func (c *ContinueNode) Parent() Node                { return c.parent }
@@ -978,7 +1087,19 @@ type RangeNode struct {
 }
 
 func (r *RangeNode) Copy() Node {
-	return &RangeNode{BranchNode: BranchNode{NodeType: NodeRange, Pos: r.Pos, Line: r.Line, Pipe: r.Pipe.CopyPipe(), List: r.List.CopyList(), ElseList: r.ElseList.CopyList(), typ: r.typ, parent: r.parent, isElse: r.isElse}}
+	return &RangeNode{
+		BranchNode: BranchNode{
+			NodeType: NodeRange,
+			Pos:      r.Pos,
+			Line:     r.Line,
+			Pipe:     r.Pipe.CopyPipe(),
+			List:     r.List.CopyList(),
+			ElseList: r.ElseList.CopyList(),
+			typ:      r.typ,
+			parent:   r.parent,
+			isElse:   r.isElse,
+		},
+	}
 }
 
 func (r *RangeNode) ValueType() types.Type {
@@ -991,7 +1112,19 @@ type WithNode struct {
 }
 
 func (w *WithNode) Copy() Node {
-	return &WithNode{BranchNode: BranchNode{NodeType: NodeWith, Pos: w.Pos, Line: w.Line, Pipe: w.Pipe.CopyPipe(), List: w.List.CopyList(), ElseList: w.ElseList.CopyList(), typ: w.typ, parent: w.parent, isElse: w.isElse}}
+	return &WithNode{
+		BranchNode: BranchNode{
+			NodeType: NodeWith,
+			Pos:      w.Pos,
+			Line:     w.Line,
+			Pipe:     w.Pipe.CopyPipe(),
+			List:     w.List.CopyList(),
+			ElseList: w.ElseList.CopyList(),
+			typ:      w.typ,
+			parent:   w.parent,
+			isElse:   w.isElse,
+		},
+	}
 }
 
 func (w *WithNode) ValueType() types.Type {
@@ -1034,7 +1167,15 @@ func (t *TemplateNode) Parent() Node {
 }
 
 func (t *TemplateNode) Copy() Node {
-	return &TemplateNode{NodeType: NodeTemplate, Pos: t.Pos, Line: t.Line, Name: t.Name, Pipe: t.Pipe.CopyPipe(), parent: t.parent, isElse: t.isElse}
+	return &TemplateNode{
+		NodeType: NodeTemplate,
+		Pos:      t.Pos,
+		Line:     t.Line,
+		Name:     t.Name,
+		Pipe:     t.Pipe.CopyPipe(),
+		parent:   t.parent,
+		isElse:   t.isElse,
+	}
 }
 
 func (t *TemplateNode) ValueType() types.Type {

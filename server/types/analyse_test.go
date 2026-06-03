@@ -13,7 +13,12 @@ func TestAnalyze(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tree := NewTreeWithType(tc.parseTree, tc.funcs, tc.dotType, tc.pkg)
 			if len(tree.Errors) != len(tc.expectedErrors) {
-				t.Fatalf("Expected %d errors, got %d: %v", len(tc.expectedErrors), len(tree.Errors), tree.Errors)
+				t.Fatalf(
+					"Expected %d errors, got %d: %v",
+					len(tc.expectedErrors),
+					len(tree.Errors),
+					tree.Errors,
+				)
 			}
 			if diff := CompareTypeTrees(tree, tc.resTree); diff != "" {
 				t.Fatalf("type tree mismatch: %s", diff)
@@ -47,7 +52,11 @@ func compareTypeListNodes(a, b *ListNode, path string) string {
 		return fmt.Sprintf("%s: got %d nodes, want %d", path, len(a.Nodes), len(b.Nodes))
 	}
 	for i := range a.Nodes {
-		if diff := compareTypeNodes(a.Nodes[i], b.Nodes[i], fmt.Sprintf("%s[%d]", path, i)); diff != "" {
+		if diff := compareTypeNodes(
+			a.Nodes[i],
+			b.Nodes[i],
+			fmt.Sprintf("%s[%d]", path, i),
+		); diff != "" {
 			return diff
 		}
 	}
@@ -77,12 +86,20 @@ func compareTypePipeNodes(a, b *PipeNode, path string) string {
 		return fmt.Sprintf("%s.Cmds: got %d items, want %d", path, len(a.Cmds), len(b.Cmds))
 	}
 	for i := range a.Decl {
-		if diff := compareTypeNodes(a.Decl[i], b.Decl[i], fmt.Sprintf("%s.Decl[%d]", path, i)); diff != "" {
+		if diff := compareTypeNodes(
+			a.Decl[i],
+			b.Decl[i],
+			fmt.Sprintf("%s.Decl[%d]", path, i),
+		); diff != "" {
 			return diff
 		}
 	}
 	for i := range a.Cmds {
-		if diff := compareTypeCommandNodes(a.Cmds[i], b.Cmds[i], fmt.Sprintf("%s.Cmds[%d]", path, i)); diff != "" {
+		if diff := compareTypeCommandNodes(
+			a.Cmds[i],
+			b.Cmds[i],
+			fmt.Sprintf("%s.Cmds[%d]", path, i),
+		); diff != "" {
 			return diff
 		}
 	}
@@ -106,7 +123,11 @@ func compareTypeCommandNodes(a, b *CommandNode, path string) string {
 		return fmt.Sprintf("%s.Args: got %d items, want %d", path, len(a.Args), len(b.Args))
 	}
 	for i := range a.Args {
-		if diff := compareTypeNodes(a.Args[i], b.Args[i], fmt.Sprintf("%s.Args[%d]", path, i)); diff != "" {
+		if diff := compareTypeNodes(
+			a.Args[i],
+			b.Args[i],
+			fmt.Sprintf("%s.Args[%d]", path, i),
+		); diff != "" {
 			return diff
 		}
 	}
@@ -124,7 +145,14 @@ func compareTypeNodes(a, b Node, path string) string {
 		return fmt.Sprintf("%s: got %T, want nil", path, a)
 	}
 	if a.Type() != b.Type() {
-		return fmt.Sprintf("%s: got node type %v (%T), want %v (%T)", path, a.Type(), a, b.Type(), b)
+		return fmt.Sprintf(
+			"%s: got node type %v (%T), want %v (%T)",
+			path,
+			a.Type(),
+			a,
+			b.Type(),
+			b,
+		)
 	}
 	if diff := compareValueTypes(a.ValueType(), b.ValueType(), path+".typ"); diff != "" {
 		return diff
@@ -132,111 +160,113 @@ func compareTypeNodes(a, b Node, path string) string {
 	switch a := a.(type) {
 	case *ListNode:
 		return compareTypeListNodes(a, b.(*ListNode), path)
-
 	case *PipeNode:
 		return compareTypePipeNodes(a, b.(*PipeNode), path)
-
 	case *TextNode:
-		bv := b.(*TextNode)
-		if string(a.Text) != string(bv.Text) {
-			return fmt.Sprintf("%s: got text %q, want %q", path, a.Text, bv.Text)
-		}
-
+		return compareTypeTextNodes(a, b.(*TextNode), path)
 	case *CommentNode:
-		bv := b.(*CommentNode)
-		if a.Text != bv.Text {
-			return fmt.Sprintf("%s: got comment %q, want %q", path, a.Text, bv.Text)
-		}
-
+		return compareTypeCommentNodes(a, b.(*CommentNode), path)
 	case *ActionNode:
-		bv := b.(*ActionNode)
-		return compareTypePipeNodes(a.Pipe, bv.Pipe, path+".Pipe")
-
+		return compareTypePipeNodes(a.Pipe, b.(*ActionNode).Pipe, path+".Pipe")
 	case *IfNode:
-		bv := b.(*IfNode)
-		if diff := compareTypePipeNodes(a.Pipe, bv.Pipe, path+".Pipe"); diff != "" {
-			return diff
-		}
-		if diff := compareTypeListNodes(a.List, bv.List, path+".List"); diff != "" {
-			return diff
-		}
-		return compareTypeListNodes(a.ElseList, bv.ElseList, path+".ElseList")
-
+		return compareTypeBranchNodes(&a.BranchNode, &b.(*IfNode).BranchNode, path)
 	case *RangeNode:
-		bv := b.(*RangeNode)
-		if diff := compareTypePipeNodes(a.Pipe, bv.Pipe, path+".Pipe"); diff != "" {
-			return diff
-		}
-		if diff := compareTypeListNodes(a.List, bv.List, path+".List"); diff != "" {
-			return diff
-		}
-		return compareTypeListNodes(a.ElseList, bv.ElseList, path+".ElseList")
-
+		return compareTypeBranchNodes(&a.BranchNode, &b.(*RangeNode).BranchNode, path)
 	case *WithNode:
-		bv := b.(*WithNode)
-		if diff := compareTypePipeNodes(a.Pipe, bv.Pipe, path+".Pipe"); diff != "" {
-			return diff
-		}
-		if diff := compareTypeListNodes(a.List, bv.List, path+".List"); diff != "" {
-			return diff
-		}
-		return compareTypeListNodes(a.ElseList, bv.ElseList, path+".ElseList")
-
+		return compareTypeBranchNodes(&a.BranchNode, &b.(*WithNode).BranchNode, path)
 	case *TemplateNode:
-		bv := b.(*TemplateNode)
-		if a.Name != bv.Name {
-			return fmt.Sprintf("%s.Name: got %q, want %q", path, a.Name, bv.Name)
-		}
-		return compareTypePipeNodes(a.Pipe, bv.Pipe, path+".Pipe")
-
+		return compareTypeTemplateNodes(a, b.(*TemplateNode), path)
 	case *IdentifierNode:
-		bv := b.(*IdentifierNode)
-		if a.Ident != bv.Ident {
-			return fmt.Sprintf("%s.Ident: got %q, want %q", path, a.Ident, bv.Ident)
-		}
-
+		return compareTypeIdentifierNodes(a, b.(*IdentifierNode), path)
 	case *VariableNode:
-		bv := b.(*VariableNode)
-		if strings.Join(a.Ident, ".") != strings.Join(bv.Ident, ".") {
-			return fmt.Sprintf("%s.Ident: got %v, want %v", path, a.Ident, bv.Ident)
-		}
-
+		return compareTypeIdentSliceNodes(a.Ident, b.(*VariableNode).Ident, path+".Ident")
 	case *FieldNode:
-		bv := b.(*FieldNode)
-		if strings.Join(a.Ident, ".") != strings.Join(bv.Ident, ".") {
-			return fmt.Sprintf("%s.Ident: got %v, want %v", path, a.Ident, bv.Ident)
-		}
-
+		return compareTypeIdentSliceNodes(a.Ident, b.(*FieldNode).Ident, path+".Ident")
 	case *ChainNode:
-		bv := b.(*ChainNode)
-		if strings.Join(a.Field, ".") != strings.Join(bv.Field, ".") {
-			return fmt.Sprintf("%s.Field: got %v, want %v", path, a.Field, bv.Field)
-		}
-		return compareTypeNodes(a.Node, bv.Node, path+".Node")
-
+		return compareTypeChainNodes(a, b.(*ChainNode), path)
 	case *BoolNode:
-		bv := b.(*BoolNode)
-		if a.True != bv.True {
-			return fmt.Sprintf("%s.True: got %v, want %v", path, a.True, bv.True)
-		}
-
+		return compareTypeBoolNodes(a, b.(*BoolNode), path)
 	case *NumberNode:
-		bv := b.(*NumberNode)
-		if a.Text != bv.Text {
-			return fmt.Sprintf("%s.Text: got %q, want %q", path, a.Text, bv.Text)
-		}
-
+		return compareTypeNumberNodes(a, b.(*NumberNode), path)
 	case *StringNode:
-		bv := b.(*StringNode)
-		if a.Text != bv.Text {
-			return fmt.Sprintf("%s.Text: got %q, want %q", path, a.Text, bv.Text)
-		}
-
+		return compareTypeStringNodes(a, b.(*StringNode), path)
 	case *DotNode, *NilNode, *BreakNode, *ContinueNode, *UndefinedNode:
 		// no additional fields to compare beyond type and ValueType checked above
-
+		return ""
 	default:
 		return fmt.Sprintf("%s: unhandled node type %T", path, a)
+	}
+}
+
+func compareTypeTextNodes(a, b *TextNode, path string) string {
+	if string(a.Text) != string(b.Text) {
+		return fmt.Sprintf("%s: got text %q, want %q", path, a.Text, b.Text)
+	}
+	return ""
+}
+
+func compareTypeCommentNodes(a, b *CommentNode, path string) string {
+	if a.Text != b.Text {
+		return fmt.Sprintf("%s: got comment %q, want %q", path, a.Text, b.Text)
+	}
+	return ""
+}
+
+func compareTypeBranchNodes(a, b *BranchNode, path string) string {
+	if diff := compareTypePipeNodes(a.Pipe, b.Pipe, path+".Pipe"); diff != "" {
+		return diff
+	}
+	if diff := compareTypeListNodes(a.List, b.List, path+".List"); diff != "" {
+		return diff
+	}
+	return compareTypeListNodes(a.ElseList, b.ElseList, path+".ElseList")
+}
+
+func compareTypeTemplateNodes(a, b *TemplateNode, path string) string {
+	if a.Name != b.Name {
+		return fmt.Sprintf("%s.Name: got %q, want %q", path, a.Name, b.Name)
+	}
+	return compareTypePipeNodes(a.Pipe, b.Pipe, path+".Pipe")
+}
+
+func compareTypeIdentifierNodes(a, b *IdentifierNode, path string) string {
+	if a.Ident != b.Ident {
+		return fmt.Sprintf("%s.Ident: got %q, want %q", path, a.Ident, b.Ident)
+	}
+	return ""
+}
+
+func compareTypeIdentSliceNodes(a, b []string, path string) string {
+	if strings.Join(a, ".") != strings.Join(b, ".") {
+		return fmt.Sprintf("%s: got %v, want %v", path, a, b)
+	}
+	return ""
+}
+
+func compareTypeChainNodes(a, b *ChainNode, path string) string {
+	if strings.Join(a.Field, ".") != strings.Join(b.Field, ".") {
+		return fmt.Sprintf("%s.Field: got %v, want %v", path, a.Field, b.Field)
+	}
+	return compareTypeNodes(a.Node, b.Node, path+".Node")
+}
+
+func compareTypeBoolNodes(a, b *BoolNode, path string) string {
+	if a.True != b.True {
+		return fmt.Sprintf("%s.True: got %v, want %v", path, a.True, b.True)
+	}
+	return ""
+}
+
+func compareTypeNumberNodes(a, b *NumberNode, path string) string {
+	if a.Text != b.Text {
+		return fmt.Sprintf("%s.Text: got %q, want %q", path, a.Text, b.Text)
+	}
+	return ""
+}
+
+func compareTypeStringNodes(a, b *StringNode, path string) string {
+	if a.Text != b.Text {
+		return fmt.Sprintf("%s.Text: got %q, want %q", path, a.Text, b.Text)
 	}
 	return ""
 }
@@ -266,7 +296,7 @@ func isNilType(t types.Type) bool {
 	}
 	v := reflect.ValueOf(t)
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
 		return v.IsNil()
 	}
 	return false

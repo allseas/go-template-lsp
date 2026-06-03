@@ -68,11 +68,42 @@ func init() {
 }
 
 var funcs = map[string]*types.Func{
-	"FuncA":    types.NewFunc(0, nil, "FuncA", signature([]types.Type{types.Typ[types.String]}, []types.Type{types.Typ[types.Int]})),                                           // string -> int
-	"FuncB":    types.NewFunc(0, nil, "FuncB", signature([]types.Type{types.Typ[types.Int], types.Typ[types.Int]}, []types.Type{types.Typ[types.String]})),                     // (int, int) -> string
-	"FuncC":    types.NewFunc(0, nil, "FuncC", signature([]types.Type{types.Typ[types.String]}, []types.Type{types.Typ[types.String], types.Universe.Lookup("error").Type()})), // (string) -> (string, error)
-	"FuncD":    types.NewFunc(0, nil, "FuncD", signature([]types.Type{types.Typ[types.Int]}, []types.Type{types.Typ[types.String]})),                                           // int -> string
-	"GetInner": types.NewFunc(0, nil, "GetInner", signature([]types.Type{mockDotType}, []types.Type{mockInnerType})),                                                           // MockDot -> Inner
+	"FuncA": types.NewFunc(
+		0,
+		nil,
+		"FuncA",
+		signature([]types.Type{types.Typ[types.String]}, []types.Type{types.Typ[types.Int]}),
+	), // string -> int
+	"FuncB": types.NewFunc(
+		0,
+		nil,
+		"FuncB",
+		signature(
+			[]types.Type{types.Typ[types.Int], types.Typ[types.Int]},
+			[]types.Type{types.Typ[types.String]},
+		),
+	), // (int, int) -> string
+	"FuncC": types.NewFunc(
+		0,
+		nil,
+		"FuncC",
+		signature(
+			[]types.Type{types.Typ[types.String]},
+			[]types.Type{types.Typ[types.String], types.Universe.Lookup("error").Type()},
+		),
+	), // (string) -> (string, error)
+	"FuncD": types.NewFunc(
+		0,
+		nil,
+		"FuncD",
+		signature([]types.Type{types.Typ[types.Int]}, []types.Type{types.Typ[types.String]}),
+	), // int -> string
+	"GetInner": types.NewFunc(
+		0,
+		nil,
+		"GetInner",
+		signature([]types.Type{mockDotType}, []types.Type{mockInnerType}),
+	), // MockDot -> Inner
 }
 
 // funcBCurried1 is the type analyseCommand produces for `FuncB 1` when one of
@@ -147,12 +178,13 @@ func list(args ...parse.Node) *parse.ListNode {
 	}
 }
 
-func ifN(cond *parse.PipeNode, list *parse.ListNode) *parse.IfNode {
+func ifN(cond *parse.PipeNode, list, elseList *parse.ListNode) *parse.IfNode {
 	return &parse.IfNode{
 		BranchNode: parse.BranchNode{
 			NodeType: parse.NodeIf,
 			Pipe:     cond,
 			List:     list,
+			ElseList: elseList,
 		},
 	}
 }
@@ -269,12 +301,13 @@ func tlist(typ types.Type, args ...Node) *ListNode {
 	}
 }
 
-func tifN(cond *PipeNode, list *ListNode) *IfNode {
+func tifN(cond *PipeNode, list, elseList *ListNode) *IfNode {
 	return &IfNode{
 		BranchNode: BranchNode{
 			NodeType: NodeIf,
 			Pipe:     cond,
 			List:     list,
+			ElseList: elseList,
 		},
 	}
 }
@@ -341,9 +374,29 @@ func ttree(name string, root *ListNode) Tree {
 
 var analyseTestCases = []analyseTestCase{
 	{
-		name:           "Valid function call",
-		parseTree:      tree("test", list(actpipe(nil, coms(com(num(42)), com(ident("FuncB"), num(1)))))),
-		resTree:        ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.Int64], tnum(42)), tcom(funcs["FuncD"].Type(), tident("FuncB", funcs["FuncB"].Type()), tnum(1)))))),
+		name: "Valid function call",
+		parseTree: tree(
+			"test",
+			list(actpipe(nil, coms(com(num(42)), com(ident("FuncB"), num(1))))),
+		),
+		resTree: ttree(
+			"test",
+			tlist(
+				nil,
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(
+						tcom(types.Typ[types.Int64], tnum(42)),
+						tcom(
+							funcs["FuncD"].Type(),
+							tident("FuncB", funcs["FuncB"].Type()),
+							tnum(1),
+						),
+					),
+				),
+			),
+		),
 		funcs:          funcs,
 		dotType:        nil,
 		pkg:            nil,
@@ -356,8 +409,19 @@ var analyseTestCases = []analyseTestCase{
 			list(actpipe(nil, coms(com(&parse.DotNode{})))),
 		))),
 		resTree: ttree("test", tlist(mockDotType, twithN(
-			tpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X")))),
-			tlist(types.Typ[types.String], tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], &DotNode{typ: types.Typ[types.String]})))),
+			tpipe(
+				types.Typ[types.String],
+				nil,
+				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
+			),
+			tlist(
+				types.Typ[types.String],
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], &DotNode{typ: types.Typ[types.String]})),
+				),
+			),
 		))),
 		funcs:   funcs,
 		dotType: mockDotType,
@@ -400,12 +464,17 @@ var analyseTestCases = []analyseTestCase{
 			actpipe(decls(varn("$x")), coms(com(field("X")))),
 			actpipe(nil, coms(com(varn("$x")))),
 		)),
-		resTree: ttree("test", tlist(mockDotType,
+		resTree: ttree("test", tlist(
+			mockDotType,
 			tactpipe(types.Typ[types.String],
 				tdecls(tvarn("$x", types.Typ[types.String])),
 				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
 			),
-			tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarn("$x", types.Typ[types.String])))),
+			tactpipe(
+				types.Typ[types.String],
+				nil,
+				tcoms(tcom(types.Typ[types.String], tvarn("$x", types.Typ[types.String]))),
+			),
 		)),
 		funcs:          funcs,
 		dotType:        mockDotType,
@@ -420,11 +489,24 @@ var analyseTestCases = []analyseTestCase{
 			list(actpipe(nil, coms(com(varn("$v"))))),
 		))),
 		resTree: ttree("test", tlist(mockDotType, trangeN(
-			tpipe(types.NewSlice(types.Typ[types.String]),
+			tpipe(
+				types.NewSlice(types.Typ[types.String]),
 				tdecls(tvarn("$i", types.Typ[types.Uint]), tvarn("$v", types.Typ[types.String])),
-				tcoms(tcom(types.NewSlice(types.Typ[types.String]), tfield(types.NewSlice(types.Typ[types.String]), "Items"))),
+				tcoms(
+					tcom(
+						types.NewSlice(types.Typ[types.String]),
+						tfield(types.NewSlice(types.Typ[types.String]), "Items"),
+					),
+				),
 			),
-			tlist(types.Typ[types.String], tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarn("$v", types.Typ[types.String]))))),
+			tlist(
+				types.Typ[types.String],
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], tvarn("$v", types.Typ[types.String]))),
+				),
+			),
 		))),
 		funcs:          funcs,
 		dotType:        mockDotType,
@@ -440,7 +522,14 @@ var analyseTestCases = []analyseTestCase{
 		))),
 		resTree: ttree("test", tlist(mockDotType, twithN(
 			tpipe(mockInnerType, nil, tcoms(tcom(mockInnerType, tfield(mockInnerType, "Inner")))),
-			tlist(mockInnerType, tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "Name"))))),
+			tlist(
+				mockInnerType,
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "Name"))),
+				),
+			),
 		))),
 		funcs:          funcs,
 		dotType:        mockDotType,
@@ -450,17 +539,34 @@ var analyseTestCases = []analyseTestCase{
 	{
 		// {{ $a := .X }}{{ $b := .Y }}{{ $a }}{{ $b }}  -- two consecutive declarations & uses
 		name: "multiple variable declarations and uses",
-		parseTree: tree("test", list(
+		parseTree: tree("test2", list(
 			actpipe(decls(varn("$a")), coms(com(field("X")))),
 			actpipe(decls(varn("$b")), coms(com(field("Y")))),
 			actpipe(nil, coms(com(varn("$a")))),
 			actpipe(nil, coms(com(varn("$b")))),
 		)),
-		resTree: ttree("test", tlist(mockDotType,
-			tactpipe(types.Typ[types.String], tdecls(tvarn("$a", types.Typ[types.String])), tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X")))),
-			tactpipe(types.Typ[types.Int], tdecls(tvarn("$b", types.Typ[types.Int])), tcoms(tcom(types.Typ[types.Int], tfield(types.Typ[types.Int], "Y")))),
-			tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarn("$a", types.Typ[types.String])))),
-			tactpipe(types.Typ[types.Int], nil, tcoms(tcom(types.Typ[types.Int], tvarn("$b", types.Typ[types.Int])))),
+		resTree: ttree("test2", tlist(
+			mockDotType,
+			tactpipe(
+				types.Typ[types.String],
+				tdecls(tvarn("$a", types.Typ[types.String])),
+				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
+			),
+			tactpipe(
+				types.Typ[types.Int],
+				tdecls(tvarn("$b", types.Typ[types.Int])),
+				tcoms(tcom(types.Typ[types.Int], tfield(types.Typ[types.Int], "Y"))),
+			),
+			tactpipe(
+				types.Typ[types.String],
+				nil,
+				tcoms(tcom(types.Typ[types.String], tvarn("$a", types.Typ[types.String]))),
+			),
+			tactpipe(
+				types.Typ[types.Int],
+				nil,
+				tcoms(tcom(types.Typ[types.Int], tvarn("$b", types.Typ[types.Int]))),
+			),
 		)),
 		funcs:          funcs,
 		dotType:        mockDotType,
@@ -474,9 +580,23 @@ var analyseTestCases = []analyseTestCase{
 			actpipe(decls(varn("$d")), coms(com(&parse.DotNode{}))),
 			actpipe(nil, coms(com(varnf("$d", "Inner", "Name")))),
 		)),
-		resTree: ttree("test", tlist(mockDotType,
-			tactpipe(mockDotType, tdecls(tvarn("$d", mockDotType)), tcoms(tcom(mockDotType, &DotNode{typ: mockDotType}))),
-			tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarnf(types.Typ[types.String], "$d", "Inner", "Name")))),
+		resTree: ttree("test", tlist(
+			mockDotType,
+			tactpipe(
+				mockDotType,
+				tdecls(tvarn("$d", mockDotType)),
+				tcoms(tcom(mockDotType, &DotNode{typ: mockDotType})),
+			),
+			tactpipe(
+				types.Typ[types.String],
+				nil,
+				tcoms(
+					tcom(
+						types.Typ[types.String],
+						tvarnf(types.Typ[types.String], "$d", "Inner", "Name"),
+					),
+				),
+			),
 		)),
 		funcs:          funcs,
 		dotType:        mockDotType,
@@ -541,9 +661,18 @@ var analyseTestCases = []analyseTestCase{
 		))),
 		resTree: ttree("test", tlist(mockDotType, twithN(
 			tpipe(mockInnerType, nil, tcoms(tcom(mockInnerType, tfield(mockInnerType, "Inner")))),
-			tlist(mockInnerType,
-				tactpipe(types.Typ[types.String], tdecls(tvarn("$n", types.Typ[types.String])), tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "Name")))),
-				tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarn("$n", types.Typ[types.String])))),
+			tlist(
+				mockInnerType,
+				tactpipe(
+					types.Typ[types.String],
+					tdecls(tvarn("$n", types.Typ[types.String])),
+					tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "Name"))),
+				),
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], tvarn("$n", types.Typ[types.String]))),
+				),
 			),
 		))),
 		funcs:          funcs,
@@ -564,15 +693,62 @@ var analyseTestCases = []analyseTestCase{
 				"Name",
 			),
 		))))),
-		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String],
-			tchain(types.Typ[types.String],
-				tpipe(mockInnerType, nil, tcoms(
-					tcom(mockDotType, &DotNode{typ: mockDotType}),
-					tcom(funcs["GetInner"].Type(), tident("GetInner", funcs["GetInner"].Type())),
-				)),
-				"Name",
+		resTree: ttree(
+			"test",
+			tlist(
+				mockDotType,
+				tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String],
+					tchain(types.Typ[types.String],
+						tpipe(mockInnerType, nil, tcoms(
+							tcom(mockDotType, &DotNode{typ: mockDotType}),
+							tcom(
+								funcs["GetInner"].Type(),
+								tident("GetInner", funcs["GetInner"].Type()),
+							),
+						)),
+						"Name",
+					),
+				))),
 			),
-		))))),
+		),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ if .X }}{{ . }}{{ else }}{{ . }}{{ end }}
+		// dot inside both the if-list and the else-list should remain the
+		// outer MockDot type (if does not introduce a new scope).
+		name: "if/else preserves dot in both branches",
+		parseTree: tree("test", list(ifN(
+			pipe(nil, coms(com(field("X")))),
+			list(actpipe(nil, coms(com(&parse.DotNode{})))),
+			list(actpipe(nil, coms(com(&parse.DotNode{})))),
+		))),
+		resTree: ttree("test", tlist(mockDotType, tifN(
+			tpipe(
+				types.Typ[types.String],
+				nil,
+				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
+			),
+			tlist(
+				mockDotType,
+				tactpipe(
+					mockDotType,
+					nil,
+					tcoms(tcom(mockDotType, &DotNode{typ: mockDotType})),
+				),
+			),
+			tlist(
+				mockDotType,
+				tactpipe(
+					mockDotType,
+					nil,
+					tcoms(tcom(mockDotType, &DotNode{typ: mockDotType})),
+				),
+			),
+		))),
 		funcs:          funcs,
 		dotType:        mockDotType,
 		pkg:            mockPkg,
