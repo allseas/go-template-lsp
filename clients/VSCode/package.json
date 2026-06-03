@@ -30,7 +30,9 @@
         "package:no-verify": "node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../"
     },
     "dependencies": {
-        "vscode-languageclient": "^9.0.1"
+        "vscode-languageclient": "^9.0.1",
+        "vscode-oniguruma": "^2.0.1",
+        "vscode-textmate": "^9.3.2"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
