@@ -74,7 +74,7 @@ func TestLoadLocalConfig(t *testing.T) {
 
 		configData := `{"enableServer": false, "trace": {"server": "off"}}`
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
-		err := os.WriteFile(configPath, []byte(configData), 0644)
+		err := os.WriteFile(configPath, []byte(configData), 0o600)
 		assert.NoError(t, err)
 
 		c := Config{EnableServer: true}
@@ -125,7 +125,7 @@ func TestLoadLocalConfig(t *testing.T) {
 		// Local file only overrides enableServer; trace.server must stay.
 		configData := `{"enableServer": false}`
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
-		assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0644))
+		assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0o600))
 
 		c := Config{EnableServer: true}
 		c.Trace.Server = protocol.TraceValueVerbose
@@ -142,7 +142,7 @@ func TestLoadLocalConfig(t *testing.T) {
 		defer func() { workspaceRoot = "" }()
 
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
-		assert.NoError(t, os.WriteFile(configPath, []byte(`{not valid json`), 0644))
+		assert.NoError(t, os.WriteFile(configPath, []byte(`{not valid json`), 0o600))
 
 		c := Config{EnableServer: true}
 		c.Trace.Server = TraceValueMessages
@@ -162,7 +162,7 @@ func TestLocalConfigOverridesClientConfig(t *testing.T) {
 
 		configData := `{"enableServer": false, "trace": {"server": "off"}}`
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
-		assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0644))
+		assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0o600))
 
 		context := &glsp.Context{
 			Call: func(method string, _ any, result any) {
@@ -179,25 +179,28 @@ func TestLocalConfigOverridesClientConfig(t *testing.T) {
 		assert.Equal(t, protocol.TraceValueOff, GetConfig().Trace.Server)
 	})
 
-	t.Run("ConfigChanged: local gotmpl.config.json overrides notification settings", func(t *testing.T) {
-		tempDir := t.TempDir()
-		workspaceRoot = tempDir
-		defer func() { workspaceRoot = "" }()
+	t.Run(
+		"ConfigChanged: local gotmpl.config.json overrides notification settings",
+		func(t *testing.T) {
+			tempDir := t.TempDir()
+			workspaceRoot = tempDir
+			defer func() { workspaceRoot = "" }()
 
-		configData := `{"trace": {"server": "off"}}`
-		configPath := filepath.Join(tempDir, "gotmpl.config.json")
-		assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0644))
+			configData := `{"trace": {"server": "off"}}`
+			configPath := filepath.Join(tempDir, "gotmpl.config.json")
+			assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0o600))
 
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(`{"enableServer": true, "trace": {"server": "verbose"}}`),
-		}
+			params := protocol.DidChangeConfigurationParams{
+				Settings: json.RawMessage(`{"enableServer": true, "trace": {"server": "verbose"}}`),
+			}
 
-		assert.NoError(t, ConfigChanged(nil, &params))
-		// enableServer comes from client (not present in local file)
-		assert.Equal(t, true, GetConfig().EnableServer)
-		// trace.server comes from local file (overrides client)
-		assert.Equal(t, protocol.TraceValueOff, GetConfig().Trace.Server)
-	})
+			assert.NoError(t, ConfigChanged(nil, &params))
+			// enableServer comes from client (not present in local file)
+			assert.Equal(t, true, GetConfig().EnableServer)
+			// trace.server comes from local file (overrides client)
+			assert.Equal(t, protocol.TraceValueOff, GetConfig().Trace.Server)
+		},
+	)
 }
 
 func TestApplyConfig(t *testing.T) {

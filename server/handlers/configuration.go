@@ -67,7 +67,7 @@ func loadLocalConfig(c *Config) {
 		return
 	}
 	configPath := filepath.Join(workspaceRoot, "gotmpl.config.json")
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) // #nosec G304 -- path is workspaceRoot + fixed filename
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Error().Err(err).Msg("failed to read local config file")
