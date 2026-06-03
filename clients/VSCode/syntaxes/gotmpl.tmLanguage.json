@@ -1,80 +1,18 @@
 {
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "fileTypes": ["tmpl", "gotmpl"],
+    "patterns": [{ "include": "#comment" }, { "include": "#action" }],
     "repository": {
-        "pipe": { "name": "keyword.operator.pipe.gotmpl", "match": "\\|" },
-        "dot": {
-            "name": "variable.language.dot.gotmpl",
-            "match": "(?<![a-zA-Z_\\w])\\.(?![a-zA-Z_\\w])"
-        },
-        "template-name": {
-            "captures": { "1": { "name": "entity.name.function.gotmpl" } },
-            "match": "(?<=template|block|define)\\s+(\"[^\"]*\")"
-        },
-        "field": {
-            "name": "variable.other.member.gotmpl",
-            "match": "\\.[a-zA-Z_]\\w*"
-        },
-        "comma": { "name": "punctuation.separator.comma.gotmpl", "match": "," },
-        "variable-assignment": {
-            "captures": {
-                "1": { "name": "variable.other.gotmpl" },
-                "2": { "name": "keyword.operator.assignment.gotmpl" }
-            },
-            "match": "(\\$[a-zA-Z_]\\w*)\\s*(=)"
-        },
-        "variable-declaration": {
-            "captures": {
-                "1": { "name": "variable.other.gotmpl" },
-                "2": { "name": "keyword.operator.assignment.gotmpl" }
-            },
-            "match": "(\\$[a-zA-Z_]\\w*)\\s*(:=)"
-        },
         "action": {
             "begin": "\\{\\{\\-?",
+            "beginCaptures": {
+                "0": { "name": "punctuation.definition.embedded.begin.gotmpl" }
+            },
+            "end": "\\-?\\}\\}",
             "endCaptures": {
                 "0": { "name": "punctuation.definition.embedded.end.gotmpl" }
             },
             "name": "meta.embedded.gotmpl",
-            "end": "\\-?\\}\\}",
-            "beginCaptures": {
-                "0": { "name": "punctuation.definition.embedded.begin.gotmpl" }
-            },
-            "patterns": [
-                { "include": "#keyword" },
-                { "include": "#pipe" },
-                { "include": "#comma" },
-                { "include": "#template-name" },
-                { "include": "#variable-declaration" },
-                { "include": "#variable-assignment" },
-                { "include": "#boolean" },
-                { "include": "#number" },
-                { "include": "#string-double" },
-                { "include": "#string-raw" },
-                { "include": "#char" },
-                { "include": "#nil" },
-                { "include": "#dot" },
-                { "include": "#field" },
-                { "include": "#parentheses" },
-                { "include": "#variable" },
-                { "include": "#builtin" }
-            ]
-        },
-        "variable": {
-            "name": "variable.other.gotmpl",
-            "match": "\\$[a-zA-Z_]\\w*|\\$"
-        },
-        "builtin": {
-            "name": "support.function.gotmpl",
-            "match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery|eq|ne|lt|le|gt|ge)\\b"
-        },
-        "parentheses": {
-            "begin": "\\(",
-            "endCaptures": {
-                "0": { "name": "punctuation.section.parens.end.gotmpl" }
-            },
-            "end": "\\)",
-            "beginCaptures": {
-                "0": { "name": "punctuation.section.parens.begin.gotmpl" }
-            },
             "patterns": [
                 { "include": "#keyword" },
                 { "include": "#pipe" },
@@ -96,64 +34,126 @@
             ]
         },
         "boolean": {
-            "name": "constant.language.boolean.gotmpl",
-            "match": "\\b(true|false)\\b"
+            "match": "\\b(true|false)\\b",
+            "name": "constant.language.boolean.gotmpl"
         },
-        "string-raw": {
-            "begin": "`",
-            "endCaptures": {
-                "0": { "name": "punctuation.definition.string.end.gotmpl" }
-            },
-            "name": "string.quoted.other.raw.gotmpl",
-            "end": "`",
+        "builtin": {
+            "match": "\\b(and|call|html|index|slice|js|len|not|or|print|printf|println|urlquery|eq|ne|lt|le|gt|ge)\\b",
+            "name": "support.function.gotmpl"
+        },
+        "char": {
+            "match": "'(?:\\\\(?:[abfnrtv\\\\\"']|x[0-9A-Fa-f]{2}|[0-7]{3}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})|[^'\\\\])'",
+            "name": "string.quoted.single.gotmpl"
+        },
+        "comma": { "match": ",", "name": "punctuation.separator.comma.gotmpl" },
+        "comment": {
+            "begin": "\\{\\{\\s*(?:-\\s)?\\s*/\\*",
             "beginCaptures": {
-                "0": { "name": "punctuation.definition.string.begin.gotmpl" }
-            }
+                "0": { "name": "punctuation.definition.comment.begin.gotmpl" }
+            },
+            "end": "\\*/\\s*\\s*-?\\}\\}",
+            "endCaptures": {
+                "0": { "name": "punctuation.definition.comment.end.gotmpl" }
+            },
+            "name": "comment.block.gotmpl"
         },
+        "dot": {
+            "match": "(?<![a-zA-Z_\\w])\\.(?![a-zA-Z_\\w])",
+            "name": "variable.language.dot.gotmpl"
+        },
+        "field": {
+            "match": "\\.[a-zA-Z_]\\w*",
+            "name": "variable.other.member.gotmpl"
+        },
+        "keyword": {
+            "match": "\\b(if|else|end|range|with|template|block|define|break|continue)\\b",
+            "name": "keyword.control.gotmpl"
+        },
+        "nil": { "match": "\\bnil\\b", "name": "constant.language.nil.gotmpl" },
+        "number": {
+            "match": "\\b(?:(?:0[xX](?:_?[0-9A-Fa-f](?:_?[0-9A-Fa-f])*(?:\\.(?:[0-9A-Fa-f](?:_?[0-9A-Fa-f])*)?)?|\\.[0-9A-Fa-f](?:_?[0-9A-Fa-f])*)[pP][-+]?[0-9](?:_?[0-9])*|[0-9](?:_?[0-9])*(?:\\.(?:[0-9](?:_?[0-9])*)?(?:[eE][-+]?[0-9](?:_?[0-9])*)?|[eE][-+]?[0-9](?:_?[0-9])*))|(?:0[xX]_?[0-9A-Fa-f](?:_?[0-9A-Fa-f])*|0[bB]_?[01](?:_?[01])*|0[oO]?_?[0-7](?:_?[0-7])*|(?:0|[1-9](?:_?[0-9](?:_?[0-9])*)?)))i?\\b",
+            "name": "constant.numeric.gotmpl"
+        },
+        "parentheses": {
+            "begin": "\\(",
+            "beginCaptures": {
+                "0": { "name": "punctuation.section.parens.begin.gotmpl" }
+            },
+            "end": "\\)",
+            "endCaptures": {
+                "0": { "name": "punctuation.section.parens.end.gotmpl" }
+            },
+            "patterns": [
+                { "include": "#keyword" },
+                { "include": "#pipe" },
+                { "include": "#comma" },
+                { "include": "#template-name" },
+                { "include": "#variable-declaration" },
+                { "include": "#variable-assignment" },
+                { "include": "#boolean" },
+                { "include": "#number" },
+                { "include": "#string-double" },
+                { "include": "#string-raw" },
+                { "include": "#char" },
+                { "include": "#nil" },
+                { "include": "#dot" },
+                { "include": "#field" },
+                { "include": "#parentheses" },
+                { "include": "#variable" },
+                { "include": "#builtin" }
+            ]
+        },
+        "pipe": { "match": "\\|", "name": "keyword.operator.pipe.gotmpl" },
         "string-double": {
             "begin": "\"",
+            "beginCaptures": {
+                "0": { "name": "punctuation.definition.string.begin.gotmpl" }
+            },
+            "end": "\"",
             "endCaptures": {
                 "0": { "name": "punctuation.definition.string.end.gotmpl" }
             },
             "name": "string.quoted.double.gotmpl",
-            "end": "\"",
-            "beginCaptures": {
-                "0": { "name": "punctuation.definition.string.begin.gotmpl" }
-            },
             "patterns": [
                 {
-                    "name": "constant.character.escape.gotmpl",
-                    "match": "\\\\(?:[abfnrtv\\\\\"']|x[0-9A-Fa-f]{2}|[0-7]{3}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})"
+                    "match": "\\\\(?:[abfnrtv\\\\\"']|x[0-9A-Fa-f]{2}|[0-7]{3}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})",
+                    "name": "constant.character.escape.gotmpl"
                 }
             ]
         },
-        "char": {
-            "name": "string.quoted.single.gotmpl",
-            "match": "'(?:\\\\(?:[abfnrtv\\\\\"']|x[0-9A-Fa-f]{2}|[0-7]{3}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})|[^'\\\\])'"
-        },
-        "number": {
-            "name": "constant.numeric.gotmpl",
-            "match": "\\b(?:(?:0[xX](?:_?[0-9A-Fa-f](?:_?[0-9A-Fa-f])*(?:\\.(?:[0-9A-Fa-f](?:_?[0-9A-Fa-f])*)?)?|\\.[0-9A-Fa-f](?:_?[0-9A-Fa-f])*)[pP][-+]?[0-9](?:_?[0-9])*|[0-9](?:_?[0-9])*(?:\\.(?:[0-9](?:_?[0-9])*)?(?:[eE][-+]?[0-9](?:_?[0-9])*)?|[eE][-+]?[0-9](?:_?[0-9])*))|(?:0[xX]_?[0-9A-Fa-f](?:_?[0-9A-Fa-f])*|0[bB]_?[01](?:_?[01])*|0[oO]?_?[0-7](?:_?[0-7])*|(?:0|[1-9](?:_?[0-9](?:_?[0-9])*)?)))i?\\b"
-        },
-        "comment": {
-            "begin": "\\{\\{\\-?\\s*/\\*",
-            "endCaptures": {
-                "0": { "name": "punctuation.definition.comment.end.gotmpl" }
-            },
-            "name": "comment.block.gotmpl",
-            "end": "\\*/\\s*\\-?\\}\\}",
+        "string-raw": {
+            "begin": "`",
             "beginCaptures": {
-                "0": { "name": "punctuation.definition.comment.begin.gotmpl" }
-            }
+                "0": { "name": "punctuation.definition.string.begin.gotmpl" }
+            },
+            "end": "`",
+            "endCaptures": {
+                "0": { "name": "punctuation.definition.string.end.gotmpl" }
+            },
+            "name": "string.quoted.other.raw.gotmpl"
         },
-        "nil": { "name": "constant.language.nil.gotmpl", "match": "\\bnil\\b" },
-        "keyword": {
-            "name": "keyword.control.gotmpl",
-            "match": "\\b(if|else|end|range|with|template|block|define|break|continue)\\b"
+        "template-name": {
+            "captures": { "1": { "name": "entity.name.function.gotmpl" } },
+            "match": "(?<=template|block|define)\\s+(\"[^\"]*\")"
+        },
+        "variable": {
+            "match": "\\$[a-zA-Z_]\\w*|\\$",
+            "name": "variable.other.gotmpl"
+        },
+        "variable-assignment": {
+            "captures": {
+                "1": { "name": "variable.other.gotmpl" },
+                "2": { "name": "keyword.operator.assignment.gotmpl" }
+            },
+            "match": "(\\$[a-zA-Z_]\\w*)\\s*(=)"
+        },
+        "variable-declaration": {
+            "captures": {
+                "1": { "name": "variable.other.gotmpl" },
+                "2": { "name": "keyword.operator.assignment.gotmpl" }
+            },
+            "match": "(\\$[a-zA-Z_]\\w*)\\s*(:=)"
         }
     },
-    "scopeName": "source.gotmpl",
-    "fileTypes": ["tmpl", "gotmpl"],
-    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-    "patterns": [{ "include": "#comment" }, { "include": "#action" }]
+    "scopeName": "source.gotmpl"
 }
