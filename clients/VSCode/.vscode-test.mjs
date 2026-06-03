@@ -13,6 +13,7 @@ export default defineConfig([
             "--user-data-dir=/tmp/vscode-test-userdata",
             "--no-sandbox",
             "--disable-gpu",
+            "--disable-dev-shm-usage",
         ],
         mocha: {
             ui: "tdd",
