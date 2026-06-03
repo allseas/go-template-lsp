@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -13,6 +14,9 @@ func TestAnalyze(t *testing.T) {
 			tree := NewTreeWithType(tc.parseTree, tc.funcs, tc.dotType, tc.pkg)
 			if len(tree.Errors) != len(tc.expectedErrors) {
 				t.Fatalf("Expected %d errors, got %d: %v", len(tc.expectedErrors), len(tree.Errors), tree.Errors)
+			}
+			if diff := CompareTypeTrees(tree, tc.resTree); diff != "" {
+				t.Fatalf("type tree mismatch: %s", diff)
 			}
 		})
 	}
@@ -129,6 +133,9 @@ func compareTypeNodes(a, b Node, path string) string {
 	case *ListNode:
 		return compareTypeListNodes(a, b.(*ListNode), path)
 
+	case *PipeNode:
+		return compareTypePipeNodes(a, b.(*PipeNode), path)
+
 	case *TextNode:
 		bv := b.(*TextNode)
 		if string(a.Text) != string(bv.Text) {
@@ -235,19 +242,32 @@ func compareTypeNodes(a, b Node, path string) string {
 }
 
 // compareValueTypes returns a diff string if two types.Type values differ.
-// Both nil is considered equal.
+// Both nil is considered equal. Typed-nil (interface holding a nil concrete
+// value) is also treated as nil.
 func compareValueTypes(a, b types.Type, path string) string {
-	if a == nil && b == nil {
+	if isNilType(a) && isNilType(b) {
 		return ""
 	}
-	if a == nil {
+	if isNilType(a) {
 		return fmt.Sprintf("%s: got nil type, want %v", path, b)
 	}
-	if b == nil {
+	if isNilType(b) {
 		return fmt.Sprintf("%s: got %v, want nil type", path, a)
 	}
 	if !types.Identical(a, b) {
 		return fmt.Sprintf("%s: got type %v, want %v", path, a, b)
 	}
 	return ""
+}
+
+func isNilType(t types.Type) bool {
+	if t == nil {
+		return true
+	}
+	v := reflect.ValueOf(t)
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+		return v.IsNil()
+	}
+	return false
 }

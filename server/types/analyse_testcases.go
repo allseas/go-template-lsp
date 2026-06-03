@@ -27,17 +27,77 @@ func tuple(typeList []types.Type) *types.Tuple {
 	return types.NewTuple(vars...)
 }
 
-var funcs = map[string]*types.Func{
-	"FuncA": types.NewFunc(0, nil, "FuncA", signature([]types.Type{types.Typ[types.String]}, []types.Type{types.Typ[types.Int]})),                                           // string -> int
-	"FuncB": types.NewFunc(0, nil, "FuncB", signature([]types.Type{types.Typ[types.Int], types.Typ[types.Int]}, []types.Type{types.Typ[types.String]})),                     // (int, int) -> string
-	"FuncC": types.NewFunc(0, nil, "FuncC", signature([]types.Type{types.Typ[types.String]}, []types.Type{types.Typ[types.String], types.Universe.Lookup("error").Type()})), // (string) -> (string, error)
-	"FuncD": types.NewFunc(0, nil, "FuncD", signature([]types.Type{types.Typ[types.Int]}, []types.Type{types.Typ[types.String]})),                                           // int -> string
+var mockPkg = types.NewPackage("example.com/mock", "mock")
+
+var mockInnerType = func() *types.Named {
+	fields := []*types.Var{
+		types.NewVar(0, mockPkg, "Name", types.Typ[types.String]),
+		types.NewVar(0, mockPkg, "Age", types.Typ[types.Int]),
+	}
+	structType := types.NewStruct(fields, nil)
+	typeName := types.NewTypeName(0, mockPkg, "Inner", nil)
+	return types.NewNamed(typeName, structType, nil)
+}()
+
+var mockDotType = func() *types.Named {
+	fields := []*types.Var{
+		types.NewVar(0, mockPkg, "X", types.Typ[types.String]),
+		types.NewVar(0, mockPkg, "Y", types.Typ[types.Int]),
+		types.NewVar(0, mockPkg, "Inner", mockInnerType),
+		types.NewVar(0, mockPkg, "Items", types.NewSlice(types.Typ[types.String])),
+	}
+	structType := types.NewStruct(fields, nil)
+	typeName := types.NewTypeName(0, mockPkg, "MockDot", nil)
+	return types.NewNamed(typeName, structType, nil)
+}()
+
+// mockDotGreet is the *types.Func for MockDot.Greet() string, attached to
+// mockDotType in init below. Pulled out so tests can reference its signature.
+var mockDotGreet = types.NewFunc(0, mockPkg, "Greet",
+	types.NewSignatureType(
+		types.NewVar(0, mockPkg, "", mockDotType),
+		nil, nil,
+		types.NewTuple(),
+		types.NewTuple(types.NewVar(0, mockPkg, "", types.Typ[types.String])),
+		false,
+	),
+)
+
+func init() {
+	mockDotType.AddMethod(mockDotGreet)
 }
+
+var funcs = map[string]*types.Func{
+	"FuncA":    types.NewFunc(0, nil, "FuncA", signature([]types.Type{types.Typ[types.String]}, []types.Type{types.Typ[types.Int]})),                                           // string -> int
+	"FuncB":    types.NewFunc(0, nil, "FuncB", signature([]types.Type{types.Typ[types.Int], types.Typ[types.Int]}, []types.Type{types.Typ[types.String]})),                     // (int, int) -> string
+	"FuncC":    types.NewFunc(0, nil, "FuncC", signature([]types.Type{types.Typ[types.String]}, []types.Type{types.Typ[types.String], types.Universe.Lookup("error").Type()})), // (string) -> (string, error)
+	"FuncD":    types.NewFunc(0, nil, "FuncD", signature([]types.Type{types.Typ[types.Int]}, []types.Type{types.Typ[types.String]})),                                           // int -> string
+	"GetInner": types.NewFunc(0, nil, "GetInner", signature([]types.Type{mockDotType}, []types.Type{mockInnerType})),                                                           // MockDot -> Inner
+}
+
+// funcBCurried1 is the type analyseCommand produces for `FuncB 1` when one of
+// FuncB's two parameters is supplied as a literal -- a signature taking just
+// the remaining (last) parameter and returning FuncB's result tuple.
+var funcBCurried1 = types.NewSignatureType(
+	nil, nil, nil,
+	types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.Int])),
+	types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.String])),
+	false,
+)
 
 func varn(name string) *parse.VariableNode {
 	return &parse.VariableNode{
 		NodeType: parse.NodeVariable,
 		Ident:    []string{name},
+	}
+}
+
+// varnf builds a $var.Field1.Field2 ... style VariableNode.
+func varnf(name string, fields ...string) *parse.VariableNode {
+	idents := append([]string{name}, fields...)
+	return &parse.VariableNode{
+		NodeType: parse.NodeVariable,
+		Ident:    idents,
 	}
 }
 
@@ -71,6 +131,13 @@ func coms(args ...*parse.CommandNode) []*parse.CommandNode {
 
 func decls(args ...*parse.VariableNode) []*parse.VariableNode {
 	return args
+}
+
+func field(names ...string) *parse.FieldNode {
+	return &parse.FieldNode{
+		NodeType: parse.NodeField,
+		Ident:    names,
+	}
 }
 
 func list(args ...parse.Node) *parse.ListNode {
@@ -125,6 +192,14 @@ func ident(name string) *parse.IdentifierNode {
 	}
 }
 
+func chain(base parse.Node, fields ...string) *parse.ChainNode {
+	return &parse.ChainNode{
+		NodeType: parse.NodeChain,
+		Node:     base,
+		Field:    fields,
+	}
+}
+
 func tree(name string, root *parse.ListNode) parse.Tree {
 	return parse.Tree{
 		Name: name,
@@ -138,6 +213,16 @@ func tvarn(name string, typ types.Type) *VariableNode {
 	return &VariableNode{
 		NodeType: NodeVariable,
 		Ident:    []string{name},
+		typ:      typ,
+	}
+}
+
+// tvarnf builds an expected typed VariableNode with chained field idents.
+func tvarnf(typ types.Type, name string, fields ...string) *VariableNode {
+	idents := append([]string{name}, fields...)
+	return &VariableNode{
+		NodeType: NodeVariable,
+		Ident:    idents,
 		typ:      typ,
 	}
 }
@@ -238,6 +323,15 @@ func tfield(typ types.Type, names ...string) *FieldNode {
 	}
 }
 
+func tchain(typ types.Type, base Node, fields ...string) *ChainNode {
+	return &ChainNode{
+		NodeType: NodeChain,
+		Node:     base,
+		Field:    fields,
+		typ:      typ,
+	}
+}
+
 func ttree(name string, root *ListNode) Tree {
 	return Tree{
 		Name: name,
@@ -249,10 +343,239 @@ var analyseTestCases = []analyseTestCase{
 	{
 		name:           "Valid function call",
 		parseTree:      tree("test", list(actpipe(nil, coms(com(num(42)), com(ident("FuncB"), num(1)))))),
-		resTree:        ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.Int], tnum(42)), tcom(funcs["FuncD"].Type(), tident("FuncB", funcs["FuncB"].Type()), tnum(1)))))),
+		resTree:        ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.Int64], tnum(42)), tcom(funcs["FuncD"].Type(), tident("FuncB", funcs["FuncB"].Type()), tnum(1)))))),
 		funcs:          funcs,
 		dotType:        nil,
 		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		name: "dot context switch",
+		parseTree: tree("test", list(withN(
+			pipe(nil, coms(com(field("X")))),
+			list(actpipe(nil, coms(com(&parse.DotNode{})))),
+		))),
+		resTree: ttree("test", tlist(mockDotType, twithN(
+			tpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X")))),
+			tlist(types.Typ[types.String], tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], &DotNode{typ: types.Typ[types.String]})))),
+		))),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+	},
+	{
+		// {{ 42 | FuncD | FuncA }}  -- int -> (FuncD) -> string -> (FuncA) -> int
+		name: "pipeline function chain",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(num(42)),
+			com(ident("FuncD")),
+			com(ident("FuncA")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+			tcom(types.Typ[types.Int64], tnum(42)),
+			tcom(funcs["FuncD"].Type(), tident("FuncD", funcs["FuncD"].Type())),
+			tcom(funcs["FuncA"].Type(), tident("FuncA", funcs["FuncA"].Type())),
+		)))),
+		funcs:          funcs,
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ .Inner.Name }}  -- chained field access
+		name:      "chained field access",
+		parseTree: tree("test", list(actpipe(nil, coms(com(field("Inner", "Name")))))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tfield(types.Typ[types.String], "Inner", "Name")),
+		)))),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ $x := .X }}{{ $x }}  -- variable declaration then reference
+		name: "variable declaration and reference",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$x")), coms(com(field("X")))),
+			actpipe(nil, coms(com(varn("$x")))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			tactpipe(types.Typ[types.String],
+				tdecls(tvarn("$x", types.Typ[types.String])),
+				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
+			),
+			tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarn("$x", types.Typ[types.String])))),
+		)),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ range $i, $v := .Items }}{{ $v }}{{ end }}  -- range with index + value
+		name: "range with index and value vars",
+		parseTree: tree("test", list(rangeN(
+			pipe(decls(varn("$i"), varn("$v")), coms(com(field("Items")))),
+			list(actpipe(nil, coms(com(varn("$v"))))),
+		))),
+		resTree: ttree("test", tlist(mockDotType, trangeN(
+			tpipe(types.NewSlice(types.Typ[types.String]),
+				tdecls(tvarn("$i", types.Typ[types.Uint]), tvarn("$v", types.Typ[types.String])),
+				tcoms(tcom(types.NewSlice(types.Typ[types.String]), tfield(types.NewSlice(types.Typ[types.String]), "Items"))),
+			),
+			tlist(types.Typ[types.String], tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarn("$v", types.Typ[types.String]))))),
+		))),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ with .Inner }}{{ .Name }}{{ end }}  -- scope change via with, field on new dot
+		name: "with scope change and field access",
+		parseTree: tree("test", list(withN(
+			pipe(nil, coms(com(field("Inner")))),
+			list(actpipe(nil, coms(com(field("Name"))))),
+		))),
+		resTree: ttree("test", tlist(mockDotType, twithN(
+			tpipe(mockInnerType, nil, tcoms(tcom(mockInnerType, tfield(mockInnerType, "Inner")))),
+			tlist(mockInnerType, tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "Name"))))),
+		))),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ $a := .X }}{{ $b := .Y }}{{ $a }}{{ $b }}  -- two consecutive declarations & uses
+		name: "multiple variable declarations and uses",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$a")), coms(com(field("X")))),
+			actpipe(decls(varn("$b")), coms(com(field("Y")))),
+			actpipe(nil, coms(com(varn("$a")))),
+			actpipe(nil, coms(com(varn("$b")))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			tactpipe(types.Typ[types.String], tdecls(tvarn("$a", types.Typ[types.String])), tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X")))),
+			tactpipe(types.Typ[types.Int], tdecls(tvarn("$b", types.Typ[types.Int])), tcoms(tcom(types.Typ[types.Int], tfield(types.Typ[types.Int], "Y")))),
+			tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarn("$a", types.Typ[types.String])))),
+			tactpipe(types.Typ[types.Int], nil, tcoms(tcom(types.Typ[types.Int], tvarn("$b", types.Typ[types.Int])))),
+		)),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ $d := . }}{{ $d.Inner.Name }}  -- field access through a variable
+		name: "field access on variable",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$d")), coms(com(&parse.DotNode{}))),
+			actpipe(nil, coms(com(varnf("$d", "Inner", "Name")))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			tactpipe(mockDotType, tdecls(tvarn("$d", mockDotType)), tcoms(tcom(mockDotType, &DotNode{typ: mockDotType}))),
+			tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarnf(types.Typ[types.String], "$d", "Inner", "Name")))),
+		)),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ 2 | FuncB 1 }}  -- curried function in pipe: FuncB partially applied with 1, pipe supplies 2
+		name: "curried function in pipe",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(num(2)),
+			com(ident("FuncB"), num(1)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.Int64], tnum(2)),
+			tcom(funcBCurried1, tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
+		)))),
+		funcs:          funcs,
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ 5 | FuncB 1 | FuncA }}  -- curried then fully-applied function
+		name: "curried then full function in pipe",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(num(5)),
+			com(ident("FuncB"), num(1)),
+			com(ident("FuncA")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+			tcom(types.Typ[types.Int64], tnum(5)),
+			tcom(funcBCurried1, tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
+			tcom(funcs["FuncA"].Type(), tident("FuncA", funcs["FuncA"].Type())),
+		)))),
+		funcs:          funcs,
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ .Greet }}  -- method call on the dot context
+		name:      "method call on dot",
+		parseTree: tree("test", list(actpipe(nil, coms(com(field("Greet")))))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tfield(types.Typ[types.String], "Greet")),
+		)))),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ with .Inner }}{{ $n := .Name }}{{ $n }}{{ end }}  -- declaration inside a with scope
+		name: "variable declaration inside with scope",
+		parseTree: tree("test", list(withN(
+			pipe(nil, coms(com(field("Inner")))),
+			list(
+				actpipe(decls(varn("$n")), coms(com(field("Name")))),
+				actpipe(nil, coms(com(varn("$n")))),
+			),
+		))),
+		resTree: ttree("test", tlist(mockDotType, twithN(
+			tpipe(mockInnerType, nil, tcoms(tcom(mockInnerType, tfield(mockInnerType, "Inner")))),
+			tlist(mockInnerType,
+				tactpipe(types.Typ[types.String], tdecls(tvarn("$n", types.Typ[types.String])), tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "Name")))),
+				tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String], tvarn("$n", types.Typ[types.String])))),
+			),
+		))),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ (. | GetInner).Name }}  -- chain over a parenthesised pipe.
+		// GetInner :: MockDot -> Inner; .Name then selects string on Inner.
+		name: "chain over pipe expression",
+		parseTree: tree("test", list(actpipe(nil, coms(com(
+			chain(
+				pipe(nil, coms(
+					com(&parse.DotNode{}),
+					com(ident("GetInner")),
+				)),
+				"Name",
+			),
+		))))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(tcom(types.Typ[types.String],
+			tchain(types.Typ[types.String],
+				tpipe(mockInnerType, nil, tcoms(
+					tcom(mockDotType, &DotNode{typ: mockDotType}),
+					tcom(funcs["GetInner"].Type(), tident("GetInner", funcs["GetInner"].Type())),
+				)),
+				"Name",
+			),
+		))))),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
 		expectedErrors: []TError{},
 	},
 }
