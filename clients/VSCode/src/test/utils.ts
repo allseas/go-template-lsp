@@ -32,18 +32,25 @@ export async function getGrammar(): Promise<vsctm.IGrammar> {
     if (_grammar) return _grammar;
 
     const wasmBin = fs.readFileSync(
-        path.join(__dirname, "../../../../node_modules/vscode-oniguruma/release/onig.wasm"),
+        path.join(
+            __dirname,
+            "../../../../node_modules/vscode-oniguruma/release/onig.wasm",
+        ),
     );
     await oniguruma.loadWASM(wasmBin.buffer as ArrayBuffer);
 
     const registry = new vsctm.Registry({
         onigLib: Promise.resolve({
-            createOnigScanner: (patterns) => new oniguruma.OnigScanner(patterns),
+            createOnigScanner: (patterns) =>
+                new oniguruma.OnigScanner(patterns),
             createOnigString: (s) => new oniguruma.OnigString(s),
         }),
         loadGrammar: async (scopeName) => {
             if (scopeName === "source.gotmpl") {
-                const grammarPath = path.join(__dirname, "../../syntaxes/gotmpl.tmLanguage.json");
+                const grammarPath = path.join(
+                    __dirname,
+                    "../../syntaxes/gotmpl.tmLanguage.json",
+                );
                 const content = fs.readFileSync(grammarPath, "utf-8");
                 return vsctm.parseRawGrammar(content, grammarPath);
             }
@@ -57,7 +64,11 @@ export async function getGrammar(): Promise<vsctm.IGrammar> {
     return grammar;
 }
 
-export function getScopes(grammar: vsctm.IGrammar, line: string, character: number): string[] {
+export function getScopes(
+    grammar: vsctm.IGrammar,
+    line: string,
+    character: number,
+): string[] {
     const result = grammar.tokenizeLine(line, vsctm.INITIAL);
     for (const token of result.tokens) {
         if (token.startIndex <= character && character < token.endIndex) {

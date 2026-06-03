@@ -43,20 +43,7 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
                   contextId="GOTMPL"
                   implementation="com.allseas.gotexttemplate.GoTextTemplateContext" />
 
-          <fileType
-                  name="Go Template"
-                  implementationClass="com.allseas.gotexttemplate.TmplFileType"
-                  fieldName="INSTANCE"
-                  language="GoTemplate"
-                  extensions="tmpl" />
 
-          <lang.syntaxHighlighterFactory
-                  language="GoTemplate"
-                  implementationClass="com.allseas.gotexttemplate.TmplSyntaxHighlighterFactory" />
-
-          <editorHighlighterProvider
-                  filetype="Go Template"
-                  implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateEditorHighlighterProvider" />
 
           <applicationService
                   serviceImplementation="com.allseas.gotexttemplate.AppSettings" />
