@@ -201,6 +201,8 @@ suite("Completion Test Suite", () => {
         }
     });
 
+    // TODO: Behaviour tested here is not correct, however, the test is deemed to be useful in the future, so it is included anyways.
+    // Refer to !61 for more info
     test("Variables are suggested in else blocks of if, with, and range", async () => {
         const { tmplUri } = await createDocument(
             "completion-else-blocks.tmpl",

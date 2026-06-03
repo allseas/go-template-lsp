@@ -162,6 +162,8 @@ class VariableCompletionTest : CustomPlatformTestCase() {
         assertDoesntContain(suggestedCompletions!!, $$"$x", $$"$y")
     }
 
+    // TODO: Behaviour tested here is not correct, however, the test is deemed to be useful in the future, so it is included anyways.
+    // Refer to !61 for more info
     fun testVariablesAreSuggestedInElseBlocksOfIfWithRange() {
         myFixture.configureByText(
             "test_else_blocks_with.txt.tmpl",
