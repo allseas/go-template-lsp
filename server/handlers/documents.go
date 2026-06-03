@@ -353,7 +353,11 @@ func WasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
 }
 
 // ResolveVarInfo resolves a variable node to its value and Go type
-func ResolveVarInfo(root parse.Node, target *parse.VariableNode, docLoadedType *LoadedType) (value any, goType types.Type) {
+func ResolveVarInfo(
+	root parse.Node,
+	target *parse.VariableNode,
+	docLoadedType *LoadedType,
+) (value any, goType types.Type) {
 	if target == nil || len(target.Ident) == 0 {
 		return nil, nil
 	}

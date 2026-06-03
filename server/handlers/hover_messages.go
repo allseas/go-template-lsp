@@ -20,7 +20,7 @@ var nodeMessage = map[parse.NodeType]string{
 	parse.NodeField:      "**Field Access** - `%s`\n\nAccesses the `%s` field of the `.%s` context.",
 	parse.NodeIdentifier: "**Identifier** - `%s`\n\nRepresents an identifier in a command or action.",
 	parse.NodePipe:       "**Pipeline** - `%s`\n\nA sequence of commands connected by `|`.",
-	parse.NodeVariable:   "```go\nvar %s\n```",
+	parse.NodeVariable:   "```go\nvar %s %T = %v\n```",
 	parse.NodeTemplate:   "**Template** - `%s`\n\nDefines a template named `%s`.",
 	parse.NodeList:       "***Document root*** - \n\n Root node of the parse tree, containing all other nodes.",
 	parse.NodeBool:       "**Boolean literal** - `%v`\n\nA literal value.",
@@ -141,7 +141,7 @@ func MessageVariable(n *parse.VariableNode, varValue any, typ types.Type) string
 	if len(n.Ident) > 0 {
 		ident = n.Ident[0]
 	}
-	return fmt.Sprintf(nodeMessage[parse.NodeVariable], ident)
+	return fmt.Sprintf(nodeMessage[parse.NodeVariable], ident, varValue, varValue)
 }
 
 // MessageBool generates a hover message for a BoolNode, including the boolean value.

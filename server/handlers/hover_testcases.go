@@ -267,8 +267,12 @@ var hoverTestCases = []hoverTestCase{
 		positionRangeEnd:       36,
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
-				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$lastLogin"}}, nil, nil),
+				Kind: protocol.MarkupKindMarkdown,
+				Value: MessageVariable(
+					&parse.VariableNode{Ident: []string{"$lastLogin"}},
+					nil,
+					nil,
+				),
 			},
 		},
 		expectingError: false,
