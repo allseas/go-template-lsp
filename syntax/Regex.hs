@@ -17,12 +17,18 @@ dOpen = escRegex "{{-" ++ "?"
 -- default template close
 dClose :: String
 dClose = escRegex "-" ++ "?" ++ escRegex "}}"
+-- comment open delimeter - either {{ or {{-\s
+cOpen :: String
+cOpen = escRegex "{{" ++ "(?:-\\s)?"
+-- comment close delimeter - either \s-}} or }}
+cClose :: String
+cClose = "(?:\\s-)?" ++ escRegex "}}"
 
 commentOpen :: String
-commentOpen = dOpen ++ "\\s*/\\*"
+commentOpen = cOpen ++ "/\\*"
 
 commentClose :: String
-commentClose = "\\*/\\s*" ++ dClose
+commentClose = "\\*/" ++ cClose
 
 pipe :: String
 pipe = "\\|"

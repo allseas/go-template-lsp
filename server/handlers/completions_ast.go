@@ -512,6 +512,9 @@ func methodCompletionItems(
 
 // varsToItems returns the list of variables
 func varsToItems(ctx *Context, delSign bool, wordRange protocol.Range) []protocol.CompletionItem {
+	if ctx == nil || ctx.Vars == nil {
+		return nil
+	}
 	items := make([]protocol.CompletionItem, 0, len(ctx.Vars))
 	kind := protocol.CompletionItemKindVariable
 	for name := range ctx.Vars {
@@ -605,6 +608,12 @@ func buildPathBranch(
 	target parse.Node,
 	ctx *Context,
 ) bool {
+	if ctx == nil {
+		return false
+	}
+	if ctx.Vars == nil {
+		ctx.Vars = make(map[string]parse.Node)
+	}
 	snapshot := snapshotVars(ctx.Vars)
 
 	found := buildPath(pipe, target, ctx) ||
@@ -729,6 +738,9 @@ func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 	if isLeafNode(n) {
 		return false
 	}
+	if ctx == nil || n == nil {
+		return false
+	}
 
 	switch n := n.(type) {
 	case *parse.ListNode:
@@ -742,11 +754,16 @@ func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 		return buildPath(n.Pipe, target, ctx)
 
 	case *parse.PipeNode:
+		if ctx.Vars == nil {
+			ctx.Vars = make(map[string]parse.Node)
+		}
 		for _, v := range n.Decl {
-			if v == target {
+			if v != nil && v == target {
 				return true
 			}
-			ctx.Vars[v.Ident[0]] = n
+			if v != nil && len(v.Ident) > 0 {
+				ctx.Vars[v.Ident[0]] = n
+			}
 		}
 		prevPipe := ctx.Pipe
 		ctx.Pipe = n

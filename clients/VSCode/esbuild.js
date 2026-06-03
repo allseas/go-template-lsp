@@ -15,7 +15,7 @@ const copyBinariesPlugin = {
             if (result.errors.length > 0) return;
 
             // Copy binaries from ../../out/server directory to out/server/bin
-            const srcBinDir = path.join(__dirname, "../../server_binaries");
+            const srcBinDir = path.join(__dirname, "../../dist/server");
             const outBinDir = path.join(__dirname, "out/server/bin");
 
             // Ensure out/server/bin exists
