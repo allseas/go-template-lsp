@@ -1,0 +1,6 @@
+{
+  "enableServer": true,
+  "trace": {
+    "server": "messages"
+  }
+}
