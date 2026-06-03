@@ -21,7 +21,7 @@ func TestDefinitionVariable(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -45,7 +45,7 @@ func TestDefinitionVariableRedeclaration(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -67,7 +67,7 @@ func TestDefinitionVariableOnDeclaration(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -100,7 +100,7 @@ func TestDefinitionDotInRange(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -124,7 +124,7 @@ func TestDefinitionDotInWith(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -147,7 +147,7 @@ func TestDefinitionDotOutsideRange(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -165,7 +165,7 @@ func TestDefinitionField(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -183,7 +183,7 @@ func TestDefinitionNoNode(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -201,7 +201,7 @@ func TestDefinitionNoDefinition(t *testing.T) {
 		},
 	}
 
-	result, err := definition(nil, params)
+	result, err := Definition(nil, params)
 	require.NoError(t, err)
 	assert.Nil(t, result)
 }

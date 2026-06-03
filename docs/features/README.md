@@ -24,8 +24,8 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 | Dynamic syntax highlighting       | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Highlighting based on variables and context                  |
 | Target language syntax            | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.) |
 | **Code Completion**               |                  |                    |          |
-| Completion on template variables  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests available variables in current scope                |
-| Completion on struct field names  | 🚧 (⏳)           | 🚧 (⏳)             | Must     | Auto-complete struct field access                            |
+| Completion on template variables  | ✅ (✅)            | ✅ (✅)              | Must     | Suggests available variables in current scope                |
+| Completion on struct field names  | ✅ (⏳)            | ✅ (⏳)              | Must     | Auto-complete struct field access                            |
 | Completion on built-in functions  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests standard template functions                         |
 | Completion on local functions     | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Suggests user-defined template functions                     |
 | **Navigation**                    |                  |                    |          |
@@ -33,7 +33,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 | Find references / Usages          | ✅ (✅)            | ✅ (✅)              | Must     | Find all usages of a symbol                                  |
 | Peek definition on hover          | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Show definition in hover tooltip                             |
 | **Inspections & Diagnostics**     |                  |                    |          |
-| Incorrect syntax                  | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Warn about incorrect syntax                                  |
+| Incorrect syntax                  | ✅ (⏳)            | ✅ (⏳)              | Must     | Warn about incorrect syntax                                  |
 | Duplicate variable detection      | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Warn about redefined variables                               |
 | Type checking                     | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Validate type compatibility in templates                     |
 | Unused variable detection         | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Flag declared but unused variables                           |

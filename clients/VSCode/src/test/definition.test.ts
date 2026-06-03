@@ -3,9 +3,11 @@ import { after, before } from "mocha";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
+const waitTime = 300;
+
 suite("Definition Test Suite", () => {
     before(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
     });
 
     after(() => {
@@ -19,7 +21,7 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             const definitions = await vscode.commands.executeCommand<
                 vscode.Location[]
@@ -51,7 +53,7 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             // Execute definition provider on last $test usage (line 3, char 4)
             const definitions = await vscode.commands.executeCommand<
@@ -80,7 +82,7 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
 
             // Execute definition provider on the dot (line 1, char 3)
             const definitions = await vscode.commands.executeCommand<

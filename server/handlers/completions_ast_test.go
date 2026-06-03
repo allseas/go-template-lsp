@@ -4,7 +4,7 @@ import (
 	"go/types"
 	"testing"
 	parse "text-template-parser"
-	servertypes "text-template-server/types"
+	serverTypes "text-template-server/types"
 
 	"golang.org/x/tools/go/packages"
 
@@ -39,12 +39,15 @@ func suggestAtWithType(
 	src string,
 	offset int,
 	isInvoked bool,
-	lt *servertypes.Tree,
+	lt *serverTypes.LoadedType,
 ) []string {
 	t.Helper()
-	trees, err := parse.Parse("test", src, "", "", builtins())
+	typ := parse.New("test")
+	typ.Mode = parse.ParsePartial | parse.SkipFuncCheck
+	treeSet := map[string]*parse.Tree{}
+	_, err := typ.Parse(src, "{{", "}}", treeSet, builtins())
 	require.NoError(t, err)
-	root := trees["test"].Root
+	root := typ.Root
 	ctx := &Context{Vars: map[string]parse.Node{}, DotType: lt}
 	cur := nodeFind(root, parse.Pos(offset))
 	ok := buildPath(root, cur, ctx)
@@ -89,11 +92,11 @@ func offsetOf(t *testing.T, s, substr string, n int) int {
 	return -1
 }
 
-func orderLoadedType(t *testing.T) *servertypes.Tree {
+func orderLoadedType(t *testing.T) *serverTypes.LoadedType {
 	t.Helper()
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax,
-		Dir:  "testdata",
+		Dir:  "../../test/resources/typehints-tests",
 	}
 	pkgs, err := packages.Load(cfg, "text-template-server/src/model")
 	require.NoError(t, err)
@@ -207,7 +210,7 @@ func TestCompletionWithFallback(t *testing.T) {
 			enableServer(t)
 			store.Set(tc.uri, tc.content)
 			t.Cleanup(func() { store.Remove(tc.uri) })
-			resp, err := completionWithFallback(nil, &protocol.CompletionParams{
+			resp, err := CompletionWithFallback(nil, &protocol.CompletionParams{
 				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 					TextDocument: protocol.TextDocumentIdentifier{URI: tc.uri},
 					Position:     protocol.Position{Line: tc.line, Character: tc.character},

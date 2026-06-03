@@ -6,7 +6,7 @@ import (
 	"go/types"
 	"strings"
 	parse "text-template-parser"
-	servertypes "text-template-server/types"
+	serverTypes "text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -22,7 +22,7 @@ type Context struct {
 	// used for the previous functions in the pipe to extract the context using Pipe.Cmds
 	Pipe *parse.PipeNode
 	// DotType is the resolved Go type of the current dot (.) object.
-	DotType *servertypes.Tree
+	DotType *serverTypes.LoadedType
 }
 
 type outputKind int
@@ -57,8 +57,8 @@ var builtinOutput = map[string]outputKind{
 	"slice":    outputUntyped,
 }
 
-// completion entry point that has a fallback option
-func completionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+// CompletionWithFallback is an entry point that has a fallback option
+func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	result := completionAst(nil, params)
 	if result == nil {
 		log.Debug().Msg("ast completion failed or returned nil, falling back to regex completion")
@@ -283,7 +283,7 @@ func basicTypeMatchesKind(t types.Type, kind outputKind) bool {
 // methodIsUsable checks whether there are issues in the function definition
 // only valid go template functions should be accepted
 // functions that return 2 or more arguments are not accepted, except those where one of them is an error
-func methodIsUsable(m MethodType) bool {
+func methodIsUsable(m serverTypes.MethodType) bool {
 	if m.Func == nil {
 		return false
 	}
@@ -356,11 +356,21 @@ func suggest(
 	}
 
 	if sChar == '.' {
+		if len(ctx.Path) > 0 {
+			cmd, ok := ctx.Path[len(ctx.Path)-1].(*parse.CommandNode)
+			if ok && len(cmd.Args) >= 2 {
+				f, ok := cmd.Args[len(cmd.Args)-2].(*parse.FieldNode)
+				if ok {
+					resolved := resolveFieldChain(ctx.DotType, f.Ident)
+					if resolved != nil {
+						return fieldChainCompletionItems(resolved, wordRange)
+					}
+					return []protocol.CompletionItem{}
+				}
+			}
+		}
 		kind := pipeOutputKind(ctx, isInvoked)
 		pipeInputType := pipeOutputType(ctx, isInvoked)
-
-		// if both pipeInputType is nil and kind = outputAny, it means that there was an issue while parsing and the whole pipe became an UndefinedNode
-		// one solution would be to remove the incorrect part of the pipe and give suggestions, but this is clumsy, so the parser should be adjusted
 		return dotItem(*ctx, true, pipeInputType, kind, wordRange)
 	}
 
@@ -445,7 +455,7 @@ func dotItem(
 
 // fieldCompletionItems returns the list of fields with or without the dot
 func fieldCompletionItems(
-	fields []TypeField,
+	fields []serverTypes.TypeField,
 	prefix string,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
@@ -465,7 +475,7 @@ func fieldCompletionItems(
 }
 
 // methodAcceptsInput checks whether the function can accept the input
-func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind) bool {
+func methodAcceptsInput(m serverTypes.MethodType, inputType types.Type, pipeKind outputKind) bool {
 	if inputType != nil {
 		for _, p := range m.Params {
 			if types.Identical(p.Type, inputType) {
@@ -483,7 +493,7 @@ func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind)
 
 // methodCompletionItems builds the function completion list with or without the dot
 func methodCompletionItems(
-	methods []MethodType,
+	methods []serverTypes.MethodType,
 	inputType types.Type,
 	pipeKind outputKind,
 	prefix string,
@@ -509,10 +519,13 @@ func methodCompletionItems(
 
 // varsToItems returns the list of variables
 func varsToItems(ctx *Context, delSign bool, wordRange protocol.Range) []protocol.CompletionItem {
+	if ctx == nil || ctx.Vars == nil {
+		return nil
+	}
 	items := make([]protocol.CompletionItem, 0, len(ctx.Vars))
 	kind := protocol.CompletionItemKindVariable
 	for name := range ctx.Vars {
-		if name == "$" {
+		if delSign && name == "$" {
 			continue
 		}
 		label := name
@@ -602,6 +615,12 @@ func buildPathBranch(
 	target parse.Node,
 	ctx *Context,
 ) bool {
+	if ctx == nil {
+		return false
+	}
+	if ctx.Vars == nil {
+		ctx.Vars = make(map[string]parse.Node)
+	}
 	snapshot := snapshotVars(ctx.Vars)
 
 	found := buildPath(pipe, target, ctx) ||
@@ -614,8 +633,66 @@ func buildPathBranch(
 	return found
 }
 
+// resolveFieldChain walks lt following each name in idents and returns the final
+// LoadedType, or nil if any step cannot be resolved.
+func resolveFieldChain(lt *serverTypes.LoadedType, idents []string) *serverTypes.LoadedType {
+	if lt == nil {
+		return nil
+	}
+	cur := lt
+	for _, name := range idents {
+		var next *serverTypes.LoadedType
+		for _, f := range lt.Fields {
+			if f.Name == name {
+				next = typeAsLoadedType(f.Type, lt)
+			}
+		}
+		for _, m := range lt.Methods {
+			if m.Name == name {
+				next = typeAsLoadedType(m.ReturnType, lt)
+			}
+		}
+		cur = next
+	}
+	return cur
+}
+
+// typeAsLoadedType converts a Go type into a *LoadedType, reusing pkg from base.
+// Returns nil for non-navigable types (primitives, slices, etc.).
+func typeAsLoadedType(t types.Type, base *serverTypes.LoadedType) *serverTypes.LoadedType {
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	named, ok := t.(*types.Named)
+	if !ok {
+		return nil
+	}
+	return &serverTypes.LoadedType{
+		Pkg:     base.Pkg,
+		Named:   named,
+		Fields:  serverTypes.StructFields(named),
+		Methods: serverTypes.NamedMethods(named),
+	}
+}
+
+// fieldChainCompletionItems returns fields and methods of a chain-resolved type,
+// without a dot prefix (the dot was already consumed as the trigger character).
+func fieldChainCompletionItems(
+	lt *serverTypes.LoadedType,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	items := make([]protocol.CompletionItem, 0, len(lt.Fields)+len(lt.Methods))
+	items = append(items, fieldCompletionItems(lt.Fields, "", wordRange)...)
+	items = append(items, methodCompletionItems(lt.Methods, nil, outputAny, "", wordRange)...)
+	return items
+}
+
 // resolvePipeDotType derives the dot type for the body of a range or with block.
-func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *servertypes.Tree {
+func resolvePipeDotType(
+	pipe *parse.PipeNode,
+	unwrapSlice bool,
+	ctx *Context,
+) *serverTypes.Tree {
 	if ctx.DotType == nil || pipe == nil || len(pipe.Cmds) != 1 {
 		return ctx.DotType
 	}
@@ -662,13 +739,16 @@ func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *s
 			return ctx.DotType
 		}
 	}
-	tree := servertypes.Tree{DotType: named, Pkg: ctx.DotType.Pkg}
+	tree := serverTypes.Tree{DotType: named, Pkg: ctx.DotType.Pkg}
 	return &tree
 }
 
 // main traversal logic
 func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 	if isLeafNode(n) {
+		return false
+	}
+	if ctx == nil || n == nil {
 		return false
 	}
 
@@ -684,11 +764,16 @@ func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 		return buildPath(n.Pipe, target, ctx)
 
 	case *parse.PipeNode:
+		if ctx.Vars == nil {
+			ctx.Vars = make(map[string]parse.Node)
+		}
 		for _, v := range n.Decl {
-			if v == target {
+			if v != nil && v == target {
 				return true
 			}
-			ctx.Vars[v.Ident[0]] = n
+			if v != nil && len(v.Ident) > 0 {
+				ctx.Vars[v.Ident[0]] = n
+			}
 		}
 		prevPipe := ctx.Pipe
 		ctx.Pipe = n

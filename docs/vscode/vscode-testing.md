@@ -121,6 +121,15 @@ try {
     await vscode.workspace.applyEdit(deleteEdit);
 }
 ```
+## Testing Syntax Highlighting
+
+Syntax highlighting is tested at the TextMate grammar layer, not through the VS Code UI.
+
+VS Code does not expose a stable public API or CLI command for reading TextMate scopes at a cursor position, so automated tests cannot reliably ask the editor “what scope is here?”. Internal commands such as `_workbench.captureSyntaxTokens` are undocumented and unstable across VS Code versions.
+
+Because of that, syntax highlighting tests use `vscode-textmate` together with `vscode-oniguruma` to tokenize sample content directly. This runs the same TextMate grammar engine that VS Code uses internally, while keeping the tests deterministic and CI-friendly.
+
+These tests verify that the grammar produces the expected scopes, which is the contract that the editor theme uses to render highlighting.
 
 ## VS Code Test Framework Resources
 

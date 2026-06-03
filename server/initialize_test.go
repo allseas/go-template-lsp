@@ -1,24 +1,25 @@
-package handlers
+package main
 
 import (
 	"path/filepath"
 	"testing"
+	"text-template-server/handlers"
 
 	"github.com/stretchr/testify/assert"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 func TestSetupHandlers(t *testing.T) {
-	setupHandlers("TestServer", "1.0.0")
+	setupHandlers()
 
-	assert.Equal(t, "TestServer", lsName, "language server name should be set")
-	assert.Equal(t, "1.0.0", version, "version should be set")
+	assert.Equal(t, "goTmpl", lsName, "language server name should be set")
+	assert.NotNil(t, version, "version should be set")
 	assert.NotNil(t, handler.Initialize, "Initialize handler should be set")
 	assert.NotNil(t, handler.TextDocumentCompletion, "Completion handler should be set")
 }
 
 func TestInitializeHandler(t *testing.T) {
-	setupHandlers("goTmpl", "0.0.1")
+	setupHandlers()
 	result, err := initialize(nil, &protocol.InitializeParams{})
 
 	assert.NoError(t, err, "initialize handler should not return an error")
@@ -33,8 +34,8 @@ func TestInitializeHandler(t *testing.T) {
 }
 
 func TestInitializeSetsWorkspaceRootAndCapabilities(t *testing.T) {
-	setupHandlers("goTmpl", "0.0.1")
-	workspaceRoot = ""
+	setupHandlers()
+	handlers.WorkspaceRoot = ""
 	rootURI := "file:///tmp/project"
 
 	result, err := initialize(nil, &protocol.InitializeParams{RootURI: &rootURI})
@@ -42,7 +43,7 @@ func TestInitializeSetsWorkspaceRootAndCapabilities(t *testing.T) {
 
 	initResult, ok := result.(protocol.InitializeResult)
 	assert.True(t, ok)
-	assert.Equal(t, filepath.FromSlash("/tmp/project"), workspaceRoot)
+	assert.Equal(t, filepath.FromSlash("/tmp/project"), handlers.WorkspaceRoot)
 
 	requireCaps := initResult.Capabilities
 	assert.NotNil(t, requireCaps.TextDocumentSync)
@@ -57,13 +58,13 @@ func TestInitializeSetsWorkspaceRootAndCapabilities(t *testing.T) {
 }
 
 func TestInitializeUsesRootPathWhenRootURIMissing(t *testing.T) {
-	setupHandlers("goTmpl", "0.0.1")
-	workspaceRoot = ""
+	setupHandlers()
+	handlers.WorkspaceRoot = ""
 	rootPath := "C:/repo/server"
 
 	_, err := initialize(nil, &protocol.InitializeParams{RootPath: &rootPath})
 	assert.NoError(t, err)
-	assert.Equal(t, rootPath, workspaceRoot)
+	assert.Equal(t, rootPath, handlers.WorkspaceRoot)
 }
 
 func TestURIToPathInvalidURI(t *testing.T) {
@@ -74,7 +75,7 @@ func TestURIToPathInvalidURI(t *testing.T) {
 }
 
 func TestShutdown(t *testing.T) {
-	setupHandlers("goTmpl", "0.0.1")
+	setupHandlers()
 	err := shutdown(nil)
 	assert.NoError(t, err, "shutdown handler should not return an error")
 }
