@@ -25,7 +25,7 @@ export async function cleanupDocument(fileUri: Uri) {
     deleteEdit.deleteFile(fileUri);
     await vscode.workspace.applyEdit(deleteEdit);
 }
-
+// Oniguruma is required by vscode-textmate to execute TextMate grammar rules; VSCode uses the same regex engine internally.
 let _grammar: vsctm.IGrammar | null = null;
 
 export async function getGrammar(): Promise<vsctm.IGrammar> {
