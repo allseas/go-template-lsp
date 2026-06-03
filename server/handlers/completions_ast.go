@@ -57,8 +57,8 @@ var builtinOutput = map[string]outputKind{
 	"slice":    outputUntyped,
 }
 
-// completion entry point that has a fallback option
-func completionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+// Completion entry point that has a fallback option
+func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	result := completionAst(nil, params)
 	if result == nil {
 		log.Debug().Msg("ast completion failed or returned nil, falling back to regex completion")
@@ -671,7 +671,10 @@ func typeAsLoadedType(t types.Type, base *serverTypes.LoadedType) *serverTypes.L
 
 // fieldChainCompletionItems returns fields and methods of a chain-resolved type,
 // without a dot prefix (the dot was already consumed as the trigger character).
-func fieldChainCompletionItems(lt *serverTypes.LoadedType, wordRange protocol.Range) []protocol.CompletionItem {
+func fieldChainCompletionItems(
+	lt *serverTypes.LoadedType,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(lt.Fields)+len(lt.Methods))
 	items = append(items, fieldCompletionItems(lt.Fields, "", wordRange)...)
 	items = append(items, methodCompletionItems(lt.Methods, nil, outputAny, "", wordRange)...)
@@ -679,7 +682,11 @@ func fieldChainCompletionItems(lt *serverTypes.LoadedType, wordRange protocol.Ra
 }
 
 // resolvePipeDotType derives the dot type for the body of a range or with block.
-func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *serverTypes.LoadedType {
+func resolvePipeDotType(
+	pipe *parse.PipeNode,
+	unwrapSlice bool,
+	ctx *Context,
+) *serverTypes.LoadedType {
 	if ctx.DotType == nil || pipe == nil || len(pipe.Cmds) != 1 {
 		return ctx.DotType
 	}

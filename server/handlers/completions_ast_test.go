@@ -214,7 +214,7 @@ func TestCompletionWithFallback(t *testing.T) {
 			enableServer(t)
 			store.Set(tc.uri, tc.content)
 			t.Cleanup(func() { store.Remove(tc.uri) })
-			resp, err := completionWithFallback(nil, &protocol.CompletionParams{
+			resp, err := CompletionWithFallback(nil, &protocol.CompletionParams{
 				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 					TextDocument: protocol.TextDocumentIdentifier{URI: tc.uri},
 					Position:     protocol.Position{Line: tc.line, Character: tc.character},

@@ -13,7 +13,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-func hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
+func Hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
 	// Get document content
 
 	doc, ok := store.Get(params.TextDocument.URI)

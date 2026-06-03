@@ -13,6 +13,8 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+var WorkspaceRoot string
+
 type document struct {
 	text       string
 	tree       *parse.Tree
@@ -32,10 +34,10 @@ func (s *documentStore) Set(uri, text string) {
 	tree, err := parseTemplate(uri, text)
 
 	var lt *types.LoadedType
-	if workspaceRoot != "" {
+	if WorkspaceRoot != "" {
 		hints := types.ParseTypeHints(strings.NewReader(text))
 		if len(hints) > 0 {
-			if loaded, lerr := types.LoadTypeFromHint(hints[0].Type, workspaceRoot); lerr == nil {
+			if loaded, lerr := types.LoadTypeFromHint(hints[0].Type, WorkspaceRoot); lerr == nil {
 				lt = loaded
 			} else {
 				log.Debug().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
@@ -94,8 +96,8 @@ func (s *documentStore) Remove(uri string) {
 	delete(s.docs, uri)
 }
 
-// didOpen is an LSP notification handler that registers a new document in the store when it is opened.
-func didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
+// DidOpen is an LSP notification handler that registers a new document in the store when it is opened.
+func DidOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 	if !GetConfig().EnableServer {
 		log.Debug().Msg("didOpen received but server is disabled by config")
 		return nil
@@ -108,8 +110,8 @@ func didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) erro
 	return nil
 }
 
-// didChange is an LSP notification handler that updates the stored document content when the user edits the file.
-func didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
+// DidChange is an LSP notification handler that updates the stored document content when the user edits the file.
+func DidChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
 	log.Debug().
 		Str("uri", params.TextDocument.URI).
 		Msg("document changed")
@@ -136,8 +138,8 @@ func didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) 
 	return nil
 }
 
-// didClose is an LSP notification handler that removes a document from the store when the editor closes the file.
-func didClose(_ *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
+// DidClose is an LSP notification handler that removes a document from the store when the editor closes the file.
+func DidClose(_ *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
 	store.Remove(params.TextDocument.URI)
 	return nil
 }
