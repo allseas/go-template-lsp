@@ -43,4 +43,4 @@ testing:
         - npm ci
     script:
         - echo "running tests"
-        - ELECTRON_DISABLE_SANDBOX=1 xvfb-run --server-args="-screen 0 1920x1080x24" npm test -w clients/VSCode
+        - xvfb-run --server-args="-screen 0 1920x1080x24" npm test -w clients/VSCode
