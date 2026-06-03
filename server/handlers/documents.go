@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	parse "text-template-parser"
+	"text-template-server/types"
+	"text-template-server/utils"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -14,7 +16,7 @@ import (
 type document struct {
 	text       string
 	tree       *parse.Tree
-	loadedType *LoadedType
+	loadedType *types.LoadedType
 }
 
 type documentStore struct {
@@ -29,11 +31,11 @@ var store = &documentStore{
 func (s *documentStore) Set(uri, text string) {
 	tree, err := parseTemplate(uri, text)
 
-	var lt *LoadedType
+	var lt *types.LoadedType
 	if workspaceRoot != "" {
-		hints := ParseTypeHints(strings.NewReader(text))
+		hints := types.ParseTypeHints(strings.NewReader(text))
 		if len(hints) > 0 {
-			if loaded, lerr := LoadTypeFromHint(hints[0].Type, workspaceRoot); lerr == nil {
+			if loaded, lerr := types.LoadTypeFromHint(hints[0].Type, workspaceRoot); lerr == nil {
 				lt = loaded
 			} else {
 				log.Debug().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
@@ -147,7 +149,7 @@ func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 
 	var walk func(n parse.Node)
 	walk = func(n parse.Node) {
-		if isNilNode(n) {
+		if utils.IsNilNode(n) {
 			return
 		}
 

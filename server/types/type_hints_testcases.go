@@ -1,4 +1,4 @@
-package handlers
+package types
 
 // ParseTypeHints test cases
 

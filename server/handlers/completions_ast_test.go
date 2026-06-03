@@ -4,6 +4,7 @@ import (
 	"go/types"
 	"testing"
 	parse "text-template-parser"
+	serverTypes "text-template-server/types"
 
 	"golang.org/x/tools/go/packages"
 
@@ -38,7 +39,7 @@ func suggestAtWithType(
 	src string,
 	offset int,
 	isInvoked bool,
-	lt *LoadedType,
+	lt *serverTypes.LoadedType,
 ) []string {
 	t.Helper()
 	typ := parse.New("test")
@@ -91,7 +92,7 @@ func offsetOf(t *testing.T, s, substr string, n int) int {
 	return -1
 }
 
-func orderLoadedType(t *testing.T) *LoadedType {
+func orderLoadedType(t *testing.T) *serverTypes.LoadedType {
 	t.Helper()
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax,
@@ -104,11 +105,11 @@ func orderLoadedType(t *testing.T) *LoadedType {
 	obj := pkg.Types.Scope().Lookup("Order")
 	require.NotNil(t, obj)
 	named := obj.Type().(*types.Named)
-	return &LoadedType{
+	return &serverTypes.LoadedType{
 		Pkg:     pkg,
 		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
+		Fields:  serverTypes.StructFields(named),
+		Methods: serverTypes.NamedMethods(named),
 	}
 }
 

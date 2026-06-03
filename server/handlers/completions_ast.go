@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"strings"
 	parse "text-template-parser"
+	serverTypes "text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -21,7 +22,7 @@ type Context struct {
 	// used for the previous functions in the pipe to extract the context using Pipe.Cmds
 	Pipe *parse.PipeNode
 	// DotType is the resolved Go type of the current dot (.) object.
-	DotType *LoadedType
+	DotType *serverTypes.LoadedType
 }
 
 type outputKind int
@@ -282,7 +283,7 @@ func basicTypeMatchesKind(t types.Type, kind outputKind) bool {
 // methodIsUsable checks whether there are issues in the function definition
 // only valid go template functions should be accepted
 // functions that return 2 or more arguments are not accepted, except those where one of them is an error
-func methodIsUsable(m MethodType) bool {
+func methodIsUsable(m serverTypes.MethodType) bool {
 	if m.Func == nil {
 		return false
 	}
@@ -448,7 +449,7 @@ func dotItem(
 
 // fieldCompletionItems returns the list of fields with or without the dot
 func fieldCompletionItems(
-	fields []TypeField,
+	fields []serverTypes.TypeField,
 	prefix string,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
@@ -468,7 +469,7 @@ func fieldCompletionItems(
 }
 
 // methodAcceptsInput checks whether the function can accept the input
-func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind) bool {
+func methodAcceptsInput(m serverTypes.MethodType, inputType types.Type, pipeKind outputKind) bool {
 	if inputType != nil {
 		for _, p := range m.Params {
 			if types.Identical(p.Type, inputType) {
@@ -486,7 +487,7 @@ func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind)
 
 // methodCompletionItems builds the function completion list with or without the dot
 func methodCompletionItems(
-	methods []MethodType,
+	methods []serverTypes.MethodType,
 	inputType types.Type,
 	pipeKind outputKind,
 	prefix string,
@@ -628,13 +629,13 @@ func buildPathBranch(
 
 // resolveFieldChain walks lt following each name in idents and returns the final
 // LoadedType, or nil if any step cannot be resolved.
-func resolveFieldChain(lt *LoadedType, idents []string) *LoadedType {
+func resolveFieldChain(lt *serverTypes.LoadedType, idents []string) *serverTypes.LoadedType {
 	if lt == nil {
 		return nil
 	}
 	cur := lt
 	for _, name := range idents {
-		var next *LoadedType
+		var next *serverTypes.LoadedType
 		for _, f := range lt.Fields {
 			if f.Name == name {
 				next = typeAsLoadedType(f.Type, lt)
@@ -652,7 +653,7 @@ func resolveFieldChain(lt *LoadedType, idents []string) *LoadedType {
 
 // typeAsLoadedType converts a Go type into a *LoadedType, reusing pkg from base.
 // Returns nil for non-navigable types (primitives, slices, etc.).
-func typeAsLoadedType(t types.Type, base *LoadedType) *LoadedType {
+func typeAsLoadedType(t types.Type, base *serverTypes.LoadedType) *serverTypes.LoadedType {
 	if ptr, ok := t.(*types.Pointer); ok {
 		t = ptr.Elem()
 	}
@@ -660,17 +661,17 @@ func typeAsLoadedType(t types.Type, base *LoadedType) *LoadedType {
 	if !ok {
 		return nil
 	}
-	return &LoadedType{
+	return &serverTypes.LoadedType{
 		Pkg:     base.Pkg,
 		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
+		Fields:  serverTypes.StructFields(named),
+		Methods: serverTypes.NamedMethods(named),
 	}
 }
 
 // fieldChainCompletionItems returns fields and methods of a chain-resolved type,
 // without a dot prefix (the dot was already consumed as the trigger character).
-func fieldChainCompletionItems(lt *LoadedType, wordRange protocol.Range) []protocol.CompletionItem {
+func fieldChainCompletionItems(lt *serverTypes.LoadedType, wordRange protocol.Range) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(lt.Fields)+len(lt.Methods))
 	items = append(items, fieldCompletionItems(lt.Fields, "", wordRange)...)
 	items = append(items, methodCompletionItems(lt.Methods, nil, outputAny, "", wordRange)...)
@@ -678,7 +679,7 @@ func fieldChainCompletionItems(lt *LoadedType, wordRange protocol.Range) []proto
 }
 
 // resolvePipeDotType derives the dot type for the body of a range or with block.
-func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *LoadedType {
+func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *serverTypes.LoadedType {
 	if ctx.DotType == nil || pipe == nil || len(pipe.Cmds) != 1 {
 		return ctx.DotType
 	}
@@ -725,11 +726,11 @@ func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *L
 			return ctx.DotType
 		}
 	}
-	return &LoadedType{
+	return &serverTypes.LoadedType{
 		Pkg:     ctx.DotType.Pkg,
 		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
+		Fields:  serverTypes.StructFields(named),
+		Methods: serverTypes.NamedMethods(named),
 	}
 }
 
