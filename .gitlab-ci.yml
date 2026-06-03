@@ -65,7 +65,7 @@ release-build:
     - curl -fsSL "https://go.dev/dl/go1.26.2.linux-amd64.tar.gz" | tar -xz -C /usr/local
     - export PATH="/usr/local/go/bin:$PATH"
     - curl -fsSL "https://aka.ms/download-jdk/microsoft-jdk-21-linux-x64.tar.gz" | tar -xz -C /usr/local
-    - export JAVA_HOME="/usr/local/jdk-21"
+    - export JAVA_HOME="$(find /usr/local -maxdepth 1 -type d -name 'jdk-21*' | head -n 1)"
     - export PATH="$JAVA_HOME/bin:$PATH"
     - npm ci
   script:
