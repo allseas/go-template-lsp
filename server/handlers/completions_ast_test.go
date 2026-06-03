@@ -96,7 +96,7 @@ func orderLoadedType(t *testing.T) *serverTypes.LoadedType {
 	t.Helper()
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax,
-		Dir:  "testdata",
+		Dir:  "../../test/resources/typehints-tests",
 	}
 	pkgs, err := packages.Load(cfg, "text-template-server/src/model")
 	require.NoError(t, err)
