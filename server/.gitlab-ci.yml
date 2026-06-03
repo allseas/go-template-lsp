@@ -19,7 +19,7 @@ linting:
 
 testing:
   stage: test
-  image: golang:tip-alpine3.23
+  image: golang:1.26.2-alpine3.23
   cache:
     key:
       files:
