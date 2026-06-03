@@ -41,11 +41,11 @@ export async function getGrammar(): Promise<vsctm.IGrammar> {
 
     const registry = new vsctm.Registry({
         onigLib: Promise.resolve({
-            createOnigScanner: (patterns) =>
+            createOnigScanner: (patterns: string[]) =>
                 new oniguruma.OnigScanner(patterns),
-            createOnigString: (s) => new oniguruma.OnigString(s),
+            createOnigString: (s: string) => new oniguruma.OnigString(s),
         }),
-        loadGrammar: async (scopeName) => {
+        loadGrammar: async (scopeName: string) => {
             if (scopeName === "source.gotmpl") {
                 const grammarPath = path.join(
                     __dirname,
@@ -82,14 +82,6 @@ export function assertScope(scopes: string[], expectedScope: string) {
     if (!scopes.includes(expectedScope)) {
         throw new Error(
             `Expected scope "${expectedScope}", got: [${scopes.join(", ")}]`,
-        );
-    }
-}
-
-export function assertNoScope(scopes: string[], unexpectedScope: string) {
-    if (scopes.includes(unexpectedScope)) {
-        throw new Error(
-            `Expected scope "${unexpectedScope}" to be absent, got: [${scopes.join(", ")}]`,
         );
     }
 }
