@@ -1,0 +1,12 @@
+{
+    "version": "0.0.1",
+    "configurations": [
+        {
+            "name": "Extension",
+            "type": "extensionHost",
+            "request": "launch",
+            "args": ["--extensionDevelopmentPath=${workspaceFolder}/clients/VSCode"],
+            "outFiles": ["${workspaceFolder}/clients/VSCode/out/extension.js"]
+        }
+    ]
+}
