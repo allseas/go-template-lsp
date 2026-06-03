@@ -59,6 +59,8 @@ TextMate grammars are regular. They cannot express arbitrary nesting depth,
 context-sensitive constraints, or semantic resolution. The generator approximates
 these where needed.
 
+## Syntax Specifications
+
 ### Comment Syntax
 
 On the `text/template` main page, the comments with trims are specified like this (with space at the beginning and end):
@@ -67,16 +69,16 @@ On the `text/template` main page, the comments with trims are specified like thi
 {{- /* a comment with white space trimmed from preceding and following text */ -}}
 ```
 
-However, the parser only forces the space after the left trim, and not the one before the right trim. Hence, this is valid go template code:
+You can also have a comment with no trims:
 
 ```gotmpl
-{{- /* abc */-}}
+{{/* no spaces */}}
 ```
 
-And this is not (it gives a parse error):
+Hence, those are examples of **invalid** comments:
 
 ```gotmpl
-{{-/* abc */ -}}
+{{ /* space at right delimeter */}}
+{{ /* space at right and left delimeter */ }}
+{{-/* no space at right delimeter with trim */}}
 ```
-
-Hence, to mimick this behaviour, the syntax regex follows this 'specification' by making the comment open require a space and close not require one.

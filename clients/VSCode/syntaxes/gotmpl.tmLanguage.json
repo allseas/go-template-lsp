@@ -47,11 +47,11 @@
         },
         "comma": { "match": ",", "name": "punctuation.separator.comma.gotmpl" },
         "comment": {
-            "begin": "\\{\\{\\s*(?:-\\s)?\\s*/\\*",
+            "begin": "\\{\\{(?:-\\s)?/\\*",
             "beginCaptures": {
                 "0": { "name": "punctuation.definition.comment.begin.gotmpl" }
             },
-            "end": "\\*/\\s*\\s*-?\\}\\}",
+            "end": "\\*/(?:\\s-)?\\}\\}",
             "endCaptures": {
                 "0": { "name": "punctuation.definition.comment.end.gotmpl" }
             },
