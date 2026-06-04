@@ -117,8 +117,16 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 					return nil, nil
 				}
 				fpos := doc.loadedType.Fset.Position(pos)
-				line := uint32(fpos.Line - 1)
-				char := uint32(fpos.Column - 1)
+
+				var line uint32
+				var char uint32
+
+				if fpos.Line > 0 && fpos.Column > 0 {
+					line = uint32(fpos.Line - 1)   //nolint:gosec // disable G115
+					char = uint32(fpos.Column - 1) //nolint:gosec // disable G115
+				} else {
+					log.Debug().Any("fpos", fpos).Msg("Definition: fpos is not > 0")
+				}
 				return protocol.Location{
 					URI: "file://" + fpos.Filename,
 					Range: protocol.Range{
