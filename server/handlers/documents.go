@@ -362,25 +362,15 @@ func WasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
 
 // ResolveVarInfo resolves a variable node to its value and Go type
 func ResolveVarInfo(
-	root parse.Node,
+	_ parse.Node,
 	target *parse.VariableNode,
-	docLoadedType *serverTypes.Tree,
+	_ *serverTypes.Tree,
 ) (value any, goType types.Type) {
 	if target == nil || len(target.Ident) == 0 {
 		return nil, nil
 	}
 
-	ctx := &Context{Vars: make(map[string]parse.Node), DotType: docLoadedType}
-	buildPath(root, target, ctx)
-
-	if pnode, ok := ctx.Vars[target.Ident[0]].(*parse.PipeNode); ok && pnode != nil {
-		pipe := pnode
-
-		// this can be a literal or a function
-		assignedValue := pipe.Cmds[len(pipe.Cmds)-1].Args[0]
-
-		log.Debug().Any("assvalue", assignedValue).Msg("ResolveVarInfo")
-	}
+	// TODO: add actual functionality, using the type tree
 
 	return nil, nil
 }
