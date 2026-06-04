@@ -169,6 +169,10 @@ tasks.build {
     dependsOn("addKtlintCheckGitPreCommitHook")
 }
 
+tasks.named("buildSearchableOptions") {
+    enabled = false
+}
+
 tasks.processResources {
     dependsOn("copyServerBin")
 }
