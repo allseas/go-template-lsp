@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"go/token"
 	"go/types"
 
 	parse "text-template-parser"
@@ -23,6 +24,7 @@ type Tree struct {
 	DotType    *types.Named           // optional: type of dot context (from gotype hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
+	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
 }
 
 // ErrorType categorizes the type of an error for customization of inspections.
