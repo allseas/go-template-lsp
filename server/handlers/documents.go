@@ -19,7 +19,7 @@ var WorkspaceRoot string
 type document struct {
 	text       string
 	tree       *parse.Tree
-	loadedType *types.LoadedType
+	loadedType *types.Tree
 }
 
 type documentStore struct {
@@ -34,7 +34,7 @@ var store = &documentStore{
 func (s *documentStore) Set(uri, text string) {
 	tree, err := parseTemplate(uri, text)
 
-	var lt *types.LoadedType
+	var lt *types.Tree
 	if WorkspaceRoot != "" {
 		hints := types.ParseTypeHints(strings.NewReader(text))
 		if len(hints) > 0 {

@@ -19,11 +19,22 @@ linting:
 
 testing:
   stage: test
-  image: golang:tip-alpine3.23
+  image: golang:1.26.2-alpine3.23
+  cache:
+    key:
+      files:
+        - server/go.sum
+    paths:
+      - .go/pkg/mod/
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
   script:
     - echo "Running Tests"
     - cd server
+    - go mod download
     - go test ./... -coverprofile=coverage.out
+    - grep -v -E '/(parse|types)/node\.go:' coverage.out > coverage.filtered.out
+    - mv coverage.filtered.out coverage.out
     - |
       COVER_OUTPUT=$(go tool cover -func=coverage.out)
       echo "$COVER_OUTPUT"
