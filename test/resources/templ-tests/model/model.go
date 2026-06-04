@@ -8,6 +8,7 @@ type Address struct {
 	City    string
 	Country string
 	Zip     string
+	Desc Description
 }
 
 // Line returns a single-line formatted address.
@@ -25,12 +26,19 @@ func (a Address) ZipCode() string {
 	return a.Zip
 }
 
+type Description struct {
+	Long string
+	Short string
+	Tags []string
+}
+
 // Item is one line in an order.
 type Item struct {
 	SKU       string
 	Name      string
 	Qty       int
 	UnitPrice float64
+	Desc Description
 }
 
 // Label returns a short display label for the item.
