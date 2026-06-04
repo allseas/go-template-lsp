@@ -3,6 +3,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 
@@ -60,6 +62,25 @@ func traceFromConfig(c Config) protocol.TraceValue {
 	return TraceValueMessages
 }
 
+func loadLocalConfig(c *Config) {
+	if workspaceRoot == "" {
+		return
+	}
+	configPath := filepath.Join(workspaceRoot, "gotmpl.config.json")
+	data, err := os.ReadFile(configPath) // #nosec G304 -- path is workspaceRoot + fixed filename
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Error().Err(err).Msg("failed to read local config file")
+		}
+		return
+	}
+	if err := json.Unmarshal(data, c); err != nil {
+		log.Error().Err(err).Msg("failed to parse local config file")
+	} else {
+		log.Debug().Any("config", *c).Msg("local config applied from gotmpl.config.json")
+	}
+}
+
 func applyTraceLevel(trace protocol.TraceValue) {
 	protocol.SetTraceValue(trace)
 
@@ -99,15 +120,17 @@ func RequestConfig(context *glsp.Context) error {
 	var result []json.RawMessage
 	context.Call("workspace/configuration", params, &result)
 
+	c := GetConfig()
 	if len(result) > 0 {
-		c := GetConfig()
 		if err := json.Unmarshal(result[0], &c); err != nil {
 			log.Error().Err(err).Msg("failed to parse config")
 		} else {
-			applyConfig(c)
-			log.Debug().Any("config", c).Msg("config stored")
+			log.Debug().Any("config", c).Msg("config stored from client")
 		}
 	}
+
+	loadLocalConfig(&c)
+	applyConfig(c)
 
 	return nil
 }
@@ -126,6 +149,7 @@ func ConfigChanged(_ *glsp.Context, params *protocol.DidChangeConfigurationParam
 		return err
 	}
 
+	loadLocalConfig(&c)
 	applyConfig(c)
 	log.Debug().Any("config", c).Msg("config changed")
 
