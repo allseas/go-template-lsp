@@ -63,10 +63,10 @@ func traceFromConfig(c Config) protocol.TraceValue {
 }
 
 func loadLocalConfig(c *Config) {
-	if workspaceRoot == "" {
+	if WorkspaceRoot == "" {
 		return
 	}
-	configPath := filepath.Join(workspaceRoot, "gotmpl.config.json")
+	configPath := filepath.Join(WorkspaceRoot, "gotmpl.config.json")
 	data, err := os.ReadFile(configPath) // #nosec G304 -- path is workspaceRoot + fixed filename
 	if err != nil {
 		if !os.IsNotExist(err) {

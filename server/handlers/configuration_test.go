@@ -70,7 +70,7 @@ func TestTraceFromConfig(t *testing.T) {
 func TestLoadLocalConfig(t *testing.T) {
 	t.Run("Loads local config when file exists", func(t *testing.T) {
 		tempDir := t.TempDir()
-		workspaceRoot = tempDir
+		WorkspaceRoot = tempDir
 
 		configData := `{"enableServer": false, "trace": {"server": "off"}}`
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
@@ -85,13 +85,13 @@ func TestLoadLocalConfig(t *testing.T) {
 		assert.Equal(t, false, c.EnableServer)
 		assert.Equal(t, protocol.TraceValueOff, c.Trace.Server)
 
-		// Unset workspaceRoot just in case
-		workspaceRoot = ""
+		// Unset WorkspaceRoot just in case
+		WorkspaceRoot = ""
 	})
 
 	t.Run("Does nothing when file does not exist", func(t *testing.T) {
 		tempDir := t.TempDir()
-		workspaceRoot = tempDir
+		WorkspaceRoot = tempDir
 
 		c := Config{EnableServer: true}
 		c.Trace.Server = "messages"
@@ -101,12 +101,12 @@ func TestLoadLocalConfig(t *testing.T) {
 		assert.Equal(t, true, c.EnableServer)
 		assert.Equal(t, TraceValueMessages, c.Trace.Server)
 
-		// Unset workspaceRoot
-		workspaceRoot = ""
+		// Unset WorkspaceRoot
+		WorkspaceRoot = ""
 	})
 
-	t.Run("Does nothing when workspaceRoot is empty", func(t *testing.T) {
-		workspaceRoot = ""
+	t.Run("Does nothing when WorkspaceRoot is empty", func(t *testing.T) {
+		WorkspaceRoot = ""
 
 		c := Config{EnableServer: true}
 		c.Trace.Server = "messages"
@@ -119,8 +119,8 @@ func TestLoadLocalConfig(t *testing.T) {
 
 	t.Run("Preserves existing fields when local config is partial", func(t *testing.T) {
 		tempDir := t.TempDir()
-		workspaceRoot = tempDir
-		defer func() { workspaceRoot = "" }()
+		WorkspaceRoot = tempDir
+		defer func() { WorkspaceRoot = "" }()
 
 		// Local file only overrides enableServer; trace.server must stay.
 		configData := `{"enableServer": false}`
@@ -138,8 +138,8 @@ func TestLoadLocalConfig(t *testing.T) {
 
 	t.Run("Leaves config unchanged when local config has invalid JSON", func(t *testing.T) {
 		tempDir := t.TempDir()
-		workspaceRoot = tempDir
-		defer func() { workspaceRoot = "" }()
+		WorkspaceRoot = tempDir
+		defer func() { WorkspaceRoot = "" }()
 
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
 		assert.NoError(t, os.WriteFile(configPath, []byte(`{not valid json`), 0o600))
@@ -157,8 +157,8 @@ func TestLoadLocalConfig(t *testing.T) {
 func TestLocalConfigOverridesClientConfig(t *testing.T) {
 	t.Run("RequestConfig: local gotmpl.config.json overrides client settings", func(t *testing.T) {
 		tempDir := t.TempDir()
-		workspaceRoot = tempDir
-		defer func() { workspaceRoot = "" }()
+		WorkspaceRoot = tempDir
+		defer func() { WorkspaceRoot = "" }()
 
 		configData := `{"enableServer": false, "trace": {"server": "off"}}`
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
@@ -183,8 +183,8 @@ func TestLocalConfigOverridesClientConfig(t *testing.T) {
 		"ConfigChanged: local gotmpl.config.json overrides notification settings",
 		func(t *testing.T) {
 			tempDir := t.TempDir()
-			workspaceRoot = tempDir
-			defer func() { workspaceRoot = "" }()
+			WorkspaceRoot = tempDir
+			defer func() { WorkspaceRoot = "" }()
 
 			configData := `{"trace": {"server": "off"}}`
 			configPath := filepath.Join(tempDir, "gotmpl.config.json")
