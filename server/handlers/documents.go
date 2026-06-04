@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 	parse "text-template-parser"
-	"text-template-server/types"
+	serverTypes "text-template-server/types"
 	"text-template-server/utils"
 
 	"github.com/rs/zerolog/log"
@@ -20,7 +20,7 @@ var WorkspaceRoot string
 type document struct {
 	text       string
 	tree       *parse.Tree
-	loadedType *types.Tree
+	loadedType *serverTypes.Tree
 }
 
 type documentStore struct {
@@ -35,11 +35,14 @@ var store = &documentStore{
 func (s *documentStore) Set(uri, text string) {
 	tree, err := parseTemplate(uri, text)
 
-	var lt *types.Tree
+	var lt *serverTypes.Tree
 	if WorkspaceRoot != "" {
-		hints := types.ParseTypeHints(strings.NewReader(text))
+		hints := serverTypes.ParseTypeHints(strings.NewReader(text))
 		if len(hints) > 0 {
-			if loaded, lerr := types.LoadTypeFromHint(hints[0].Type, WorkspaceRoot); lerr == nil {
+			if loaded, lerr := serverTypes.LoadTypeFromHint(
+				hints[0].Type,
+				WorkspaceRoot,
+			); lerr == nil {
 				lt = loaded
 			} else {
 				log.Debug().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
@@ -361,7 +364,7 @@ func WasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
 func ResolveVarInfo(
 	root parse.Node,
 	target *parse.VariableNode,
-	docLoadedType *LoadedType,
+	docLoadedType *serverTypes.Tree,
 ) (value any, goType types.Type) {
 	if target == nil || len(target.Ident) == 0 {
 		return nil, nil
