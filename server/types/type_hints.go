@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"go/types"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -78,34 +80,72 @@ type ParamType struct {
 func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 	importPath, typeName := splitTypeHint(hint)
 
+	log.Debug().
+		Str("hint", hint).
+		Str("importPath", importPath).
+		Str("typeName", typeName).
+		Str("workspaceRoot", workspaceRoot).
+		Msg("LoadTypeFromHint: attempting to load type")
+
 	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
+	dir := workspaceRoot
+	if _, err := os.Stat(dir); err != nil {
+		log.Warn().
+			Str("dir", dir).
+			Msg("LoadTypeFromHint: workspace root does not exist on disk, using process cwd")
+		if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+			dir = cwd
+		}
+	}
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes,
-		Dir:  workspaceRoot,
+		Dir:  dir,
 	}
 
 	pkgs, err := packages.Load(cfg, importPath)
 	if err != nil {
+		log.Error().
+			Err(err).
+			Str("importPath", importPath).
+			Str("dir", workspaceRoot).
+			Msg("LoadTypeFromHint: packages.Load failed")
 		return nil, fmt.Errorf("packages.Load(%q): %w", importPath, err)
 	}
 	if len(pkgs) == 0 {
+		log.Error().Str("importPath", importPath).Msg("LoadTypeFromHint: no packages found")
 		return nil, fmt.Errorf("no packages found for import path %q", importPath)
 	}
 
 	pkg := pkgs[0]
 	if len(pkg.Errors) > 0 {
+		log.Error().
+			Str("importPath", importPath).
+			Str("error", pkg.Errors[0].Msg).
+			Msg("LoadTypeFromHint: package has errors")
 		return nil, fmt.Errorf("package %q has errors: %v", importPath, pkg.Errors[0])
 	}
 
 	obj := pkg.Types.Scope().Lookup(typeName)
 	if obj == nil {
+		log.Error().
+			Str("typeName", typeName).
+			Str("importPath", importPath).
+			Msg("LoadTypeFromHint: type not found in package scope")
 		return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
 	}
 
 	named, ok := obj.Type().(*types.Named)
 	if !ok {
+		log.Error().Str("typeName", typeName).Msg("LoadTypeFromHint: type is not a named type")
 		return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
 	}
+
+	log.Debug().
+		Str("typeName", typeName).
+		Str("importPath", importPath).
+		Int("numFields", named.Underlying().(*types.Struct).NumFields()).
+		Int("numMethods", named.NumMethods()).
+		Msg("LoadTypeFromHint: type loaded successfully")
 
 	tree := &Tree{DotType: named, Pkg: pkg.Types}
 	return tree, nil

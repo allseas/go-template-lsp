@@ -33,21 +33,50 @@ var store = &documentStore{
 }
 
 func (s *documentStore) Set(uri, text string) {
+	log.Debug().Str("uri", uri).Str("workspaceRoot", WorkspaceRoot).Msg("documentStore.Set called")
+
 	tree, err := parseTemplate(uri, text)
+	if err != nil {
+		log.Debug().
+			Str("uri", uri).
+			Err(err).
+			Msg("documentStore.Set: parse error (will use previous tree if available)")
+	} else {
+		log.Debug().Str("uri", uri).Msg("documentStore.Set: parse succeeded")
+	}
 
 	var lt *serverTypes.Tree
 	if WorkspaceRoot != "" {
 		hints := serverTypes.ParseTypeHints(strings.NewReader(text))
+		log.Debug().
+			Int("hintCount", len(hints)).
+			Str("uri", uri).
+			Msg("documentStore.Set: parsed type hints")
 		if len(hints) > 0 {
+			log.Debug().
+				Str("hint", hints[0].Type).
+				Str("workspaceRoot", WorkspaceRoot).
+				Msg("documentStore.Set: attempting to load type from hint")
 			if loaded, lerr := serverTypes.LoadTypeFromHint(
 				hints[0].Type,
 				WorkspaceRoot,
 			); lerr == nil {
 				lt = loaded
+				log.Debug().
+					Str("hint", hints[0].Type).
+					Msg("documentStore.Set: type loaded successfully")
 			} else {
-				log.Debug().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
+				log.Warn().
+					Str("hint", hints[0].Type).
+					Err(lerr).
+					Str("workspaceRoot", WorkspaceRoot).
+					Msg("documentStore.Set: type hint load FAILED")
 			}
 		}
+	} else {
+		log.Warn().
+			Str("uri", uri).
+			Msg("documentStore.Set: WorkspaceRoot is empty, skipping type hint resolution")
 	}
 
 	s.mu.Lock()

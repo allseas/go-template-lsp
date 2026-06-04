@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"text-template-server/handlers"
 
 	"github.com/rs/zerolog/log"
@@ -57,14 +58,50 @@ func Init() error {
 func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
 	// use RootURI as it is more modern and RootPath is deprecated
 	if params.RootURI != nil {
+		log.Debug().Str("rootURI", *params.RootURI).Msg("initialize: received RootURI")
 		path, err := uriToPath(*params.RootURI)
 		if err != nil {
 			return nil, fmt.Errorf("initialize: %w", err)
 		}
 		handlers.WorkspaceRoot = path
+		log.Debug().
+			Str("workspaceRoot", handlers.WorkspaceRoot).
+			Msg("initialize: workspace root set from RootURI")
 	} else if params.RootPath != nil {
 		handlers.WorkspaceRoot = *params.RootPath
+		log.Debug().
+			Str("workspaceRoot", handlers.WorkspaceRoot).
+			Msg("initialize: workspace root set from RootPath")
+	} else {
+		log.Warn().Msg("initialize: no RootURI or RootPath provided, WorkspaceRoot will be empty")
 	}
+
+	// In tests, the WorkspaceRoot might be set to fake paths like /tmp/project.
+	// Only fall back to os.Getwd() if we aren't under test (or if we really want to ensure the path exists)
+	// Actually, the simplest fix for tests is to mock os.Stat or check if we are in test mode.
+	// Since go test sets os.Args[0] ending with .test, we can check that. Or just don't strictly override if someone explicitly set it via RootURI but it doesn't exist?
+	// Given tests use fake paths, let's just use it if it doesn't exist but warn.
+	if handlers.WorkspaceRoot == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			handlers.WorkspaceRoot = cwd
+			log.Debug().
+				Str("workspaceRoot", handlers.WorkspaceRoot).
+				Msg("initialize: workspace root empty, fell back to process cwd")
+		}
+	} else {
+		// Just check if it exists for logging, but don't strictly OVERRIDE what the client sent.
+		// If the client sent a path, we should trust it, else we break tests and potentially other valid cases (like virtual FS).
+		if _, err := os.Stat(handlers.WorkspaceRoot); err != nil {
+			log.Warn().
+				Str("workspaceRoot", handlers.WorkspaceRoot).
+				Msg("initialize: workspace root does not exist on disk, we will keep it but `go list` may fail later")
+
+			// If it's literally an empty IDE or deleted folder etc, let's fallback to CWD only if we really want.
+			// But since tests fail, it's better to NOT overwrite it if the client explicitly sent it.
+			// We will remove the strict fallback here.
+		}
+	}
+
 	capabilities := handler.CreateServerCapabilities()
 
 	openClose := true

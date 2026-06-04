@@ -59,10 +59,23 @@ var builtinOutput = map[string]outputKind{
 
 // CompletionWithFallback is an entry point that has a fallback option
 func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+	log.Debug().
+		Str("uri", params.TextDocument.URI).
+		Uint32("line", params.Position.Line).
+		Uint32("char", params.Position.Character).
+		Msg("CompletionWithFallback: request received")
+
 	result := completionAst(nil, params)
 	if result == nil {
-		log.Debug().Msg("ast completion failed or returned nil, falling back to regex completion")
+		log.Debug().
+			Msg("CompletionWithFallback: ast completion returned nil, falling back to regex completion")
 		return completion(nil, params)
+	}
+
+	if cl, ok := result.(protocol.CompletionList); ok {
+		log.Debug().
+			Int("itemCount", len(cl.Items)).
+			Msg("CompletionWithFallback: returning ast completion results")
 	}
 	return result, nil
 }
@@ -71,19 +84,30 @@ func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) 
 func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !GetConfig().EnableServer {
-		log.Debug().Msg("completion requested but server is disabled by config")
+		log.Debug().Msg("completionAst: server is disabled by config")
 		return nil
 	}
 
 	if !ok {
-		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
+		log.Error().
+			Str("uri", params.TextDocument.URI).
+			Msg("completionAst: document not found in store")
 		return nil
 	}
 
 	if doc.tree == nil {
-		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no parsed tree")
+		log.Error().
+			Str("uri", params.TextDocument.URI).
+			Msg("completionAst: document has no parsed tree")
 		return nil
 	}
+
+	hasLoadedType := doc.loadedType != nil
+	log.Debug().
+		Str("uri", params.TextDocument.URI).
+		Bool("hasLoadedType", hasLoadedType).
+		Int("textLen", len(doc.text)).
+		Msg("completionAst: document state")
 
 	text := doc.text
 	tree := doc.tree
@@ -356,6 +380,11 @@ func suggest(
 	}
 
 	if sChar == '.' {
+		log.Debug().
+			Bool("hasDotType", ctx.DotType != nil).
+			Int("pathLen", len(ctx.Path)).
+			Msg("suggest: handling dot trigger")
+
 		if len(ctx.Path) > 0 {
 			cmd, ok := ctx.Path[len(ctx.Path)-1].(*parse.CommandNode)
 			if ok && len(cmd.Args) >= 2 {
@@ -439,18 +468,26 @@ func dotItem(
 		prefix = "."
 	}
 	if lt := ctx.DotType; lt != nil {
+		fields := serverTypes.StructFields(lt.DotType)
+		methods := serverTypes.NamedMethods(lt.DotType)
+		log.Debug().
+			Int("fieldCount", len(fields)).
+			Int("methodCount", len(methods)).
+			Msg("dotItem: resolving fields and methods from DotType")
 		items = append(
 			items,
-			fieldCompletionItems(serverTypes.StructFields(lt.DotType), prefix, wordRange)...)
+			fieldCompletionItems(fields, prefix, wordRange)...)
 		items = append(
 			items,
 			methodCompletionItems(
-				serverTypes.NamedMethods(lt.DotType),
+				methods,
 				inputType,
 				pipeKind,
 				prefix,
 				wordRange,
 			)...)
+	} else {
+		log.Debug().Msg("dotItem: DotType is nil, no fields/methods to suggest")
 	}
 	return items
 }
