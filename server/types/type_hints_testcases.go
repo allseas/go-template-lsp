@@ -1,4 +1,4 @@
-package handlers
+package types
 
 // ParseTypeHints test cases
 
@@ -120,7 +120,7 @@ var loadTypeHintTestCases = []loadTypeHintTestCase{
 	{
 		name:         "loads Order type with fields and methods",
 		hint:         "text-template-server/src/model.Order",
-		root:         "testdata",
+		root:         "../../test/resources/typehints-tests",
 		wantTypeName: "Order",
 		wantFields: []string{
 			"ID",
@@ -136,19 +136,19 @@ var loadTypeHintTestCases = []loadTypeHintTestCase{
 	{
 		name:    "returns error for invalid import path",
 		hint:    "nonexistent/package.Foo",
-		root:    "testdata",
+		root:    "../../test/resources/typehints-tests",
 		wantErr: true,
 	},
 	{
 		name:    "returns error when type not found in package",
 		hint:    "text-template-server/src/model.NonExistent",
-		root:    "testdata",
+		root:    "../../test/resources/typehints-tests",
 		wantErr: true,
 	},
 	{
 		name:    "returns error when symbol is not a named type",
 		hint:    "fmt.Println",
-		root:    "testdata",
+		root:    "../../test/resources/typehints-tests",
 		wantErr: true,
 	},
 }

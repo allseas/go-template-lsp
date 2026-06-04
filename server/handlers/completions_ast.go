@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"strings"
 	parse "text-template-parser"
+	serverTypes "text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -21,7 +22,7 @@ type Context struct {
 	// used for the previous functions in the pipe to extract the context using Pipe.Cmds
 	Pipe *parse.PipeNode
 	// DotType is the resolved Go type of the current dot (.) object.
-	DotType *LoadedType
+	DotType *serverTypes.Tree
 }
 
 type outputKind int
@@ -56,8 +57,8 @@ var builtinOutput = map[string]outputKind{
 	"slice":    outputUntyped,
 }
 
-// completion entry point that has a fallback option
-func completionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
+// CompletionWithFallback is an entry point that has a fallback option
+func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	result := completionAst(nil, params)
 	if result == nil {
 		log.Debug().Msg("ast completion failed or returned nil, falling back to regex completion")
@@ -218,24 +219,24 @@ func pipeOutputType(ctx *Context, isInvoked bool) types.Type {
 	}
 	switch arg := preceding.Args[0].(type) {
 	case *parse.DotNode:
-		return ctx.DotType.Named
+		return ctx.DotType.DotType
 	case *parse.FieldNode:
 		if len(arg.Ident) != 1 {
 			return nil
 		}
 		name := arg.Ident[0]
-		for _, f := range ctx.DotType.Fields {
+		for _, f := range serverTypes.StructFields(ctx.DotType.DotType) {
 			if f.Name == name {
 				return f.Type
 			}
 		}
-		for _, m := range ctx.DotType.Methods {
+		for _, m := range serverTypes.NamedMethods(ctx.DotType.DotType) {
 			if m.Name == name {
 				return m.ReturnType
 			}
 		}
 	case *parse.IdentifierNode:
-		for _, m := range ctx.DotType.Methods {
+		for _, m := range serverTypes.NamedMethods(ctx.DotType.DotType) {
 			if m.Name == arg.Ident {
 				return m.ReturnType
 			}
@@ -282,7 +283,7 @@ func basicTypeMatchesKind(t types.Type, kind outputKind) bool {
 // methodIsUsable checks whether there are issues in the function definition
 // only valid go template functions should be accepted
 // functions that return 2 or more arguments are not accepted, except those where one of them is an error
-func methodIsUsable(m MethodType) bool {
+func methodIsUsable(m serverTypes.MethodType) bool {
 	if m.Func == nil {
 		return false
 	}
@@ -380,7 +381,7 @@ func suggest(
 		pipeInputType := pipeOutputType(ctx, isInvoked)
 		inputType := pipeInputType
 		if inputType == nil && kind == outputAny && ctx.DotType != nil {
-			inputType = ctx.DotType.Named
+			inputType = ctx.DotType.DotType
 		}
 		return pipeFilteredItems(kind, inputType, pipeInputType, ctx, wordRange)
 	}
@@ -438,17 +439,25 @@ func dotItem(
 		prefix = "."
 	}
 	if lt := ctx.DotType; lt != nil {
-		items = append(items, fieldCompletionItems(lt.Fields, prefix, wordRange)...)
 		items = append(
 			items,
-			methodCompletionItems(lt.Methods, inputType, pipeKind, prefix, wordRange)...)
+			fieldCompletionItems(serverTypes.StructFields(lt.DotType), prefix, wordRange)...)
+		items = append(
+			items,
+			methodCompletionItems(
+				serverTypes.NamedMethods(lt.DotType),
+				inputType,
+				pipeKind,
+				prefix,
+				wordRange,
+			)...)
 	}
 	return items
 }
 
 // fieldCompletionItems returns the list of fields with or without the dot
 func fieldCompletionItems(
-	fields []TypeField,
+	fields []serverTypes.TypeField,
 	prefix string,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
@@ -468,7 +477,7 @@ func fieldCompletionItems(
 }
 
 // methodAcceptsInput checks whether the function can accept the input
-func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind) bool {
+func methodAcceptsInput(m serverTypes.MethodType, inputType types.Type, pipeKind outputKind) bool {
 	if inputType != nil {
 		for _, p := range m.Params {
 			if types.Identical(p.Type, inputType) {
@@ -486,7 +495,7 @@ func methodAcceptsInput(m MethodType, inputType types.Type, pipeKind outputKind)
 
 // methodCompletionItems builds the function completion list with or without the dot
 func methodCompletionItems(
-	methods []MethodType,
+	methods []serverTypes.MethodType,
 	inputType types.Type,
 	pipeKind outputKind,
 	prefix string,
@@ -627,22 +636,22 @@ func buildPathBranch(
 }
 
 // resolveFieldChain walks lt following each name in idents and returns the final
-// LoadedType, or nil if any step cannot be resolved.
-func resolveFieldChain(lt *LoadedType, idents []string) *LoadedType {
+// Tree, or nil if any step cannot be resolved.
+func resolveFieldChain(lt *serverTypes.Tree, idents []string) *serverTypes.Tree {
 	if lt == nil {
 		return nil
 	}
 	cur := lt
 	for _, name := range idents {
-		var next *LoadedType
-		for _, f := range lt.Fields {
+		var next *serverTypes.Tree
+		for _, f := range serverTypes.StructFields(lt.DotType) {
 			if f.Name == name {
-				next = typeAsLoadedType(f.Type, lt)
+				next = typeAsTree(f.Type, lt)
 			}
 		}
-		for _, m := range lt.Methods {
+		for _, m := range serverTypes.NamedMethods(lt.DotType) {
 			if m.Name == name {
-				next = typeAsLoadedType(m.ReturnType, lt)
+				next = typeAsTree(m.ReturnType, lt)
 			}
 		}
 		cur = next
@@ -650,9 +659,9 @@ func resolveFieldChain(lt *LoadedType, idents []string) *LoadedType {
 	return cur
 }
 
-// typeAsLoadedType converts a Go type into a *LoadedType, reusing pkg from base.
+// typeAsTree converts a Go type into a *Tree, reusing pkg from base.
 // Returns nil for non-navigable types (primitives, slices, etc.).
-func typeAsLoadedType(t types.Type, base *LoadedType) *LoadedType {
+func typeAsTree(t types.Type, base *serverTypes.Tree) *serverTypes.Tree {
 	if ptr, ok := t.(*types.Pointer); ok {
 		t = ptr.Elem()
 	}
@@ -660,25 +669,40 @@ func typeAsLoadedType(t types.Type, base *LoadedType) *LoadedType {
 	if !ok {
 		return nil
 	}
-	return &LoadedType{
+	return &serverTypes.Tree{
 		Pkg:     base.Pkg,
-		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
+		DotType: named,
 	}
 }
 
 // fieldChainCompletionItems returns fields and methods of a chain-resolved type,
 // without a dot prefix (the dot was already consumed as the trigger character).
-func fieldChainCompletionItems(lt *LoadedType, wordRange protocol.Range) []protocol.CompletionItem {
-	items := make([]protocol.CompletionItem, 0, len(lt.Fields)+len(lt.Methods))
-	items = append(items, fieldCompletionItems(lt.Fields, "", wordRange)...)
-	items = append(items, methodCompletionItems(lt.Methods, nil, outputAny, "", wordRange)...)
+func fieldChainCompletionItems(
+	lt *serverTypes.Tree,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	items := make([]protocol.CompletionItem, 0)
+	items = append(
+		items,
+		fieldCompletionItems(serverTypes.StructFields(lt.DotType), "", wordRange)...)
+	items = append(
+		items,
+		methodCompletionItems(
+			serverTypes.NamedMethods(lt.DotType),
+			nil,
+			outputAny,
+			"",
+			wordRange,
+		)...)
 	return items
 }
 
 // resolvePipeDotType derives the dot type for the body of a range or with block.
-func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *LoadedType {
+func resolvePipeDotType(
+	pipe *parse.PipeNode,
+	unwrapSlice bool,
+	ctx *Context,
+) *serverTypes.Tree {
 	if ctx.DotType == nil || pipe == nil || len(pipe.Cmds) != 1 {
 		return ctx.DotType
 	}
@@ -692,7 +716,7 @@ func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *L
 	}
 	fieldName := field.Ident[0]
 	var fieldType types.Type
-	for _, f := range ctx.DotType.Fields {
+	for _, f := range serverTypes.StructFields(ctx.DotType.DotType) {
 		if f.Name == fieldName {
 			fieldType = f.Type
 			break
@@ -725,11 +749,9 @@ func resolvePipeDotType(pipe *parse.PipeNode, unwrapSlice bool, ctx *Context) *L
 			return ctx.DotType
 		}
 	}
-	return &LoadedType{
+	return &serverTypes.Tree{
+		DotType: named,
 		Pkg:     ctx.DotType.Pkg,
-		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
 	}
 }
 

@@ -8,8 +8,8 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// references finds and outputs all references for a selected variable or function
-func references(_ *glsp.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
+// References finds and outputs all references for a selected variable or function
+func References(_ *glsp.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !ok || doc.tree == nil {
 		log.Debug().Msg("doc or tree is nil")

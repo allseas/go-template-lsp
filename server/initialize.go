@@ -1,7 +1,8 @@
-package handlers
+package main
 
 import (
 	"fmt"
+	"text-template-server/handlers"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -10,12 +11,7 @@ import (
 	lspuri "go.lsp.dev/uri"
 )
 
-var (
-	handler       protocol.Handler
-	version       string
-	lsName        string
-	workspaceRoot string
-)
+var handler protocol.Handler
 
 func uriToPath(uri string) (string, error) {
 	u, err := lspuri.Parse(uri)
@@ -26,29 +22,26 @@ func uriToPath(uri string) (string, error) {
 }
 
 // setupHandlers initializes the handler configuration with the given language server name and version. This is separated from server startup to enable testing.
-func setupHandlers(langServerName string, langServerVersion string) {
-	lsName = langServerName
-	version = langServerVersion
-
+func setupHandlers() {
 	handler = protocol.Handler{
 		Initialize:                      initialize,
 		Initialized:                     initialized,
 		Shutdown:                        shutdown,
-		TextDocumentCompletion:          completionWithFallback,
-		TextDocumentDidOpen:             didOpen,
-		TextDocumentDidChange:           didChange,
-		TextDocumentDidClose:            didClose,
-		TextDocumentDefinition:          definition,
-		SetTrace:                        SetTrace,
-		WorkspaceDidChangeConfiguration: ConfigChanged,
-		TextDocumentReferences:          references,
-		TextDocumentHover:               hover,
+		TextDocumentCompletion:          handlers.CompletionWithFallback,
+		TextDocumentDidOpen:             handlers.DidOpen,
+		TextDocumentDidChange:           handlers.DidChange,
+		TextDocumentDidClose:            handlers.DidClose,
+		TextDocumentDefinition:          handlers.Definition,
+		SetTrace:                        handlers.SetTrace,
+		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
+		TextDocumentReferences:          handlers.References,
+		TextDocumentHover:               handlers.Hover,
 	}
 }
 
 // Init initializes the LSP server with the provided name and version, sets up the request handlers, and starts the server using standard I/O for communication. It returns an error if the server fails to start.
-func Init(langServerName string, langServerVersion string) error {
-	setupHandlers(langServerName, langServerVersion)
+func Init() error {
+	setupHandlers()
 
 	lspServer := server.NewServer(&handler, lsName, false)
 
@@ -68,9 +61,9 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 		if err != nil {
 			return nil, fmt.Errorf("initialize: %w", err)
 		}
-		workspaceRoot = path
+		handlers.WorkspaceRoot = path
 	} else if params.RootPath != nil {
-		workspaceRoot = *params.RootPath
+		handlers.WorkspaceRoot = *params.RootPath
 	}
 	capabilities := handler.CreateServerCapabilities()
 
@@ -87,11 +80,12 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 		TriggerCharacters: []string{"$", "."},
 		ResolveProvider:   &resolveProvider,
 	}
+	v := version
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
 		ServerInfo: &protocol.InitializeResultServerInfo{
 			Name:    lsName,
-			Version: &version,
+			Version: &v,
 		},
 	}, nil
 }
@@ -101,7 +95,7 @@ func initialized(context *glsp.Context, _ *protocol.InitializedParams) error {
 
 	// so we don't block the initialized request handler.
 	go func(ctx *glsp.Context) {
-		if err := RequestConfig(ctx); err != nil {
+		if err := handlers.RequestConfig(ctx); err != nil {
 			log.Error().Err(err).Msg("failed to request config")
 		}
 	}(context)

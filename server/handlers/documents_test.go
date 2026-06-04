@@ -153,7 +153,7 @@ func TestDidOpenAndChange(t *testing.T) {
 			},
 		}
 
-		err := didOpen(nil, openParams)
+		err := DidOpen(nil, openParams)
 		assert.NoError(t, err, "didOpen should not error")
 
 		val, ok := store.Get(uri)
@@ -173,7 +173,7 @@ func TestDidOpenAndChange(t *testing.T) {
 			},
 		}
 
-		err = didChange(nil, changeParams)
+		err = DidChange(nil, changeParams)
 		assert.NoError(t, err, "didChange should not error")
 
 		val, ok = store.Get(uri)
@@ -200,7 +200,7 @@ func TestDidOpenAndChange(t *testing.T) {
 			},
 		}
 
-		err := didOpen(nil, openParams)
+		err := DidOpen(nil, openParams)
 		assert.NoError(t, err, "didOpen should not error")
 
 		val, ok := store.Get(uri)
@@ -212,7 +212,7 @@ func TestDidOpenAndChange(t *testing.T) {
 			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
 		}
 
-		err = didClose(nil, closeParams)
+		err = DidClose(nil, closeParams)
 
 		assert.NoError(t, err, "didClose should not error")
 		val, ok = store.Get(uri)

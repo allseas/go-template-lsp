@@ -1,4 +1,5 @@
-package handlers
+// Package types implements utils for types and the type tree
+package types
 
 import (
 	"bufio"
@@ -72,17 +73,9 @@ type ParamType struct {
 	TypeName string
 }
 
-// LoadedType is the result of resolving a type hint against a real Go package.
-type LoadedType struct {
-	Pkg     *packages.Package
-	Named   *types.Named
-	Fields  []TypeField
-	Methods []MethodType
-}
-
-// LoadTypeFromHint loads the Go package identified by the hint and returns the
-// named type together with its struct fields (if any).
-func LoadTypeFromHint(hint, workspaceRoot string) (*LoadedType, error) {
+// LoadTypeFromHint loads the Go package identified by the hint and returns a
+// Tree with DotType and Pkg set.
+func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 	importPath, typeName := splitTypeHint(hint)
 
 	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
@@ -114,12 +107,8 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*LoadedType, error) {
 		return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
 	}
 
-	return &LoadedType{
-		Pkg:     pkg,
-		Named:   named,
-		Fields:  structFields(named),
-		Methods: namedMethods(named),
-	}, nil
+	tree := &Tree{DotType: named, Pkg: pkg.Types}
+	return tree, nil
 }
 
 // splitTypeHint splits a raw gotype hint into (importPath, typeName).
@@ -131,8 +120,8 @@ func splitTypeHint(hint string) (importPath, typeName string) {
 	return hint[:idx], hint[idx+1:]
 }
 
-// namedMethods extracts the methods from the model
-func namedMethods(named *types.Named) []MethodType {
+// NamedMethods extracts the methods from the model
+func NamedMethods(named *types.Named) []MethodType {
 	var methods []MethodType
 	for i := range named.NumMethods() {
 		fn := named.Method(i)
@@ -171,8 +160,8 @@ func namedMethods(named *types.Named) []MethodType {
 	return methods
 }
 
-// structFields returns the exported fields of the struct
-func structFields(named *types.Named) []TypeField {
+// StructFields returns the exported fields of the struct
+func StructFields(named *types.Named) []TypeField {
 	// Underlying returns structs fields and types
 	st, ok := named.Underlying().(*types.Struct)
 	if !ok {

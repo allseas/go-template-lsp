@@ -3,7 +3,6 @@ package main
 
 import (
 	"os"
-	"text-template-server/handlers"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -20,7 +19,7 @@ func main() {
 
 	log.Print("starting server")
 
-	err := handlers.Init(lsName, version)
+	err := Init()
 	if err != nil {
 		log.Fatal().Err(err).Msg("error initializing handlers")
 	}

@@ -18,14 +18,14 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 ## Editor Features
 
 | Feature                           | VS Code (tested) | JetBrains (tested) | Priority | Notes                                                        |
-| --------------------------------- | ---------------- | ------------------ | -------- | ------------------------------------------------------------ |
+|-----------------------------------|------------------|--------------------|----------|--------------------------------------------------------------|
 | **Syntax Highlighting**           |                  |                    |          |
 | Static syntax highlighting        | ✅ (⏳)            | ✅ (⏳)              | Must     | Syntax defined in `.tmpl` files                              |
 | Dynamic syntax highlighting       | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Highlighting based on variables and context                  |
 | Target language syntax            | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.) |
 | **Code Completion**               |                  |                    |          |
-| Completion on template variables  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests available variables in current scope                |
-| Completion on struct field names  | 🚧 (⏳)            | 🚧 (⏳)              | Must     | Auto-complete struct field access                            |
+| Completion on template variables  | ✅ (✅)            | ✅ (✅)              | Must     | Suggests available variables in current scope                |
+| Completion on struct field names  | ✅ (⏳)            | ✅ (⏳)              | Must     | Auto-complete struct field access                            |
 | Completion on built-in functions  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests standard template functions                         |
 | Completion on local functions     | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Suggests user-defined template functions                     |
 | **Navigation**                    |                  |                    |          |
@@ -52,7 +52,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 The language server provides the backend intelligence for all editor features. These features support multiple IDEs through the LSP protocol.
 
 | Feature                         | Supported (tested) | Priority | Notes                                               |
-| ------------------------------- | ------------------ | -------- | --------------------------------------------------- |
+|---------------------------------|--------------------|----------|-----------------------------------------------------|
 | **Configuration**               |                    |          |
 | User configuration              | ✅ (⏳)              | Should   | Per-user configuration, lower priority than project |
 | Project-level settings          | ✅ (⏳)              | Must     | Per-project configuration override                  |
@@ -72,7 +72,7 @@ The language server provides the backend intelligence for all editor features. T
 ## Specialized Support
 
 | Feature                 | Supported | Status  | Priority | Notes                                       |
-| ----------------------- | --------- | ------- | -------- | ------------------------------------------- |
+|-------------------------|-----------|---------|----------|---------------------------------------------|
 | **Helm Templates**      |           |         |          |                                             |
 | Helm syntax support     | ⏳         | Planned | Could    | Special handling for Helm `.yaml.tpl` files |
 | Helm built-in functions | ⏳         | Planned | Could    | Auto-complete and documentation             |
