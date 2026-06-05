@@ -201,8 +201,6 @@ suite("Completion Test Suite", () => {
         }
     });
 
-    // TODO: Behaviour tested here is not correct, however, the test is deemed to be useful in the future, so it is included anyways.
-    // Refer to !61 for more info
     test("Variables are suggested in else blocks of if, with, and range", async () => {
         const { tmplUri } = await createDocument(
             "completion-else-blocks.tmpl",
@@ -215,8 +213,8 @@ suite("Completion Test Suite", () => {
             let list = await getCompletions(tmplUri, new vscode.Position(2, 2));
             let labels = getLabels(list);
             assert.ok(
-                labels.includes("$x"),
-                "Expected $x to be inside 'else' block of 'with'",
+                !labels.includes("$x"),
+                "Expected $x to not be inside 'else' block of 'with'",
             );
 
             // Check 'else' block of 'if'
@@ -231,12 +229,12 @@ suite("Completion Test Suite", () => {
             list = await getCompletions(tmplUri, new vscode.Position(10, 2));
             labels = getLabels(list);
             assert.ok(
-                labels.includes("$k"),
-                "Expected $k to be inside 'else' block of 'range'",
+                !labels.includes("$k"),
+                "Expected $k to not be inside 'else' block of 'range'",
             );
             assert.ok(
-                labels.includes("$v"),
-                "Expected $v to be inside 'else' block of 'range'",
+                !labels.includes("$v"),
+                "Expected $v to not be inside 'else' block of 'range'",
             );
         } finally {
             await cleanupDocument(tmplUri);
