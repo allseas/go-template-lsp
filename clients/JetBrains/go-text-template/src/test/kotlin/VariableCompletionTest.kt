@@ -162,8 +162,6 @@ class VariableCompletionTest : CustomPlatformTestCase() {
         assertDoesntContain(suggestedCompletions!!, $$"$x", $$"$y")
     }
 
-    // TODO: Behaviour tested here is not correct, however, the test is deemed to be useful in the future, so it is included anyways.
-    // Refer to !61 for more info
     fun testVariablesAreSuggestedInElseBlocksOfIfWithRange() {
         myFixture.configureByText(
             "test_else_blocks_with.txt.tmpl",
@@ -177,7 +175,7 @@ class VariableCompletionTest : CustomPlatformTestCase() {
         myFixture.complete(CompletionType.BASIC)
         var suggestedCompletions = myFixture.lookupElementStrings
         assertNotNull(suggestedCompletions)
-        assertContainsElements(suggestedCompletions!!, $$"$x")
+        assertDoesntContain(suggestedCompletions!!, $$"$x")
 
         myFixture.configureByText(
             "test_else_blocks_if.txt.tmpl",
@@ -205,7 +203,7 @@ class VariableCompletionTest : CustomPlatformTestCase() {
         myFixture.complete(CompletionType.BASIC)
         suggestedCompletions = myFixture.lookupElementStrings
         assertNotNull(suggestedCompletions)
-        assertContainsElements(suggestedCompletions!!, $$"$k", $$"$v")
+        assertDoesntContain(suggestedCompletions!!, $$"$k", $$"$v")
     }
 
     fun testMultiAssignmentVariables() {
