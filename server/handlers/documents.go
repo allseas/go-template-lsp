@@ -8,6 +8,8 @@ import (
 	"text-template-server/types"
 	"text-template-server/utils"
 
+	gotypes "go/types"
+
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -20,6 +22,7 @@ type document struct {
 	text       string
 	tree       *parse.Tree
 	loadedType *types.Tree
+	typedTree  *types.Tree
 }
 
 type documentStore struct {
@@ -55,7 +58,32 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 
-	s.docs[uri] = &document{text: text, tree: tree, loadedType: lt}
+	s.docs[uri] = &document{
+		text:       text,
+		tree:       tree,
+		loadedType: lt,
+		typedTree:  buildTypedTree(tree, lt),
+	}
+}
+
+// buildTypedTree returns the analysed (typed) tree if the parse tree exists.
+// It carries dot-type / package info from the loaded type hint when available.
+func buildTypedTree(tree *parse.Tree, lt *types.Tree) *types.Tree {
+	if tree == nil {
+		return nil
+	}
+	var dotType gotypes.Type
+	var pkg *gotypes.Package
+	if lt != nil {
+		dotType = lt.DotType
+		pkg = lt.Pkg
+	}
+	t := types.NewTree(*tree, nil, dotType, pkg)
+	if lt != nil {
+		t.DotType = lt.DotType
+		t.Pkg = lt.Pkg
+	}
+	return &t
 }
 
 func (s *documentStore) Get(uri string) (*document, bool) {
