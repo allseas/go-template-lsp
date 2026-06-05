@@ -28,9 +28,8 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		return nil, nil
 	}
 
-	switch node.Type() {
-	case parse.NodeVariable:
-		target := node.(*parse.VariableNode)
+	switch target := node.(type) {
+	case *parse.VariableNode:
 		varName := target.Ident[0]
 
 		var results []protocol.Location
@@ -47,7 +46,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 			return nil, nil
 		}
 		return results, nil
-	case parse.NodeDot:
+	case *parse.DotNode:
 		// TODO: decide if that is the correct behaviour to go to the previous range/with?
 		ctx := &Context{Vars: make(map[string]parse.Node)}
 		buildPath(doc.tree.Root, node, ctx)
@@ -67,11 +66,10 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 			}
 		}
 		return nil, nil
-	case parse.NodeField:
+	case *parse.FieldNode:
 		if doc.loadedType == nil || doc.loadedType.Fset == nil || doc.loadedType.DotType == nil {
 			return nil, nil
 		}
-		target := node.(*parse.FieldNode)
 		if len(target.Ident) == 0 {
 			return nil, nil
 		}
