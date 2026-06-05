@@ -76,30 +76,16 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 			return nil, nil
 		}
 
-		// Determine which ident in the chain the cursor is on.
-		// A FieldNode at byte Pos covers ".Ident[0].Ident[1]..."
-		fieldOffset := int(target.Pos) + 1 // skip the leading '.'
-		targetIdx := len(target.Ident) - 1 // default to last ident
-		for i, ident := range target.Ident {
-			if i > 0 {
-				fieldOffset++ // skip the separator '.'
-			}
-			if offset >= fieldOffset && offset < fieldOffset+len(ident) {
-				targetIdx = i
-				break
-			}
-			fieldOffset += len(ident)
-		}
+		targetIdx := getFieldIdentIdx(target, offset)
 
-		log.Debug().
-			Any("dotType", doc.loadedType.DotType).
-			Any("Ident", target.Ident).
-			Any("target", targetIdx).
-			Any("cursorPosition", offset).
-			Any("fieldNodePos", target.Pos).
-			Msg("definition NodeField")
+		// log.Debug().
+		// 	Any("dotType", doc.loadedType.DotType).
+		// 	Any("Ident", target.Ident).
+		// 	Any("target", targetIdx).
+		// 	Any("cursorPosition", offset).
+		// 	Any("fieldNodePos", target.Pos).
+		// 	Msg("definition NodeField")
 
-		// Walk the type chain to find the Go object at targetIdx.
 		var currentType gotypes.Type = doc.loadedType.DotType
 		for i := 0; i <= targetIdx; i++ {
 			obj, _, _ := gotypes.LookupFieldOrMethod(
@@ -156,4 +142,20 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		Any("node", node).
 		Msg("node at position is not a field or identifier")
 	return nil, nil
+}
+
+func getFieldIdentIdx(target *parse.FieldNode, offset int) int {
+	fieldOffset := int(target.Pos) + 1 // skip the leading '.'
+	targetIdx := len(target.Ident) - 1 // default to last ident
+	for i, ident := range target.Ident {
+		if i > 0 {
+			fieldOffset++ // skip the separator '.'
+		}
+		if offset >= fieldOffset && offset < fieldOffset+len(ident) {
+			targetIdx = i
+			break
+		}
+		fieldOffset += len(ident)
+	}
+	return targetIdx
 }

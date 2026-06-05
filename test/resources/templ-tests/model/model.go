@@ -32,6 +32,10 @@ type Description struct {
 	Tags []string
 }
 
+func (d Description) Summarize() string {
+	return "You are exactly right! It's not just ... -- it's ..."
+}
+
 // Item is one line in an order.
 type Item struct {
 	SKU       string
