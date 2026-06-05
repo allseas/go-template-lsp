@@ -11,6 +11,17 @@ type Address struct {
 	Desc Description
 }
 
+// Copy returns a copy of the address.
+func (a Address) Copy() Address {
+	return Address{
+		Street:  a.Street,
+		City:    a.City,
+		Country: a.Country,
+		Zip:     a.Zip,
+		Desc:    a.Desc,
+	}
+}
+
 // Line returns a single-line formatted address.
 func (a Address) Line() string {
 	return a.Street + ", " + a.City
