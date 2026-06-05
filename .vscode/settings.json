@@ -1,3 +1,13 @@
 {
-    "go.lintTool": "golangci-lint-v2"
+    "go.lintTool": "golangci-lint-v2",
+    "cSpell.words": [
+        "coverprofile",
+        "glsp",
+        "golangci",
+        "gotemplate",
+        "gowatch",
+        "gradlew",
+        "ktlint",
+        "silenceper"
+    ]
 }

@@ -37,16 +37,17 @@ This repository contains the source code of the *GoTemplate Support* extension. 
 Extension features:
 
 | Feature                                         | VS Code | JetBrains | Priority |
-|-------------------------------------------------|---------|-----------|----------|
+| ----------------------------------------------- | ------- | --------- | -------- |
 | Static syntax highlighting                      | ✅       | ✅         | Must     |
 | Dynamic syntax highlighting                     |         |           | Must     |
 | Autocompletion on variables                     | ✅       | ✅         | Must     |
 | Autocompletion on field names                   | ✅       | ✅         | Must     |
+| Autocompletion on chained field accesses        | ✅       | ✅         | Must     |
 | Autocompletion on global functions              | ✅       | ✅         | Must     |
 | Autocompletion on local functions               |         |           | Must     |
-| Inspection on duplicate variable names          |         |           | Must     |
+| Inspection on duplicate variable names          | ✅       | ✅         | Must     |
 | Jump to definition                              | ✅       | ✅         | Must     |
-| Definition on hover                             |         |           | Must     |
+| Definition on hover                             | ✅       | ✅         | Must     |
 | Toggling features                               |         |           | Must     |
 | Find usages of a variable or function           | ✅       | ✅         | Must     |
 | Type checking on template                       | ✅       | ✅         | Must     |
@@ -54,7 +55,7 @@ Extension features:
 | Wrap selection in a comment                     | ✅       | ✅         | Should   |
 | Highlight end of the current block              |         |           | Should   |
 | Label functions as deprecated                   |         |           | Could    |
-| Static syntax highlighting for target langauge  |         |           | Could    |
+| Static syntax highlighting for target language  |         |           | Could    |
 | Auto-closing of opened tags (snippets)          | ✅       | ✅         | Could    |
 | Wrap selection in a block                       | ✅       | ✅         | Should   |
 | Inspection for missing whitespace trims in tags |         |           | Could    |
@@ -62,7 +63,7 @@ Extension features:
 Language server features:
 
 | Feature                                                  | Supported | Priority |
-|----------------------------------------------------------|-----------|----------|
+| -------------------------------------------------------- | --------- | -------- |
 | Locally defined syntax modifications                     |           | Should   |
 | Completions and types of functions inferred from project |           | Should   |
 | Support for adding more global functions and tag types   |           | Should   |
@@ -188,12 +189,15 @@ The TextMate grammar for syntax highlighting is generated from a formal Go templ
 cd syntax
 cabal run
 ```
+
 This outputs `syntax/syntaxes/gotemplate.tmLanguage.json`, which is used by both VS Code and JetBrains.
 
 or:
+
 ```bash
 npm run generate:syntax
 ```
+
 which automatically formats the file and copies it into both extensions.
 
 ### VS Code Extension
