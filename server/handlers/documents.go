@@ -175,6 +175,7 @@ func DidClose(_ *glsp.Context, params *protocol.DidCloseTextDocumentParams) erro
 }
 
 // nodeFind finds a node in a tree given the offset
+// deprecated, NodeFind should now find the correct node in a type tree
 func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 	best := root
 	bestPos := parse.Pos(0)
