@@ -10,6 +10,7 @@ Diagnostics report errors in template files as squiggly underlines. They are pub
 | `{{ }}`                      | `template: …: missing value for command`            | The full `{{ }}`                             |
 | `{{ $x }}` (undeclared)      | `undefined variable: $x`                            | The `{{ … }}` block                          |
 | `{{ foo }}` Unknown function | `unsupported function or unregistered command: foo` | The `{{ … }}` block                          |
+| `{{ $x := 1 }} {{ $x := 2 }}`| `duplicate variable name: $x`                       | The `{{ … }}` block with the duplicate       |
 
 ## Request flow
 

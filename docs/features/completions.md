@@ -8,6 +8,7 @@ Completions based on AST offer context-aware suggestions when the user types in 
 |----------------------------------------------|---------------------------------------------------------------------------------------------------------------|
 | `{{ `**`$`**` }}`                            | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix                                          |
 | `{{ `**`.`**` }}`                            | `.` item, or all fields and methods of the current dot type if a type hint is resolved                        |
+| `{{ .Items\[0\].`**`▌`**` }}`                | Fields and methods available on the resolved field type (chained field accesses)                             |
 | `{{ .Items \| `**`len`**` \| `**`▌`**` }}`   | Functions that accept `int` output: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `not`, `print`, `printf`, `println`   |
 | `{{ .IsAdmin \| `**`not`**` \| `**`▌`**` }}` | Functions that accept `bool` output: `and`, `or`, `not`, `print`, `printf`, `println`                         |
 | `{{ .Name \| `**`html`**` \| `**`▌`**` }}`   | Functions that accept `string` output: `html`, `js`, `urlquery`, `len`, `print`, `printf`, `println`, `index` |
