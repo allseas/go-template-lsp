@@ -25,7 +25,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 | Target language syntax            | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.) |
 | **Code Completion**               |                  |                    |          |
 | Completion on template variables  | ✅ (✅)            | ✅ (✅)              | Must     | Suggests available variables in current scope                |
-| Completion on struct field names  | ✅ (⏳)            | ✅ (⏳)              | Must     | Auto-complete struct field access                            |
+| Completion on struct field names  | ✅ (✅)            | ✅ (✅)              | Must     | Auto-complete struct field access and chained field accesses |
 | Completion on built-in functions  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests standard template functions                         |
 | Completion on local functions     | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Suggests user-defined template functions                     |
 | **Navigation**                    |                  |                    |          |
@@ -33,8 +33,8 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 | Find references / Usages          | ✅ (✅)            | ✅ (✅)              | Must     | Find all usages of a symbol                                  |
 | Peek definition on hover          | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Show definition in hover tooltip                             |
 | **Inspections & Diagnostics**     |                  |                    |          |
-| Incorrect syntax                  | ✅ (⏳)            | ✅ (⏳)              | Must     | Warn about incorrect syntax                                  |
-| Duplicate variable detection      | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Warn about redefined variables                               |
+| Incorrect syntax                  | ✅ (✅)            | ✅ (✅)              | Must     | Warn about incorrect syntax                                  |
+| Duplicate variable detection      | ✅ (✅)            | ✅ (✅)              | Must     | Warn about redefined variables                               |
 | Type checking                     | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Validate type compatibility in templates                     |
 | Unused variable detection         | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Flag declared but unused variables                           |
 | Missing whitespace trim detection | ⏳ (⏳)            | ⏳ (⏳)              | Could    | Suggest whitespace trim operators when needed                |
@@ -54,8 +54,8 @@ The language server provides the backend intelligence for all editor features. T
 | Feature                         | Supported (tested) | Priority | Notes                                               |
 |---------------------------------|--------------------|----------|-----------------------------------------------------|
 | **Configuration**               |                    |          |
-| User configuration              | ✅ (⏳)              | Should   | Per-user configuration, lower priority than project |
-| Project-level settings          | ✅ (⏳)              | Must     | Per-project configuration override                  |
+| User configuration              | ✅ (✅)              | Should   | Per-user configuration, lower priority than project |
+| Project-level settings          | ✅ (✅)              | Must     | Per-project configuration via `gotmpl.config.json`  |
 | Per-file configuration comments | ⏳ (⏳)              | Could    | `// @gotemplate disable-inspection-name`            |
 | Dotfile Config                  | ⏳ (⏳)              | Should   |                                                     |
 | **Analysis**                    |                    |          |
