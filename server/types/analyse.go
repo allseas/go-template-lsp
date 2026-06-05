@@ -307,7 +307,8 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 	r.Pipe = analysePipe(n.Pipe, r, ctx)
 	typ := getRangeableType(r.Pipe.typ)
 	if typ == nil {
-		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over type %s", r.Pipe.typ.String())
+		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over type %v", r.Pipe.typ)
+		ctx.dotType = nil
 	} else {
 		ctx.dotType = typ
 		// override the range var if it was set

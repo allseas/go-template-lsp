@@ -2,7 +2,6 @@
 package handlers
 
 import (
-	"fmt"
 	"go/types"
 	"strings"
 	parse "text-template-parser"
@@ -14,6 +13,7 @@ import (
 )
 
 // Context struct is used only in completion_ast to construct Context to be scope aware
+// not needed anymore
 type Context struct {
 	// chain from root to the Node
 	Path []parse.Node
@@ -35,6 +35,7 @@ const (
 	outputUntyped            // call, index, slice — dynamic, don't restrict
 )
 
+// TODO: can be derived from the type of the node
 var builtinOutput = map[string]outputKind{
 	"len":      outputInt,
 	"not":      outputBool,
@@ -67,33 +68,29 @@ func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) 
 	return result, nil
 }
 
-// completions that use AST
+// completions that use the typed AST exclusively. All scope/context
+// information (variables, dot type, parent) is derived from traversing the typed tree
 func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
-	doc, ok := store.Get(params.TextDocument.URI)
 	if !GetConfig().EnableServer {
 		log.Debug().Msg("completion requested but server is disabled by config")
 		return nil
 	}
-
+	doc, ok := store.Get(params.TextDocument.URI)
 	if !ok {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
 		return nil
 	}
-
-	if doc.tree == nil {
-		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no parsed tree")
+	if doc.typedTree == nil || doc.typedTree.Root == nil {
+		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no typed tree")
 		return nil
 	}
 
 	text := doc.text
-	tree := doc.tree
-
-	ctx := &Context{
-		Vars:    map[string]parse.Node{"$": nil},
-		DotType: doc.loadedType,
-	}
-
 	offset := positionToOffset(text, params.Position)
+
+	if !isInsideTemplate(text, offset) {
+		return nil
+	}
 
 	currentWord := getWordAtOffset(text, offset)
 	wordUTF16Len := utf16Len(currentWord)
@@ -109,29 +106,14 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 		End: params.Position,
 	}
 
-	curNode := nodeFind(tree.Root, parse.Pos(offset))
-	result := buildPath(tree.Root, curNode, ctx)
-
-	logPath(ctx)
-
-	isInvoked := params.Context != nil &&
-		params.Context.TriggerKind == protocol.CompletionTriggerKindInvoked
-
-	var parent parse.Node
-	if len(ctx.Path) <= 1 {
-		log.Debug().Msg("context not passed")
-	} else {
-		parent = ctx.Path[len(ctx.Path)-2]
-	}
-
-	if !isInsideTemplate(text, offset) {
-		return nil
-	}
-
-	if !result {
+	cur := serverTypes.NodeFind(doc.typedTree.Root, serverTypes.Pos(offset))
+	if cur == nil {
 		log.Error().Msg("The target node is not found")
 		return nil
 	}
+
+	isInvoked := params.Context != nil &&
+		params.Context.TriggerKind == protocol.CompletionTriggerKindInvoked
 
 	var sChar uint8
 	if offset > 0 && offset <= len(text) {
@@ -146,7 +128,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 		}
 	}
 
-	items := suggest(parent, ctx, sChar, isInvoked, wordRange)
+	items := suggest(cur, sChar, isInvoked, wordRange)
 
 	return protocol.CompletionList{
 		IsIncomplete: false,
@@ -178,6 +160,7 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	}
 	cmds := ctx.Pipe.Cmds
 	// precedingIdx is -1 when the user invokes the suggestion mid-typing and -2 when automatically suggested
+	// TODO: preceding is not always len(cmds) - 2 as we are not always editing the last cmd
 	precedingIdx := len(cmds) - 2
 	if isInvoked {
 		precedingIdx = len(cmds) - 1
@@ -199,51 +182,294 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	return outputAny
 }
 
-// pipeOutputType returns the type of a previous command in a pipe.
-// If the current command is broken, then nil is returned, as the pipe becomes nil
-func pipeOutputType(ctx *Context, isInvoked bool) types.Type {
-	if ctx.Pipe == nil || ctx.DotType == nil {
+// pipeOutputTypeT returns the output type of the command preceding the cursor's
+// command in the enclosing pipe. The type is taken straight from the typed tree
+func pipeOutputTypeT(cur serverTypes.Node, isInvoked bool) types.Type {
+	pipe := serverTypes.EnclosingPipe(cur)
+	if pipe == nil {
 		return nil
 	}
-	cmds := ctx.Pipe.Cmds
+	cmds := pipe.Cmds
+	// TODO: not always -2
 	precedingIdx := len(cmds) - 2
 	if isInvoked {
 		precedingIdx = len(cmds) - 1
 	}
-	if precedingIdx < 0 {
+	if precedingIdx < 0 || precedingIdx >= len(cmds) {
 		return nil
+	}
+	return cmds[precedingIdx].ValueType()
+}
+
+// pipeOutputKindT determines the output kind of the preceding pipe command.
+// Falls back to a name lookup for builtin identifiers when the typed node
+// has no resolved type (no funcs map is wired in during analysis).
+func pipeOutputKindT(cur serverTypes.Node, isInvoked bool) outputKind {
+	// TODO: change that to actually get the type from the tree
+	pipe := serverTypes.EnclosingPipe(cur)
+	if pipe == nil {
+		return outputAny
+	}
+	cmds := pipe.Cmds
+	precedingIdx := len(cmds) - 2
+	if isInvoked {
+		precedingIdx = len(cmds) - 1
+	}
+	if precedingIdx < 0 || precedingIdx >= len(cmds) {
+		return outputAny
 	}
 	preceding := cmds[precedingIdx]
-	if len(preceding.Args) == 0 {
-		return nil
+	if t := preceding.ValueType(); t != nil {
+		return typeToOutputKind(t)
 	}
-	switch arg := preceding.Args[0].(type) {
-	case *parse.DotNode:
-		return ctx.DotType.DotType
-	case *parse.FieldNode:
-		if len(arg.Ident) != 1 {
-			return nil
-		}
-		name := arg.Ident[0]
-		for _, f := range serverTypes.StructFields(ctx.DotType.DotType) {
-			if f.Name == name {
-				return f.Type
+	if len(preceding.Args) > 0 {
+		if id, ok := preceding.Args[0].(*serverTypes.IdentifierNode); ok {
+			if k, found := builtinOutput[id.Ident]; found {
+				return k
 			}
 		}
-		for _, m := range serverTypes.NamedMethods(ctx.DotType.DotType) {
-			if m.Name == name {
-				return m.ReturnType
-			}
-		}
-	case *parse.IdentifierNode:
-		for _, m := range serverTypes.NamedMethods(ctx.DotType.DotType) {
-			if m.Name == arg.Ident {
-				return m.ReturnType
-			}
-		}
-		return nil
+	}
+	return outputAny
+}
+
+// dotTypeAt returns the type of the dot in scope at cur, derived from the
+// enclosing typed ListNode (set during analysis).
+func dotTypeAt(cur serverTypes.Node) types.Type {
+	if l := serverTypes.EnclosingList(cur); l != nil {
+		return l.ValueType()
 	}
 	return nil
+}
+
+// toNamed unwraps optional pointer indirection and returns the underlying
+// *types.Named, or nil if the type is not a named type.
+func toNamed(t types.Type) *types.Named {
+	if t == nil {
+		return nil
+	}
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	n, _ := t.(*types.Named)
+	return n
+}
+
+// visibleVarsAt returns variables in scope at cur. It starts from the snapshot
+// stored on the enclosing ListNode and adds top-level decls from
+// preceding actions in the same list whose start precedes cur.
+func visibleVarsAt(cur serverTypes.Node) []*serverTypes.VariableNode {
+	list := serverTypes.EnclosingList(cur)
+	if list == nil {
+		return nil
+	}
+	vars := append([]*serverTypes.VariableNode{}, list.Vars()...)
+	curPos := cur.Position()
+	for _, child := range list.Nodes {
+		if child == nil {
+			continue
+		}
+		if child.Position() >= curPos {
+			break
+		}
+		a, ok := child.(*serverTypes.ActionNode)
+		if !ok {
+			continue
+		}
+		if a.Pipe != nil && !a.Pipe.IsAssign {
+			vars = append(vars, a.Pipe.Decl...)
+		}
+	}
+	return vars
+}
+
+// suggest builds the completion list for cur, deriving all scope information
+// from the typed tree (parent chain, enclosing list/pipe/command, value types).
+func suggest(
+	cur serverTypes.Node,
+	sChar uint8,
+	isInvoked bool,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	if cur == nil {
+		return nil
+	}
+
+	if sChar == '$' {
+		return varsItemsT(visibleVarsAt(cur), true, wordRange)
+	}
+
+	if sChar == '.' {
+		if cmd := serverTypes.EnclosingCommand(cur); cmd != nil && len(cmd.Args) >= 2 {
+			// TODO: not always cmd.args - 2
+			arg := cmd.Args[len(cmd.Args)-2]
+			switch arg.(type) {
+			case *serverTypes.FieldNode, *serverTypes.ChainNode, *serverTypes.VariableNode:
+				if t := arg.ValueType(); t != nil {
+					return fieldChainItemsT(t, wordRange)
+				}
+				return []protocol.CompletionItem{}
+			}
+		}
+		kind := pipeOutputKindT(cur, false)
+		pipeIn := pipeOutputTypeT(cur, false)
+		return dotItemsT(cur, true, pipeIn, kind, wordRange)
+	}
+
+	all := func() []protocol.CompletionItem {
+		kind := pipeOutputKindT(cur, isInvoked)
+		pipeIn := pipeOutputTypeT(cur, isInvoked)
+		inputType := pipeIn
+		if inputType == nil && kind == outputAny {
+			inputType = dotTypeAt(cur)
+		}
+		return pipeFilteredItemsT(cur, kind, inputType, pipeIn, wordRange)
+	}
+
+	dotAndVars := func() []protocol.CompletionItem {
+		items := dotItemsT(cur, false, nil, outputAny, wordRange)
+		items = append(items, varsItemsT(visibleVarsAt(cur), false, wordRange)...)
+		return items
+	}
+
+	parent := cur.Parent()
+	switch parent.(type) {
+	case *serverTypes.CommandNode:
+		return all()
+	case *serverTypes.ChainNode, *serverTypes.TemplateNode:
+		return dotAndVars()
+	case *serverTypes.PipeNode,
+		*serverTypes.IfNode,
+		*serverTypes.RangeNode,
+		*serverTypes.WithNode,
+		*serverTypes.ListNode,
+		*serverTypes.ActionNode:
+		return all()
+	default:
+		return all()
+	}
+}
+
+// pipeFilteredItemsT assembles the suggestion list
+func pipeFilteredItemsT(
+	cur serverTypes.Node,
+	kind outputKind,
+	inputType types.Type,
+	pipeInputType types.Type,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	items := dotItemsT(cur, false, pipeInputType, kind, wordRange)
+	items = append(items, varsItemsT(visibleVarsAt(cur), false, wordRange)...)
+
+	effectiveKind := kind
+	if effectiveKind == outputAny && inputType != nil {
+		effectiveKind = typeToOutputKind(inputType)
+	}
+
+	names, ok := functionsAccepting[effectiveKind]
+	if !ok || effectiveKind == outputUntyped || effectiveKind == outputAny {
+		items = append(items, builtinItems(wordRange)...)
+		return items
+	}
+
+	fnKind := protocol.CompletionItemKindFunction
+	for _, name := range names {
+		items = append(items, protocol.CompletionItem{
+			Label:    name,
+			Kind:     &fnKind,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: name},
+		})
+	}
+	return items
+}
+
+// dotItemsT returns dot, fields, and methods of the dot type at cur. Skipped
+// entirely if a pipe input is present (dot does not refer to it).
+func dotItemsT(
+	cur serverTypes.Node,
+	delSign bool,
+	inputType types.Type,
+	pipeKind outputKind,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	items := []protocol.CompletionItem{}
+	inPipe := inputType != nil || (pipeKind != outputAny && pipeKind != outputUntyped)
+	if inPipe {
+		return items
+	}
+	prefix := ""
+	if !delSign {
+		k := protocol.CompletionItemKindVariable
+		items = append(items, protocol.CompletionItem{
+			Label:    ".",
+			Kind:     &k,
+			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: "."},
+		})
+		prefix = "."
+	}
+	named := toNamed(dotTypeAt(cur))
+	if named != nil {
+		items = append(
+			items,
+			fieldCompletionItems(serverTypes.StructFields(named), prefix, wordRange)...)
+		items = append(items, methodCompletionItems(
+			serverTypes.NamedMethods(named),
+			inputType, pipeKind, prefix, wordRange,
+		)...)
+	}
+	return items
+}
+
+// fieldChainItemsT returns fields/methods of t, with no prefix (the dot
+// trigger has already been consumed).
+func fieldChainItemsT(t types.Type, wordRange protocol.Range) []protocol.CompletionItem {
+	named := toNamed(t)
+	if named == nil {
+		return []protocol.CompletionItem{}
+	}
+	items := fieldCompletionItems(serverTypes.StructFields(named), "", wordRange)
+	items = append(items, methodCompletionItems(
+		serverTypes.NamedMethods(named), nil, outputAny, "", wordRange,
+	)...)
+	return items
+}
+
+// varsItemsT renders visible variables as completion items.
+func varsItemsT(
+	vars []*serverTypes.VariableNode,
+	delSign bool,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	if len(vars) == 0 {
+		return nil
+	}
+	items := make([]protocol.CompletionItem, 0, len(vars))
+	k := protocol.CompletionItemKindVariable
+	seen := map[string]struct{}{}
+	for _, v := range vars {
+		if v == nil || len(v.Ident) == 0 {
+			continue
+		}
+		name := v.Ident[0]
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		if delSign && name == "$" {
+			continue
+		}
+		label := name
+		filter := name
+		if delSign {
+			label = name[1:]
+		}
+		items = append(items, protocol.CompletionItem{
+			Label:      label,
+			Kind:       &k,
+			FilterText: &filter,
+			TextEdit:   &protocol.TextEdit{Range: wordRange, NewText: name},
+		})
+	}
+	return items
 }
 
 // typeToOutputKind maps a concrete Go type to the outputKind used to filter builtins.
@@ -302,157 +528,6 @@ func methodIsUsable(m serverTypes.MethodType) bool {
 	default:
 		return false
 	}
-}
-
-// pipeFilteredItems determines based on the input types what should be the suggestion list
-func pipeFilteredItems(
-	kind outputKind,
-	inputType types.Type,
-	pipeInputType types.Type,
-	ctx *Context,
-	wordRange protocol.Range,
-) []protocol.CompletionItem {
-	items := make([]protocol.CompletionItem, 0)
-	items = append(items, dotItem(*ctx, false, pipeInputType, kind, wordRange)...)
-	items = append(items, varsToItems(ctx, false, wordRange)...)
-
-	if ctx.DotType == nil {
-		items = append(items, builtinItems(wordRange)...)
-		return items
-	}
-
-	effectiveKind := kind
-	if effectiveKind == outputAny && inputType != nil {
-		effectiveKind = typeToOutputKind(inputType)
-	}
-
-	names, ok := functionsAccepting[effectiveKind]
-	if !ok || effectiveKind == outputUntyped || effectiveKind == outputAny {
-		items = append(items, builtinItems(wordRange)...)
-		return items
-	}
-
-	fnKind := protocol.CompletionItemKindFunction
-
-	for _, name := range names {
-		items = append(items, protocol.CompletionItem{
-			Label:    name,
-			Kind:     &fnKind,
-			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: name},
-		})
-	}
-	return items
-}
-
-func suggest(
-	parent parse.Node,
-	ctx *Context,
-	sChar uint8,
-	isInvoked bool,
-	wordRange protocol.Range,
-) []protocol.CompletionItem {
-	if sChar == '$' {
-		return varsToItems(ctx, true, wordRange)
-	}
-
-	if sChar == '.' {
-		if len(ctx.Path) > 0 {
-			cmd, ok := ctx.Path[len(ctx.Path)-1].(*parse.CommandNode)
-			if ok && len(cmd.Args) >= 2 {
-				f, ok := cmd.Args[len(cmd.Args)-2].(*parse.FieldNode)
-				if ok {
-					resolved := resolveFieldChain(ctx.DotType, f.Ident)
-					if resolved != nil {
-						return fieldChainCompletionItems(resolved, wordRange)
-					}
-					return []protocol.CompletionItem{}
-				}
-			}
-		}
-		kind := pipeOutputKind(ctx, isInvoked)
-		pipeInputType := pipeOutputType(ctx, isInvoked)
-		return dotItem(*ctx, true, pipeInputType, kind, wordRange)
-	}
-
-	all := func() []protocol.CompletionItem {
-		// kind is primarily used to determine the output type of a function that is the previous node in a pipe
-		kind := pipeOutputKind(ctx, isInvoked)
-		// pipeInputType is used to determine the type of the dot object that the function is going to be applied on
-		pipeInputType := pipeOutputType(ctx, isInvoked)
-		inputType := pipeInputType
-		if inputType == nil && kind == outputAny && ctx.DotType != nil {
-			inputType = ctx.DotType.DotType
-		}
-		return pipeFilteredItems(kind, inputType, pipeInputType, ctx, wordRange)
-	}
-
-	dotAndVars := func() []protocol.CompletionItem {
-		return append(
-			dotItem(*ctx, false, nil, outputAny, wordRange),
-			varsToItems(ctx, false, wordRange)...)
-	}
-
-	switch parent.(type) {
-	case *parse.CommandNode:
-		return all()
-
-	case *parse.ChainNode:
-		return dotAndVars()
-
-	case *parse.TemplateNode:
-		return dotAndVars()
-
-	case *parse.PipeNode,
-		*parse.IfNode,
-		*parse.RangeNode,
-		*parse.WithNode,
-		*parse.ListNode,
-		*parse.ActionNode:
-		return all()
-
-	default:
-		return all()
-	}
-}
-
-// dotItem returns the list of items that should be suggested on dot
-func dotItem(
-	ctx Context,
-	delSign bool,
-	inputType types.Type,
-	pipeKind outputKind,
-	wordRange protocol.Range,
-) []protocol.CompletionItem {
-	items := []protocol.CompletionItem{}
-	inPipe := inputType != nil || (pipeKind != outputAny && pipeKind != outputUntyped)
-	if inPipe {
-		return items
-	}
-	prefix := ""
-	if !delSign {
-		kind := protocol.CompletionItemKindVariable
-		items = append(items, protocol.CompletionItem{
-			Label:    ".",
-			Kind:     &kind,
-			TextEdit: &protocol.TextEdit{Range: wordRange, NewText: "."},
-		})
-		prefix = "."
-	}
-	if lt := ctx.DotType; lt != nil {
-		items = append(
-			items,
-			fieldCompletionItems(serverTypes.StructFields(lt.DotType), prefix, wordRange)...)
-		items = append(
-			items,
-			methodCompletionItems(
-				serverTypes.NamedMethods(lt.DotType),
-				inputType,
-				pipeKind,
-				prefix,
-				wordRange,
-			)...)
-	}
-	return items
 }
 
 // fieldCompletionItems returns the list of fields with or without the dot
@@ -519,32 +594,6 @@ func methodCompletionItems(
 	return items
 }
 
-// varsToItems returns the list of variables
-func varsToItems(ctx *Context, delSign bool, wordRange protocol.Range) []protocol.CompletionItem {
-	if ctx == nil || ctx.Vars == nil {
-		return nil
-	}
-	items := make([]protocol.CompletionItem, 0, len(ctx.Vars))
-	kind := protocol.CompletionItemKindVariable
-	for name := range ctx.Vars {
-		if delSign && name == "$" {
-			continue
-		}
-		label := name
-		filter := name
-		if delSign {
-			label = name[1:]
-		}
-		items = append(items, protocol.CompletionItem{
-			Label:      label,
-			Kind:       &kind,
-			FilterText: &filter,
-			TextEdit:   &protocol.TextEdit{Range: wordRange, NewText: name},
-		})
-	}
-	return items
-}
-
 func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
 	statics := []string{
 		"and", "call", "html", "index", "slice", "js", "len",
@@ -561,16 +610,6 @@ func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
 		})
 	}
 	return items
-}
-
-func logPath(ctx *Context) {
-	for i, node := range ctx.Path {
-		log.Debug().
-			Int("depth", i).
-			Str("type", fmt.Sprintf("%T", node)).
-			Str("content", node.String()).
-			Msg("path")
-	}
 }
 
 // extract method for buildPath
@@ -633,68 +672,6 @@ func buildPathBranch(
 		ctx.Vars = snapshot
 	}
 	return found
-}
-
-// resolveFieldChain walks lt following each name in idents and returns the final
-// Tree, or nil if any step cannot be resolved.
-func resolveFieldChain(lt *serverTypes.Tree, idents []string) *serverTypes.Tree {
-	if lt == nil {
-		return nil
-	}
-	cur := lt
-	for _, name := range idents {
-		var next *serverTypes.Tree
-		for _, f := range serverTypes.StructFields(lt.DotType) {
-			if f.Name == name {
-				next = typeAsTree(f.Type, lt)
-			}
-		}
-		for _, m := range serverTypes.NamedMethods(lt.DotType) {
-			if m.Name == name {
-				next = typeAsTree(m.ReturnType, lt)
-			}
-		}
-		cur = next
-	}
-	return cur
-}
-
-// typeAsTree converts a Go type into a *Tree, reusing pkg from base.
-// Returns nil for non-navigable types (primitives, slices, etc.).
-func typeAsTree(t types.Type, base *serverTypes.Tree) *serverTypes.Tree {
-	if ptr, ok := t.(*types.Pointer); ok {
-		t = ptr.Elem()
-	}
-	named, ok := t.(*types.Named)
-	if !ok {
-		return nil
-	}
-	return &serverTypes.Tree{
-		Pkg:     base.Pkg,
-		DotType: named,
-	}
-}
-
-// fieldChainCompletionItems returns fields and methods of a chain-resolved type,
-// without a dot prefix (the dot was already consumed as the trigger character).
-func fieldChainCompletionItems(
-	lt *serverTypes.Tree,
-	wordRange protocol.Range,
-) []protocol.CompletionItem {
-	items := make([]protocol.CompletionItem, 0)
-	items = append(
-		items,
-		fieldCompletionItems(serverTypes.StructFields(lt.DotType), "", wordRange)...)
-	items = append(
-		items,
-		methodCompletionItems(
-			serverTypes.NamedMethods(lt.DotType),
-			nil,
-			outputAny,
-			"",
-			wordRange,
-		)...)
-	return items
 }
 
 // resolvePipeDotType derives the dot type for the body of a range or with block.
