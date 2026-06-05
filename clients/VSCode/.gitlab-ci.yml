@@ -51,6 +51,9 @@ testing:
     image:
         name: $CI_REGISTRY_IMAGE/vscode-ci:latest
     before_script:
+        - apt-get update
+        - apt-get upgrade -y
+        - apt-get install -y --no-install-recommends xvfb xauth chromium
         - npm ci
     script:
         - echo "running tests"
