@@ -36,7 +36,7 @@ const (
 	outputUntyped            // call, index, slice — dynamic, don't restrict
 )
 
-// TODO: can be derived from the type of the node
+// deprecated, built in output can be derived from the type tree
 var builtinOutput = map[string]outputKind{
 	"len":      outputInt,
 	"not":      outputBool,
