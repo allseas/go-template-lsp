@@ -259,6 +259,9 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 }
 
 func getRangeableType(typ types.Type) types.Type {
+	if typ == nil {
+		return nil
+	}
 	switch t := typ.Underlying().(type) {
 	case *types.Pointer:
 		return getRangeableType(types.Unalias(t.Elem()))
@@ -297,7 +300,9 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 	keepVars := len(ctx.vars)
 	pipe := analysePipe(n.Pipe, parent, ctx)
 	typ := getRangeableType(pipe.typ)
-	if typ == nil {
+	if pipe.typ == nil {
+		ctx.errorf(pipe, ErrorTypeInvalidRange, "cannot range over untyped value")
+	} else if typ == nil {
 		ctx.errorf(pipe, ErrorTypeInvalidRange, "cannot range over type %s", pipe.typ.String())
 		ctx.dotType = nil
 	} else {

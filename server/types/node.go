@@ -26,6 +26,7 @@ type Node interface {
 	// CopyXxx methods that return *XxxNode.
 	Copy() Node
 	Position() Pos // byte position of start of node in full original input string
+	End() Pos      // byte position of end of node in full original input string
 	Parent() Node
 	// writeTo writes the String output to the builder.
 	writeTo(*strings.Builder)
@@ -85,6 +86,7 @@ const (
 type UndefinedNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Err    error  // the error that caused this node to be produced
 	str    string // original source text
@@ -124,11 +126,16 @@ func (u *UndefinedNode) CopyUndefined() *UndefinedNode {
 	return &UndefinedNode{
 		NodeType: NodeUndefined,
 		Pos:      u.Pos,
+		endPos:   u.endPos,
 		parent:   u.parent,
 		Err:      u.Err,
 		str:      u.str,
 		isElse:   u.isElse,
 	}
+}
+
+func (u *UndefinedNode) End() Pos {
+	return u.endPos
 }
 
 func (u *UndefinedNode) ValueType() types.Type {
@@ -139,11 +146,16 @@ func (u *UndefinedNode) ValueType() types.Type {
 type ListNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Nodes  []Node          // The element nodes in lexical order.
 	isElse bool            // Whether this is in an else list.
 	vars   []*VariableNode // Variables declared in this list, in appearance order. May be nil.
 	typ    types.Type      // Resolved type of the dot in this list (set during analysis)
+}
+
+func (l *ListNode) End() Pos {
+	return l.endPos
 }
 
 func (l *ListNode) Vars() []*VariableNode {
@@ -178,7 +190,7 @@ func (l *ListNode) CopyList() *ListNode {
 	if l == nil {
 		return l
 	}
-	n := &ListNode{NodeType: NodeList, Pos: l.Pos, parent: l.parent, isElse: l.isElse}
+	n := &ListNode{NodeType: NodeList, Pos: l.Pos, endPos: l.endPos, parent: l.parent, isElse: l.isElse}
 	for _, elem := range l.Nodes {
 		n.append(elem.Copy())
 	}
@@ -203,6 +215,7 @@ func (l *ListNode) ValueType() types.Type {
 type TextNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Text   []byte // The text; may span newlines.
 	isElse bool   // Whether this is in an else list.
@@ -210,6 +223,10 @@ type TextNode struct {
 
 func (t *TextNode) IsElseList() bool {
 	return t.isElse
+}
+
+func (t *TextNode) End() Pos {
+	return t.endPos
 }
 
 func (t *TextNode) String() string {
@@ -228,6 +245,7 @@ func (t *TextNode) Copy() Node {
 	return &TextNode{
 		NodeType: NodeText,
 		Pos:      t.Pos,
+		endPos:   t.endPos,
 		parent:   t.parent,
 		Text:     append([]byte{}, t.Text...),
 		isElse:   t.isElse,
@@ -242,6 +260,7 @@ func (t *TextNode) ValueType() types.Type {
 type CommentNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Text   string // Comment text.
 	isElse bool   // Whether this is in an else list.
@@ -249,6 +268,10 @@ type CommentNode struct {
 
 func (c *CommentNode) IsElseList() bool {
 	return c.isElse
+}
+
+func (c *CommentNode) End() Pos {
+	return c.endPos
 }
 
 func (c *CommentNode) String() string {
@@ -271,6 +294,7 @@ func (c *CommentNode) Copy() Node {
 	return &CommentNode{
 		NodeType: NodeComment,
 		Pos:      c.Pos,
+		endPos:   c.endPos,
 		parent:   c.parent,
 		Text:     c.Text,
 		isElse:   c.isElse,
@@ -285,6 +309,7 @@ func (c *CommentNode) ValueType() types.Type {
 type PipeNode struct {
 	NodeType
 	Pos
+	endPos   Pos
 	parent   Node
 	Line     int             // The line number in the input. Deprecated: Kept for compatibility.
 	IsAssign bool            // The variables are being assigned, not declared.
@@ -292,6 +317,10 @@ type PipeNode struct {
 	Cmds     []*CommandNode  // The commands in lexical order.
 	typ      types.Type      // Resolved type of the pipe output (set during analysis)
 	isElse   bool            // Whether this is in an else list.
+}
+
+func (p *PipeNode) End() Pos {
+	return p.endPos
 }
 
 func (p *PipeNode) IsElseList() bool {
@@ -348,7 +377,7 @@ func (p *PipeNode) CopyPipe() *PipeNode {
 	for i, d := range p.Decl {
 		vars[i] = d.Copy().(*VariableNode)
 	}
-	n := &PipeNode{NodeType: NodePipe, Pos: p.Pos, parent: p.parent, Line: p.Line, Decl: vars}
+	n := &PipeNode{NodeType: NodePipe, Pos: p.Pos, endPos: p.endPos, parent: p.parent, Line: p.Line, Decl: vars}
 	n.IsAssign = p.IsAssign
 	for _, c := range p.Cmds {
 		n.append(c.Copy().(*CommandNode))
@@ -370,10 +399,15 @@ func (p *PipeNode) ValueType() types.Type {
 type ActionNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Line   int       // The line number in the input. Deprecated: Kept for compatibility.
 	Pipe   *PipeNode // The pipeline in the action.
 	isElse bool      // Whether this is in an else list.
+}
+
+func (a *ActionNode) End() Pos {
+	return a.endPos
 }
 
 func (a *ActionNode) IsElseList() bool {
@@ -400,6 +434,7 @@ func (a *ActionNode) Copy() Node {
 	return &ActionNode{
 		NodeType: NodeAction,
 		Pos:      a.Pos,
+		endPos:   a.endPos,
 		parent:   a.parent,
 		Line:     a.Line,
 		Pipe:     a.Pipe.CopyPipe(),
@@ -415,6 +450,7 @@ func (a *ActionNode) ValueType() types.Type {
 type CommandNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Args   []Node     // Arguments in lexical order: Identifier, field, or constant.
 	typ    types.Type // Resolved type of the command result (set during analysis)
@@ -454,7 +490,7 @@ func (c *CommandNode) Copy() Node {
 	if c == nil {
 		return c
 	}
-	n := &CommandNode{NodeType: NodeCommand, Pos: c.Pos, parent: c.parent, isElse: c.isElse}
+	n := &CommandNode{NodeType: NodeCommand, Pos: c.Pos, endPos: c.endPos, parent: c.parent, isElse: c.isElse}
 	for _, c := range c.Args {
 		n.append(c.Copy())
 	}
@@ -469,15 +505,24 @@ func (c *CommandNode) Parent() Node {
 	return c.parent
 }
 
+func (c *CommandNode) End() Pos {
+	return c.endPos
+}
+
 // IdentifierNode holds an identifier.
 type IdentifierNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	tr     *Tree
 	Ident  string     // The identifier's name.
 	typ    types.Type // Resolved type if this is a function return type (set during analysis)
 	parent Node
 	isElse bool // Whether this is in an else list.
+}
+
+func (i *IdentifierNode) End() Pos {
+	return i.endPos
 }
 
 func (i *IdentifierNode) Parent() Node {
@@ -488,6 +533,7 @@ func (i *IdentifierNode) Copy() Node {
 	return &IdentifierNode{
 		NodeType: NodeIdentifier,
 		Pos:      i.Pos,
+		endPos:   i.endPos,
 		tr:       i.tr,
 		Ident:    i.Ident,
 		typ:      i.typ,
@@ -528,6 +574,7 @@ type VariableNode struct {
 	Ident  []string   // Variable name and fields in lexical order.
 	typ    types.Type // Resolved type of the variable (set during analysis)
 	parent Node
+	endPos Pos
 	isElse bool // Whether this is in an else list.
 }
 
@@ -554,11 +601,16 @@ func (v *VariableNode) Parent() Node {
 	return v.parent
 }
 
+func (v *VariableNode) End() Pos {
+	return v.endPos
+}
+
 func (v *VariableNode) Copy() Node {
 	return &VariableNode{
 		parent:   v.parent,
 		NodeType: NodeVariable,
 		Pos:      v.Pos,
+		endPos:   v.endPos,
 		Ident:    append([]string{}, v.Ident...),
 		isElse:   v.isElse,
 	}
@@ -573,12 +625,17 @@ type DotNode struct {
 	NodeType
 	Pos
 	parent Node
+	endPos Pos
 	typ    types.Type
 	isElse bool // Whether this is in an else list.
 }
 
 func (d *DotNode) IsElseList() bool {
 	return d.isElse
+}
+
+func (d *DotNode) End() Pos {
+	return d.endPos
 }
 
 func (d *DotNode) Type() NodeType {
@@ -612,8 +669,13 @@ func (d *DotNode) ValueType() types.Type {
 type NilNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	isElse bool // Whether this is in an else list.
+}
+
+func (n *NilNode) End() Pos {
+	return n.endPos
 }
 
 func (n *NilNode) IsElseList() bool {
@@ -640,7 +702,7 @@ func (n *NilNode) Parent() Node {
 }
 
 func (n *NilNode) Copy() Node {
-	return &NilNode{NodeType: NodeNil, Pos: n.Pos, parent: n.parent, isElse: n.isElse}
+	return &NilNode{NodeType: NodeNil, Pos: n.Pos, endPos: n.endPos, parent: n.parent, isElse: n.isElse}
 }
 
 func (n *NilNode) ValueType() types.Type {
@@ -653,10 +715,15 @@ func (n *NilNode) ValueType() types.Type {
 type FieldNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Ident  []string   // The identifiers in lexical order.
 	typ    types.Type // Resolved type of the final field (set during analysis)
 	isElse bool       // Whether this is in an else list.
+}
+
+func (f *FieldNode) End() Pos {
+	return f.endPos
 }
 
 func (f *FieldNode) IsElseList() bool {
@@ -681,6 +748,7 @@ func (f *FieldNode) Copy() Node {
 		parent:   f.parent,
 		NodeType: NodeField,
 		Pos:      f.Pos,
+		endPos:   f.endPos,
 		Ident:    append([]string{}, f.Ident...),
 		isElse:   f.isElse,
 	}
@@ -700,11 +768,16 @@ func (f *FieldNode) ValueType() types.Type {
 type ChainNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Node   Node
 	Field  []string   // The identifiers in lexical order.
 	typ    types.Type // Resolved type of the final field in chain (set during analysis)
 	isElse bool       // Whether this is in an else list.
+}
+
+func (c *ChainNode) End() Pos {
+	return c.endPos
 }
 
 // Add adds the named field (which should start with a period) to the end of the chain.
@@ -751,6 +824,7 @@ func (c *ChainNode) Copy() Node {
 	return &ChainNode{
 		NodeType: NodeChain,
 		Pos:      c.Pos,
+		endPos:   c.endPos,
 		Node:     c.Node,
 		Field:    append([]string{}, c.Field...),
 		parent:   c.parent,
@@ -766,9 +840,14 @@ func (c *ChainNode) ValueType() types.Type {
 type BoolNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	True   bool // The value of the boolean constant.
 	isElse bool // Whether this is in an else list.
+}
+
+func (b *BoolNode) End() Pos {
+	return b.endPos
 }
 
 func (b *BoolNode) IsElseList() bool {
@@ -794,6 +873,7 @@ func (b *BoolNode) Copy() Node {
 	return &BoolNode{
 		NodeType: NodeBool,
 		Pos:      b.Pos,
+		endPos:   b.endPos,
 		True:     b.True,
 		parent:   b.parent,
 		isElse:   b.isElse,
@@ -810,6 +890,7 @@ func (b *BoolNode) ValueType() types.Type {
 type NumberNode struct {
 	NodeType
 	Pos
+	endPos     Pos
 	IsInt      bool       // Number has an integral value.
 	IsUint     bool       // Number has an unsigned integral value.
 	IsFloat    bool       // Number has a floating-point value.
@@ -821,6 +902,10 @@ type NumberNode struct {
 	Text       string     // The original textual representation from the input.
 	parent     Node
 	isElse     bool // Whether this is in an else list.
+}
+
+func (n *NumberNode) End() Pos {
+	return n.endPos
 }
 
 func (n *NumberNode) IsElseList() bool {
@@ -866,10 +951,15 @@ func (n *NumberNode) ValueType() types.Type {
 type StringNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	Quoted string // The original text of the string, with quotes.
 	Text   string // The string, after quote processing.
 	parent Node
 	isElse bool // Whether this is in an else list.
+}
+
+func (s *StringNode) End() Pos {
+	return s.endPos
 }
 
 func (s *StringNode) IsElseList() bool {
@@ -907,6 +997,7 @@ func (s *StringNode) ValueType() types.Type {
 type BranchNode struct {
 	NodeType
 	Pos
+	endPos   Pos
 	Line     int        // The line number in the input. Deprecated: Kept for compatibility.
 	Pipe     *PipeNode  // The pipeline to be evaluated.
 	List     *ListNode  // What to execute if the value is non-empty.
@@ -914,6 +1005,10 @@ type BranchNode struct {
 	typ      types.Type // Resolved type of the pipe output (set during analysis)
 	parent   Node
 	isElse   bool // Whether this is in an else list.
+}
+
+func (b *BranchNode) End() Pos {
+	return b.endPos
 }
 
 func (b *BranchNode) IsElseList() bool {
@@ -1025,6 +1120,7 @@ func (i *IfNode) Copy() Node {
 			typ:      i.typ,
 			parent:   i.parent,
 			isElse:   i.isElse,
+			endPos:   i.endPos,
 		},
 	}
 }
@@ -1037,6 +1133,7 @@ func (i *IfNode) ValueType() types.Type {
 type BreakNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	Line   int
 	parent Node
 	isElse bool // Whether this is in an else list.
@@ -1049,6 +1146,7 @@ func (b *BreakNode) Copy() Node {
 		Line:     b.Line,
 		parent:   b.parent,
 		isElse:   b.isElse,
+		endPos:   b.endPos,
 	}
 }
 func (b *BreakNode) String() string              { return "{{break}}" }
@@ -1056,12 +1154,14 @@ func (b *BreakNode) Parent() Node                { return b.parent }
 func (b *BreakNode) writeTo(sb *strings.Builder) { sb.WriteString("{{break}}") }
 func (b *BreakNode) ValueType() types.Type       { return nil }
 func (b *BreakNode) IsElseList() bool            { return b.isElse }
+func (b *BreakNode) End() Pos                    { return b.endPos }
 
 // ContinueNode represents a {{continue}} action.
 type ContinueNode struct {
 	parent Node
 	NodeType
 	Pos
+	endPos Pos
 	Line   int
 	isElse bool // Whether this is in an else list.
 }
@@ -1073,6 +1173,7 @@ func (c *ContinueNode) Copy() Node {
 		Line:     c.Line,
 		parent:   c.parent,
 		isElse:   c.isElse,
+		endPos:   c.endPos,
 	}
 }
 func (c *ContinueNode) String() string              { return "{{continue}}" }
@@ -1080,6 +1181,7 @@ func (c *ContinueNode) Parent() Node                { return c.parent }
 func (c *ContinueNode) writeTo(sb *strings.Builder) { sb.WriteString("{{continue}}") }
 func (c *ContinueNode) ValueType() types.Type       { return nil }
 func (c *ContinueNode) IsElseList() bool            { return c.isElse }
+func (c *ContinueNode) End() Pos                    { return c.endPos }
 
 // RangeNode represents a {{range}} action and its commands.
 type RangeNode struct {
@@ -1096,6 +1198,7 @@ func (r *RangeNode) Copy() Node {
 			List:     r.List.CopyList(),
 			ElseList: r.ElseList.CopyList(),
 			typ:      r.typ,
+			endPos:   r.endPos,
 			parent:   r.parent,
 			isElse:   r.isElse,
 		},
@@ -1123,6 +1226,7 @@ func (w *WithNode) Copy() Node {
 			typ:      w.typ,
 			parent:   w.parent,
 			isElse:   w.isElse,
+			endPos:   w.endPos,
 		},
 	}
 }
@@ -1135,11 +1239,16 @@ func (w *WithNode) ValueType() types.Type {
 type TemplateNode struct {
 	NodeType
 	Pos
+	endPos Pos
 	parent Node
 	Line   int       // The line number in the input. Deprecated: Kept for compatibility.
 	Name   string    // The name of the template (unquoted).
 	Pipe   *PipeNode // The command to evaluate as dot for the template.
 	isElse bool      // Whether this is in an else list.
+}
+
+func (t *TemplateNode) End() Pos {
+	return t.endPos
 }
 
 func (t *TemplateNode) IsElseList() bool {
@@ -1175,6 +1284,7 @@ func (t *TemplateNode) Copy() Node {
 		Pipe:     t.Pipe.CopyPipe(),
 		parent:   t.parent,
 		isElse:   t.isElse,
+		endPos:   t.endPos,
 	}
 }
 
