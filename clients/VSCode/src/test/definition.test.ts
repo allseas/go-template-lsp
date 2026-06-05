@@ -1,15 +1,9 @@
 import * as assert from "assert";
-import { after, before } from "mocha";
+import { after } from "mocha";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
-const waitTime = 300;
-
 suite("Definition Test Suite", () => {
-    before(async () => {
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
-    });
-
     after(() => {
         vscode.window.showInformationMessage("All definition tests done!");
     });
@@ -21,12 +15,7 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, waitTime));
-
-            const definitions = await vscode.commands.executeCommand<
-                vscode.Location[]
-            >(
-                "vscode.executeDefinitionProvider",
+            const definitions = await getDefinitions(
                 tmplUri,
                 new vscode.Position(1, 4),
             );
@@ -53,13 +42,8 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, waitTime));
-
             // Execute definition provider on last $test usage (line 3, char 4)
-            const definitions = await vscode.commands.executeCommand<
-                vscode.Location[]
-            >(
-                "vscode.executeDefinitionProvider",
+            const definitions = await getDefinitions(
                 tmplUri,
                 new vscode.Position(3, 4),
             );
@@ -82,13 +66,7 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, waitTime));
-
-            // Execute definition provider on the dot (line 1, char 3)
-            const definitions = await vscode.commands.executeCommand<
-                vscode.Location[]
-            >(
-                "vscode.executeDefinitionProvider",
+            const definitions = await getDefinitions(
                 tmplUri,
                 new vscode.Position(1, 3),
             );
@@ -107,4 +85,159 @@ suite("Definition Test Suite", () => {
             cleanupDocument(tmplUri);
         }
     });
+
+    test("Go to definition on field jumps to struct field declaration", async () => {
+        const { tmplUri } = await createDocument(
+            "definition-field-test.tmpl",
+            "{{/*gotype: cg/model.Order*/}}\n{{ .CustomerName }}",
+        );
+
+        try {
+            // char 5 is inside "CustomerName" (after "{{ .")
+            const definitions = await getDefinitions(
+                tmplUri,
+                new vscode.Position(1, 5),
+            );
+
+            assert.ok(definitions, "Definitions should be returned");
+            assert.ok(
+                definitions.length >= 1,
+                `Expected at least 1 definition, got ${definitions.length}`,
+            );
+            assert.ok(
+                definitions[0].uri.fsPath.endsWith("model.go"),
+                `Expected definition in model.go, got ${definitions[0].uri.fsPath}`,
+            );
+            assert.strictEqual(
+                definitions[0].range.start.line,
+                83,
+                "CustomerName should be on line 84 (0-indexed: 83)",
+            );
+        } finally {
+            cleanupDocument(tmplUri);
+        }
+    });
+
+    test("Go to definition on method jumps to method declaration", async () => {
+        const { tmplUri } = await createDocument(
+            "definition-method-test.tmpl",
+            "{{/*gotype: cg/model.Order*/}}\n{{ .DisplayName }}",
+        );
+
+        try {
+            const definitions = await getDefinitions(
+                tmplUri,
+                new vscode.Position(1, 5),
+            );
+
+            assert.ok(definitions, "Definitions should be returned");
+            assert.ok(
+                definitions.length >= 1,
+                `Expected at least 1 definition, got ${definitions.length}`,
+            );
+            assert.ok(
+                definitions[0].uri.fsPath.endsWith("model.go"),
+                `Expected definition in model.go, got ${definitions[0].uri.fsPath}`,
+            );
+            assert.strictEqual(
+                definitions[0].range.start.line,
+                92,
+                "DisplayName should be on line 93 (0-indexed: 92)",
+            );
+        } finally {
+            cleanupDocument(tmplUri);
+        }
+    });
+
+    test("Go to definition on nested field first identifier jumps to field", async () => {
+        const { tmplUri } = await createDocument(
+            "definition-nested-first-test.tmpl",
+            "{{/*gotype: cg/model.Order*/}}\n{{ .Address.City }}",
+        );
+
+        try {
+            // char 5 is inside "Address"
+            const definitions = await getDefinitions(
+                tmplUri,
+                new vscode.Position(1, 5),
+            );
+
+            assert.ok(definitions, "Definitions should be returned");
+            assert.ok(
+                definitions.length >= 1,
+                `Expected at least 1 definition, got ${definitions.length}`,
+            );
+            assert.ok(
+                definitions[0].uri.fsPath.endsWith("model.go"),
+                `Expected definition in model.go, got ${definitions[0].uri.fsPath}`,
+            );
+            assert.strictEqual(
+                definitions[0].range.start.line,
+                85,
+                "Address field should be on line 86 (0-indexed: 85)",
+            );
+        } finally {
+            cleanupDocument(tmplUri);
+        }
+    });
+
+    test("Go to definition on nested field second identifier jumps to nested field", async () => {
+        const { tmplUri } = await createDocument(
+            "definition-nested-second-test.tmpl",
+            "{{/*gotype: cg/model.Order*/}}\n{{ .Address.City }}",
+        );
+
+        try {
+            // "{{ .Address." is 12 chars, so char 13 is inside "City"
+            const definitions = await getDefinitions(
+                tmplUri,
+                new vscode.Position(1, 13),
+            );
+
+            assert.ok(definitions, "Definitions should be returned");
+            assert.ok(
+                definitions.length >= 1,
+                `Expected at least 1 definition, got ${definitions.length}`,
+            );
+            assert.ok(
+                definitions[0].uri.fsPath.endsWith("model.go"),
+                `Expected definition in model.go, got ${definitions[0].uri.fsPath}`,
+            );
+            assert.strictEqual(
+                definitions[0].range.start.line,
+                7,
+                "City field in Address should be on line 8 (0-indexed: 7)",
+            );
+        } finally {
+            cleanupDocument(tmplUri);
+        }
+    });
+
+    test("Go to definition on unknown field returns no results", async () => {
+        const { tmplUri } = await createDocument(
+            "definition-unknown-field-test.tmpl",
+            "{{/*gotype: cg/model.Order*/}}\n{{ .NonExistent }}",
+        );
+
+        try {
+            const definitions = await getDefinitions(
+                tmplUri,
+                new vscode.Position(1, 5),
+            );
+
+            assert.ok(
+                !definitions || definitions.length === 0,
+                `Expected no definitions for unknown field, got ${definitions?.length}`,
+            );
+        } finally {
+            cleanupDocument(tmplUri);
+        }
+    });
 });
+async function getDefinitions(tmplUri: vscode.Uri, pos: vscode.Position) {
+    return await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeDefinitionProvider",
+        tmplUri,
+        pos,
+    );
+}
