@@ -51,6 +51,7 @@ testing:
     image:
         name: $CI_REGISTRY_IMAGE/vscode-ci:latest
     before_script:
+        - apt-get install -y --no-install-recommends xauth
         - npm ci
     script:
         - echo "running tests"
