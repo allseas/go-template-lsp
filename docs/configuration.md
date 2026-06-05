@@ -20,9 +20,25 @@ These options are supported on all platforms:
 
 Settings follow this precedence (highest to lowest):
 
-1. **Project/Workspace** — `.vscode/settings.json` (VS Code) or `.idea/` config (JetBrains)
-2. **User** — Global IDE user settings
-3. **Defaults** — Plugin defaults (all servers enabled, trace at `messages` level)
+1. **Project File** — `gotmpl.config.json` in project root (applies to all IDEs)
+2. **IDE Project/Workspace** — `.vscode/settings.json` (VS Code) or `.idea/` config (JetBrains)
+3. **User** — Global IDE user settings
+4. **Defaults** — Plugin defaults (all servers enabled, trace at `messages` level)
+
+## Project Configuration File
+
+You can create a `gotmpl.config.json` file in your project root to configure the language server for your entire project. This configuration applies across all IDEs (VS Code, JetBrains, etc.):
+
+```json
+{
+  "enableServer": true,
+  "trace": {
+    "server": "messages"
+  }
+}
+```
+
+The project configuration takes precedence over IDE-specific settings and user preferences.
 
 ## Adding New Options
 
