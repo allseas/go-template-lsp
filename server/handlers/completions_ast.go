@@ -1,4 +1,4 @@
-// Package handlers provides a Language Server Protocol implementation for Go text/templates, featuring scope-aware variable completion and built-in function support.
+﻿// Package handlers provides a Language Server Protocol implementation for Go text/templates, featuring scope-aware variable completion and built-in function support.
 package handlers
 
 import (
@@ -14,6 +14,7 @@ import (
 
 // Context struct is used only in completion_ast to construct Context to be scope aware
 // not needed anymore
+// Deprecated: Use type tree instead
 type Context struct {
 	// chain from root to the Node
 	Path []parse.Node

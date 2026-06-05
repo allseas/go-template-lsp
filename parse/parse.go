@@ -937,7 +937,7 @@ func (t *Tree) operand() Node {
 		return nil
 	}
 	if t.peek().typ == itemField {
-		chain := t.newChain(t.peek().pos, node)
+		chain := t.newChain(node.Position(), node)
 		for t.peek().typ == itemField {
 			chain.Add(t.next().val)
 		}

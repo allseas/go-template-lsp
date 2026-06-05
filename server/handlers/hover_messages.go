@@ -3,105 +3,80 @@ package handlers
 
 import (
 	"fmt"
+	"go/types"
 	"strings"
 	parse "text-template-parser"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-var nodeMessage = map[parse.NodeType]string{
-	parse.NodeAction:     "**Action** - `{{ %s }}`\n\nAction running a command or pipeline.",
-	parse.NodeIf:         "**If Branch** - `{{ if %s }}`\n\n Conditional branch executed if %s evaluates to true.",
-	parse.NodeRange:      "**Range Branch** - `{{ range %s }}`\n\nBranch executed for each item in a collection.",
-	parse.NodeWith:       "**With Branch** - `{{ with %s }}`\n\nBranch executed with a new context.",
-	parse.NodeCommand:    "**Command** - `%s`\n\nA command within an action.",
-	parse.NodeDot:        "**Cursor** - `.`\n\nReturns the current context",
-	parse.NodeField:      "**Field Access** - `%s`\n\nAccesses the `%s` field of the `.%s` context.",
-	parse.NodeIdentifier: "**Identifier** - `%s`\n\nRepresents an identifier in a command or action.",
-	parse.NodePipe:       "**Pipeline** - `%s`\n\nA sequence of commands connected by `|`.",
-	parse.NodeVariable:   "**Variable** - `%s`\n\n",
-	parse.NodeText:       "**Text** - `%.15s`\n\nPlain text content.",
-	parse.NodeTemplate:   "**Template** - `%s`\n\nDefines a template named `%s`.",
-	parse.NodeList:       "***Document root*** - \n\n Root node of the parse tree, containing all other nodes.",
-	parse.NodeBool:       "**Boolean literal** - `%v`\n\nA literal value.",
-	parse.NodeNumber:     "**Number literal** - `%s`\n\nA literal numeric value.",
-	parse.NodeString:     "**String literal** - `%s`\n\nA literal string value.",
-	parse.NodeNil:        "**Nil literal** - `nil`\n\nRepresents a nil value.",
-	parse.NodeUndefined:  "**Undefined** - \n\nError during parsing, node type is undefined: %s",
-}
-
-var specialMessages = map[string]string{
-	"and":   "**And Function** - `and`\n\nA built-in function that returns the first argument if it is false, and the last argument otherwise.",
-	"index": "**Index variable** - `%s`\n\n serves as the index variable in the range loop, representing the current iteration count.",
-	"len":   "**Len Function** - `len`\n\nA built-in function that returns the length of its argument.",
-	"not":   "**Not Function** - `not`\n\nA built-in function that returns the boolean negation of its argument.",
-	"or":    "**Or Function** - `or`\n\nA built-in function that returns the first argument if it is true, and the last argument otherwise.",
-	"end":   "**End Tag** - \n\nMarks the end of %s, which started at line %d.",
-	"else":  "**Else Branch** - \n\nMarks the else branch of conditional %s statement starting at line %d.",
-}
-
 // MessageElse generates a hover message for an else tag of a BranchNode, including the branch type and line number where the if statement starts.
 func MessageElse(n *parse.Node, pos protocol.Position) string {
+	const withBranch = "```go\nelse\n```\nFrom `%s` at line %d."
+	const withoutBranch = "```go\nelse\n```\nUnknown start."
+
 	switch (*n).(type) {
 	case *parse.IfNode:
-		return fmt.Sprintf(specialMessages["else"], "if", pos.Line+1)
+		return withLink(fmt.Sprintf(withBranch, "if", pos.Line+1))
 	case *parse.RangeNode:
-		return fmt.Sprintf(specialMessages["else"], "range", pos.Line+1)
+		return withLink(fmt.Sprintf(withBranch, "range", pos.Line+1))
 	case *parse.WithNode:
-		return fmt.Sprintf(specialMessages["else"], "with", pos.Line+1)
+		return withLink(fmt.Sprintf(withBranch, "with", pos.Line+1))
 	default:
-		return "Couldn't find the branch statement"
+		return withLink(withoutBranch)
 	}
 }
 
 // MessageEnd generates a hover message for an end tag of a BranchNode, including the branch type and line number where the branch starts.
 // TODO: should hyperlink the line number to the start tag of the branch
 func MessageEnd(n parse.Node, pos protocol.Position) string {
+	const withBranch = "```go\nend\n```\nFrom `%s` at line %d."
+	const withoutBranch = "```go\nelse\n```\nFrom `unknown`."
+
 	switch node := n.(type) {
 	case *parse.IfNode:
-		return fmt.Sprintf(specialMessages["end"], "if", pos.Line+1)
+		return fmt.Sprintf(withBranch, "if", pos.Line+1)
 	case *parse.RangeNode:
-		return fmt.Sprintf(specialMessages["end"], "range", pos.Line+1)
+		return fmt.Sprintf(withBranch, "range", pos.Line+1)
 	case *parse.WithNode:
-		return fmt.Sprintf(specialMessages["end"], "with", pos.Line+1)
+		return fmt.Sprintf(withBranch, "with", pos.Line+1)
 	case *parse.TemplateNode:
-		return fmt.Sprintf(specialMessages["end"], "template "+node.Name, node.Line+1)
+		return fmt.Sprintf(withBranch, "template "+node.Name, node.Line+1)
 	default:
-		return ""
+		return withoutBranch
 	}
-}
-
-// MessageAction generates a hover message for an ActionNode, including the full action string.
-func MessageAction(n *parse.ActionNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeAction], n.Pipe.String())
 }
 
 // MessageBranch generates a hover message for a BranchNode, including the branch type and relevant pipeline information.
 func MessageBranch(n *parse.BranchNode) string {
+	const ifMessage = "```go\nif %s\n```\nIf the value of the pipeline is empty, no output is generated; Otherwise, inside is executed."
+	const rangeMessage = "```go\nrange %s\n```\nBranch executed for each item in a collection."
+	const withMessage = "```go\nwith %s\n```\nBranch executed with a new context."
+
 	switch n.NodeType {
 	case parse.NodeIf:
-		return fmt.Sprintf(nodeMessage[parse.NodeIf], n.Pipe.String())
+		return withLink(fmt.Sprintf(ifMessage, n.Pipe.String()))
 	case parse.NodeRange:
-		return fmt.Sprintf(nodeMessage[parse.NodeRange], n.Pipe.String())
+		return withLink(fmt.Sprintf(rangeMessage, n.Pipe.String()))
 	case parse.NodeWith:
-		return fmt.Sprintf(nodeMessage[parse.NodeWith], n.Pipe.String())
-	default:
-		return ""
+		return withLink(fmt.Sprintf(withMessage, n.Pipe.String()))
 	}
-}
 
-// MessageCommand generates a hover message for a CommandNode, including the full command string.
-func MessageCommand(n *parse.CommandNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeCommand], n.String())
+	// this should be unreachable
+	return ""
 }
 
 // MessageDot generates a hover message for a DotNode.
 func MessageDot(_ *parse.DotNode) string {
-	return nodeMessage[parse.NodeDot]
+	const dotMessage = "```go\ndot\n```\nReturns the current context."
+
+	return withLink(dotMessage)
 }
 
 // MessageField generates a hover message for a FieldNode, including the field name and context.
 func MessageField(n *parse.FieldNode) string {
+	const fieldMessage = "```go\nfield %s\n```\nAccesses the `%s` field of the `.%s` context."
+
 	ctx := ""
 	if len(n.Ident) > 1 {
 		ctx = strings.Join(n.Ident[1:], ".")
@@ -110,76 +85,74 @@ func MessageField(n *parse.FieldNode) string {
 	if len(n.Ident) > 0 {
 		field = n.Ident[0]
 	}
-	return fmt.Sprintf(nodeMessage[parse.NodeField], n.String(), field, ctx)
+	return withLink(fmt.Sprintf(fieldMessage, n.String(), field, ctx))
 }
 
 // MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name.
 func MessageIdentifier(n *parse.IdentifierNode) string {
-	if msg, ok := specialMessages[string(n.Ident[0])]; ok {
-		return msg
-	}
-	return fmt.Sprintf(nodeMessage[parse.NodeIdentifier], n.Ident)
-}
+	const identifierMessage = "```go\n%s\n```\nRepresents an identifier in a command or action."
 
-// MessagePipe generates a hover message for a PipeNode, including the full pipeline string.
-func MessagePipe(n *parse.PipeNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodePipe], n.String())
+	// TODO: add more special messages
+	specialMessages := map[string]string{
+		"and": "```go\nand\n```\nA built-in function that returns the first argument if it is false, and the last argument otherwise.",
+		"len": "```go\nlen\n```\nA built-in function that returns the length of its argument.",
+		"not": "```go\nnot\n```\nA built-in function that returns the boolean negation of its argument.",
+		"or":  "```go\nor\n```\nA built-in function that returns the first argument if it is true, and the last argument otherwise.",
+	}
+
+	if msg, ok := specialMessages[n.Ident]; ok {
+		return withLink(msg)
+	}
+	return withLink(fmt.Sprintf(identifierMessage, n.Ident))
 }
 
 // MessageIndexVariable generates a hover message for a VariableNode that serves as an index variable in a range loop, including the variable name.
 func MessageIndexVariable(n *parse.VariableNode) string {
+	const indexMessage = "```go\nvar %s int\n```\nServes as the index variable in the `range` loop, representing the current iteration count."
+
 	ident := ""
 	if len(n.Ident) > 0 {
 		ident = n.Ident[0]
 	}
-	return fmt.Sprintf(specialMessages["index"], ident)
+	return fmt.Sprintf(indexMessage, ident)
 }
 
 // MessageVariable generates a hover message for a VariableNode, including the variable name.
-func MessageVariable(n *parse.VariableNode) string {
+func MessageVariable(n *parse.VariableNode, varValue any, typ types.Type) string {
+	const withValue = "```go\nvar %s %T = %v\n```"
+	const withType = "```go\nvar %s %v\n```"
+	const unknownType = "```go\nvar %s (unknown)\n```"
+
 	ident := ""
 	if len(n.Ident) > 0 {
 		ident = n.Ident[0]
 	}
-	return fmt.Sprintf(nodeMessage[parse.NodeVariable], ident)
+
+	if varValue != nil {
+		return fmt.Sprintf(withValue, ident, varValue, varValue)
+	}
+	if typ != nil {
+		return fmt.Sprintf(withType, ident, typ)
+	}
+
+	return fmt.Sprintf(unknownType, ident)
 }
 
-// MessageBool generates a hover message for a BoolNode, including the boolean value.
-func MessageBool(n *parse.BoolNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeBool], n.True)
-}
+// Because both `block` and `template` parse to TemplateNode, it's impossible to distinguish them
+// the information that would be provided is not that informative, so it's easier to not provide any
 
-// MessageText generates a hover message for a TextNode, including a truncated version of the text content.
-func MessageText(n *parse.TextNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeText], n.Text)
-}
+// // MessageTemplate generates a hover message for a TemplateNode, including the template name.
+// func MessageTemplate(n *parse.TemplateNode) string {
+// 	const templateMessage = "```go\ntemplate \"%s\"\n```\nExecutes a template named `%s` with the pipelined data."
 
-// MessageTemplate generates a hover message for a TemplateNode, including the template name.
-func MessageTemplate(n *parse.TemplateNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeTemplate], n.Name, n.Name)
-}
-
-// MessageList generates a hover message for a ListNode, including the number of nodes in the list.
-func MessageList(n *parse.ListNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeList], len(n.Nodes))
-}
-
-// MessageNumber generates a hover message for a NumberNode, including the numeric value.
-func MessageNumber(n *parse.NumberNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeNumber], n.Text)
-}
-
-// MessageString generates a hover message for a StringNode, including the string value.
-func MessageString(n *parse.StringNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeString], n.Text)
-}
+// 	return withLink(fmt.Sprintf(templateMessage, n.Name, n.Name))
+// }
 
 // MessageNil generates a hover message for a NilNode, which represents a nil value in Go templates.
 func MessageNil(_ *parse.NilNode) string {
-	return nodeMessage[parse.NodeNil]
+	return "```go\nvar nil\n```\nnil is a predeclared identifier representing the zero value for a pointer, channel, func, interface, map, or slice type."
 }
 
-// MessageUndefined generates a hover message for an undefined node type, including the node type information.
-func MessageUndefined(n *parse.UndefinedNode) string {
-	return fmt.Sprintf(nodeMessage[parse.NodeUndefined], n.String())
+func withLink(str string) string {
+	return str + "\n***\n[text/template reference](https://pkg.go.dev/text/template)"
 }

@@ -84,12 +84,6 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 
 func buildHoverContent(target parse.Node, hover *protocol.Hover, doc *document) {
 	switch target := target.(type) {
-	case *parse.ActionNode:
-		log.Debug().Msg("Hover on ActionNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageAction(target),
-		}
 	case *parse.BranchNode:
 		{
 			log.Debug().Msg("Hover on BranchNode")
@@ -97,12 +91,6 @@ func buildHoverContent(target parse.Node, hover *protocol.Hover, doc *document) 
 				Kind:  protocol.MarkupKindMarkdown,
 				Value: MessageBranch(target),
 			}
-		}
-	case *parse.CommandNode:
-		log.Debug().Msg("Hover on CommandNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageCommand(target),
 		}
 	case *parse.DotNode:
 		log.Debug().Msg("Hover on DotNode")
@@ -122,61 +110,22 @@ func buildHoverContent(target parse.Node, hover *protocol.Hover, doc *document) 
 			Kind:  protocol.MarkupKindMarkdown,
 			Value: MessageIdentifier(target),
 		}
-	case *parse.PipeNode:
-		log.Debug().Msg("Hover on PipeNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessagePipe(target),
-		}
 	case *parse.VariableNode:
-		log.Debug().Msg("Hover on VariableNode")
+		log.Debug().Any("node", target).Msg("Hover on VariableNode")
 
-		if isIndexVariable(target, doc.tree.Root) {
+		if IsIndexVariable(target, doc.tree.Root) {
 			hover.Contents = protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
 				Value: MessageIndexVariable(target),
 			}
 		} else {
+			varValue, goType := ResolveVarInfo(doc.tree.Root, target, doc.loadedType)
+
 			hover.Contents = protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageVariable(target),
+				Value: MessageVariable(target, varValue, goType),
 			}
-		}
-	case *parse.TextNode:
-		log.Debug().Msg("Hover on TextNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageText(target),
-		}
-	case *parse.TemplateNode:
-		log.Debug().Msg("Hover on TemplateNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageTemplate(target),
-		}
-	case *parse.ListNode:
-		log.Debug().Msg("Hover on ListNode")
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageList(target),
-		}
-	case *parse.BoolNode:
-		log.Debug().Msgf("Hover on %T", target)
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageBool(target),
-		}
-	case *parse.NumberNode:
-		log.Debug().Msgf("Hover on %T", target)
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageNumber(target),
-		}
-	case *parse.StringNode:
-		log.Debug().Msgf("Hover on %T", target)
-		hover.Contents = protocol.MarkupContent{
-			Kind:  protocol.MarkupKindMarkdown,
-			Value: MessageString(target),
+
 		}
 	case *parse.NilNode:
 		log.Debug().Msgf("Hover on %T", target)
@@ -366,43 +315,4 @@ func elseNodeHover(
 	}
 
 	return
-}
-
-func isIndexVariable(target *parse.VariableNode, root *parse.ListNode) bool {
-	ctx := &Context{Vars: make(map[string]parse.Node)}
-	buildPath(root, target, ctx)
-
-	path := ctx.Path
-	branch := path[len(path)-2] // branch is the second to last element in the path
-	if _, ok := branch.(*parse.RangeNode); !ok {
-		return wasDeclaredAsIndex(target, ctx)
-	}
-	branchNode := branch.(*parse.RangeNode)
-
-	pipe := branchNode.Pipe
-
-	return pipe.Decl[0] == target
-}
-
-func wasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
-	for ident, pipe := range ctx.Vars {
-		if ident != target.Ident[0] {
-			continue
-		}
-		if pipe.(*parse.PipeNode).Decl[0].Ident[0] != target.Ident[0] {
-			return false
-		}
-		for _, node := range ctx.Path {
-			if _, ok := node.(*parse.RangeNode); !ok {
-				continue
-			}
-			rangeNode := node.(*parse.RangeNode)
-
-			if rangeNode.Pipe != pipe {
-				continue
-			}
-			return true
-		}
-	}
-	return false
 }
