@@ -1,4 +1,5 @@
-## Parser
+# Parser
+
 This is an extended version of the go/text/template/parse package.
 
 Changes implemented:
@@ -16,5 +17,6 @@ Changes implemented:
 - The lexer has been modified to detect a left delimiter inside an already open action, which it didnt do before.
 - The lexer response to ':' has been changed. Now if its not followed by '=' it simply returns the unicode char, instead of consuming the following character and producing an error.
 
+- Fixed `FieldNode` position for chained field accesses (e.g. `.Address.Country`). Previously the node's `Pos` pointed to the second field in the chain rather than the first, because the `FieldNode` used to anchor at the next peeked token's position. The `FieldNode` is now anchored at the original node's position, so the resulting `FieldNode.Pos` correctly points to the leading `.` of the first field.
 
 We aim to have these changes eventually merged into the upstream of go, then having this package locally will become obsolete.
