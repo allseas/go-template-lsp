@@ -19,8 +19,9 @@ import (
 var WorkspaceRoot string
 
 type document struct {
-	text       string
-	tree       *parse.Tree
+	text string
+	tree *parse.Tree
+	// deprecated, typedTree is enough, but functions should be rewritten
 	loadedType *types.Tree
 	typedTree  *types.Tree
 }
