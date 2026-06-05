@@ -36,6 +36,8 @@ func setupHandlers() {
 		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
 		TextDocumentReferences:          handlers.References,
 		TextDocumentHover:               handlers.Hover,
+		TextDocumentSemanticTokensFull:  handlers.SemanticTokensFull,
+		TextDocumentDocumentSymbol:      handlers.DocumentSymbols,
 	}
 }
 
