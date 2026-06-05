@@ -624,39 +624,41 @@ func TestErrors(t *testing.T) {
 	}
 }
 
+type fieldNodeTest struct {
+	name           string
+	input          string
+	expectedIdents []string
+	expectedPos    Pos
+}
+
+var fieldNodeTests = []fieldNodeTest{
+	{
+		name:           "two fields",
+		input:          "{{ .Address.Country }}",
+		expectedIdents: []string{"Address", "Country"},
+		// `{{` (2) + ` ` (1) = byte offset 3 — the '.' of .Address
+		expectedPos: 3,
+	},
+	{
+		name:           "three fields",
+		input:          "{{ .A.B.C }}",
+		expectedIdents: []string{"A", "B", "C"},
+		// `{{` (2) + ` ` (1) = byte offset 3
+		expectedPos: 3,
+	},
+	{
+		name:           "single field (no chain)",
+		input:          "{{ .Name }}",
+		expectedIdents: []string{"Name"},
+		expectedPos:    3,
+	},
+}
+
 // TestFieldNodePosition verifies that a chained field access such as
 // .Address.Country produces a single FieldNode whose Pos is at the start of
 // the first field (the leading '.'), not at any later field in the chain.
 func TestFieldNodePosition(t *testing.T) {
-	tests := []struct {
-		name       string
-		input      string
-		wantIdents []string
-		wantPos    Pos
-	}{
-		{
-			name:       "two fields",
-			input:      "{{ .Address.Country }}",
-			wantIdents: []string{"Address", "Country"},
-			// `{{` (2) + ` ` (1) = byte offset 3 — the '.' of .Address
-			wantPos: 3,
-		},
-		{
-			name:       "three fields",
-			input:      "{{ .A.B.C }}",
-			wantIdents: []string{"A", "B", "C"},
-			// `{{` (2) + ` ` (1) = byte offset 3
-			wantPos: 3,
-		},
-		{
-			name:       "single field (no chain)",
-			input:      "{{ .Name }}",
-			wantIdents: []string{"Name"},
-			wantPos:    3,
-		},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range fieldNodeTests {
 		t.Run(tt.name, func(t *testing.T) {
 			tr := New(tt.name)
 			tr.Mode = SkipFuncCheck
@@ -685,18 +687,18 @@ func TestFieldNodePosition(t *testing.T) {
 				t.Fatalf("expected FieldNode, got %T", cmd.Args[0])
 			}
 
-			if got, want := len(field.Ident), len(tt.wantIdents); got != want {
+			if got, want := len(field.Ident), len(tt.expectedIdents); got != want {
 				t.Errorf("Ident length: got %d, want %d", got, want)
 			} else {
-				for i, ident := range tt.wantIdents {
+				for i, ident := range tt.expectedIdents {
 					if field.Ident[i] != ident {
 						t.Errorf("Ident[%d]: got %q, want %q", i, field.Ident[i], ident)
 					}
 				}
 			}
 
-			if field.Position() != tt.wantPos {
-				t.Errorf("FieldNode.Position(): got %d, want %d", field.Position(), tt.wantPos)
+			if field.Position() != tt.expectedPos {
+				t.Errorf("FieldNode.Position(): got %d, want %d", field.Position(), tt.expectedPos)
 			}
 		})
 	}
