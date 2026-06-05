@@ -350,6 +350,15 @@ var completionTestCases = []completionTestCase{
 	},
 	// scope switch — range
 	{
+		name:        "inside range — dot trigger returns Item fields not Order fields",
+		src:         `{{range .Items}}{{.}}{{end}}`,
+		subStr:      ".",
+		occurrence:  1,
+		withType:    true,
+		contains:    []string{"SKU", "Name"},
+		notContains: []string{"ID", "CustomerName", "Address", "Items"},
+	},
+	{
 		name:        "inside range — dot-prefixed Item methods, Order methods absent",
 		src:         `{{range .Items}}{{len .SKU}}{{end}}`,
 		subStr:      "l",
@@ -739,4 +748,504 @@ var completionFallbackTestCases = []completionFallbackTestCase{
 		line:      1,
 		character: 2,
 	},
+}
+
+// varsItemsT unit test cases
+
+type varsItemsTTestCase struct {
+	name        string
+	varNames    []string // each entry is Ident[0], e.g. "$x"; nil means pass nil vars
+	delSign     bool
+	wantNil     bool
+	wantLen     int // if > 0, assert exact length
+	wantLabels  []string
+	notContains []string
+	wantFilter  string // if non-empty, assert FilterText of first item equals this
+}
+
+var varsItemsTTestCases = []varsItemsTTestCase{
+	{
+		name:    "nil vars returns nil",
+		wantNil: true,
+	},
+	{
+		name:     "empty vars returns nil",
+		varNames: []string{},
+		wantNil:  true,
+	},
+	{
+		name:       "delSign false keeps full dollar-prefixed label",
+		varNames:   []string{"$top"},
+		delSign:    false,
+		wantLabels: []string{"$top"},
+	},
+	{
+		name:       "delSign true strips sigil from label",
+		varNames:   []string{"$top"},
+		delSign:    true,
+		wantLabels: []string{"top"},
+	},
+	{
+		name:       "delSign true skips bare dollar variable",
+		varNames:   []string{"$", "$x"},
+		delSign:    true,
+		wantLen:    1,
+		wantLabels: []string{"x"},
+	},
+	{
+		name:     "deduplicates repeated variable names",
+		varNames: []string{"$x", "$x"},
+		wantLen:  1,
+	},
+	{
+		name:       "filter text retains sigil when delSign true",
+		varNames:   []string{"$val"},
+		delSign:    true,
+		wantFilter: "$val",
+	},
+}
+
+// fieldChainItemsT unit test cases
+
+type fieldChainItemsTTestCase struct {
+	name        string
+	useBasic    bool // pass types.Typ[types.String] as the type
+	useOrder    bool // pass the loaded Order *types.Named
+	contains    []string
+	notContains []string
+	wantEmpty   bool
+}
+
+var fieldChainItemsTTestCases = []fieldChainItemsTTestCase{
+	{
+		name:      "nil type returns empty slice",
+		wantEmpty: true,
+	},
+	{
+		name:      "basic string type returns empty slice",
+		useBasic:  true,
+		wantEmpty: true,
+	},
+	{
+		name:        "named struct returns fields without dot prefix",
+		useOrder:    true,
+		contains:    []string{"ID", "CustomerName", "Address"},
+		notContains: []string{".ID"},
+	},
+	{
+		name:        "named struct returns methods without dot prefix",
+		useOrder:    true,
+		contains:    []string{"DisplayName", "ItemCount"},
+		notContains: []string{".DisplayName"},
+	},
+}
+
+// dotItemsT unit test cases
+
+type dotItemsTTestCase struct {
+	name          string
+	src           string
+	subStr        string
+	delSign       bool
+	inputIsString bool // set inputType = types.Typ[types.String]
+	pipeKind      outputKind
+	withType      bool
+	contains      []string
+	notContains   []string
+	wantEmpty     bool
+}
+
+var dotItemsTTestCases = []dotItemsTTestCase{
+	{
+		name:      "non-outputAny pipe kind blocks all items",
+		src:       `{{.}}`,
+		subStr:    ".",
+		pipeKind:  outputBool,
+		wantEmpty: true,
+	},
+	{
+		name:          "non-nil inputType blocks all items",
+		src:           `{{.}}`,
+		subStr:        ".",
+		inputIsString: true,
+		wantEmpty:     true,
+	},
+	{
+		name:     "delSign false includes dot item",
+		src:      `{{.}}`,
+		subStr:   ".",
+		delSign:  false,
+		contains: []string{"."},
+	},
+	{
+		name:        "delSign true omits dot item",
+		src:         `{{.}}`,
+		subStr:      ".",
+		delSign:     true,
+		notContains: []string{"."},
+	},
+	{
+		name:        "with loaded type delSign false returns dot-prefixed fields and methods",
+		src:         `{{.}}`,
+		subStr:      ".",
+		withType:    true,
+		delSign:     false,
+		contains:    []string{".ID", ".CustomerName", ".DisplayName"},
+		notContains: []string{"ID"},
+	},
+	{
+		name:        "with loaded type delSign true returns unprefixed fields and methods",
+		src:         `{{.}}`,
+		subStr:      ".",
+		withType:    true,
+		delSign:     true,
+		contains:    []string{"ID", "DisplayName"},
+		notContains: []string{".ID", "."},
+	},
+}
+
+// pipeFilteredItemsT unit test cases
+
+type pipeFilteredItemsTTestCase struct {
+	name          string
+	src           string
+	subStr        string
+	kind          outputKind
+	inputIsString bool // set inputType = types.Typ[types.String]
+	contains      []string
+	notContains   []string
+}
+
+var pipeFilteredItemsTTestCases = []pipeFilteredItemsTTestCase{
+	{
+		name:     "outputAny includes all builtins",
+		src:      `{{.}}`,
+		subStr:   ".",
+		kind:     outputAny,
+		contains: []string{"len", "html", "not", "eq"},
+	},
+	{
+		name:        "outputString includes only string-accepting builtins",
+		src:         `{{.}}`,
+		subStr:      ".",
+		kind:        outputString,
+		contains:    []string{"html", "len"},
+		notContains: []string{"not", "and"},
+	},
+	{
+		name:        "outputBool includes only bool-accepting builtins",
+		src:         `{{.}}`,
+		subStr:      ".",
+		kind:        outputBool,
+		contains:    []string{"not", "and"},
+		notContains: []string{"html", "len"},
+	},
+	{
+		name:        "outputInt includes only int-accepting builtins",
+		src:         `{{.}}`,
+		subStr:      ".",
+		kind:        outputInt,
+		contains:    []string{"eq", "lt"},
+		notContains: []string{"html", "not"},
+	},
+	{
+		name:     "outputUntyped includes all builtins",
+		src:      `{{.}}`,
+		subStr:   ".",
+		kind:     outputUntyped,
+		contains: []string{"len", "not", "html"},
+	},
+	{
+		name:          "inputType string with outputAny infers string-accepting builtins",
+		src:           `{{.}}`,
+		subStr:        ".",
+		kind:          outputAny,
+		inputIsString: true,
+		contains:      []string{"html", "len"},
+		notContains:   []string{"not"},
+	},
+}
+
+// pipeOutputKind
+
+type pipeOutputKindTestCase struct {
+	name      string
+	src       string // template; the test extracts the pipe from the first ActionNode
+	nilPipe   bool   // pass ctx with Pipe=nil
+	isInvoked bool
+	want      outputKind
+}
+
+var pipeOutputKindTestCases = []pipeOutputKindTestCase{
+	{
+		name:    "nil pipe returns outputAny",
+		nilPipe: true,
+		want:    outputAny,
+	},
+	{
+		name: "single command pipe, non-invoked returns outputAny",
+		src:  `{{html .}}`,
+		want: outputAny,
+	},
+	{
+		name:      "html preceding when invoked returns outputString",
+		src:       `{{html .}}`,
+		isInvoked: true,
+		want:      outputString,
+	},
+	{
+		name:      "len preceding when invoked returns outputInt",
+		src:       `{{len .}}`,
+		isInvoked: true,
+		want:      outputInt,
+	},
+	{
+		name:      "not preceding when invoked returns outputBool",
+		src:       `{{not .}}`,
+		isInvoked: true,
+		want:      outputBool,
+	},
+	{
+		name: "html piped to x non-invoked returns outputString",
+		src:  `{{html . | x}}`,
+		want: outputString,
+	},
+	{
+		name:      "non-builtin identifier preceding returns outputAny",
+		src:       `{{foo .}}`,
+		isInvoked: true,
+		want:      outputAny,
+	},
+	{
+		name:      "dot first arg preceding returns outputAny",
+		src:       `{{. | html}}`,
+		isInvoked: false,
+		want:      outputAny,
+	},
+}
+
+// basicTypeMatchesKind unit test cases
+
+type basicTypeMatchesKindTestCase struct {
+	name  string
+	basic string
+	kind  outputKind
+	want  bool
+}
+
+var basicTypeMatchesKindTestCases = []basicTypeMatchesKindTestCase{
+	{name: "non-basic type returns false", basic: "none", kind: outputString, want: false},
+	{name: "string matches outputString", basic: "string", kind: outputString, want: true},
+	{name: "string does not match outputInt", basic: "string", kind: outputInt, want: false},
+	{name: "int matches outputInt", basic: "int", kind: outputInt, want: true},
+	{name: "int does not match outputBool", basic: "int", kind: outputBool, want: false},
+	{name: "bool matches outputBool", basic: "bool", kind: outputBool, want: true},
+	{name: "bool does not match outputString", basic: "bool", kind: outputString, want: false},
+	{name: "string with outputAny returns false", basic: "string", kind: outputAny, want: false},
+	{name: "float with outputInt returns false", basic: "float64", kind: outputInt, want: false},
+}
+
+// methodAcceptsInput unit test cases
+
+type methodAcceptsInputTestCase struct {
+	name          string
+	methodName    string // Order method to use
+	inputIsString bool
+	inputIsInt    bool
+	pipeKind      outputKind
+	want          bool
+}
+
+var methodAcceptsInputTestCases = []methodAcceptsInputTestCase{
+	{
+		name:       "no input and outputAny returns true",
+		methodName: "Format",
+		pipeKind:   outputAny,
+		want:       true,
+	},
+	{
+		name:       "no input and outputUntyped returns true",
+		methodName: "Format",
+		pipeKind:   outputUntyped,
+		want:       true,
+	},
+	{
+		name:          "string input matches Format(string)",
+		methodName:    "Format",
+		inputIsString: true,
+		want:          true,
+	},
+	{
+		name:       "int input does not match Format(string)",
+		methodName: "Format",
+		inputIsInt: true,
+		want:       false,
+	},
+	{
+		name:       "outputString matches last param of Format(string)",
+		methodName: "Format",
+		pipeKind:   outputString,
+		want:       true,
+	},
+	{
+		name:       "outputInt does not match last param of Format(string)",
+		methodName: "Format",
+		pipeKind:   outputInt,
+		want:       false,
+	},
+	{
+		name:       "outputInt matches last param of Oper(int)",
+		methodName: "Oper",
+		pipeKind:   outputInt,
+		want:       true,
+	},
+	{
+		name:       "outputString does not match last param of Oper(int)",
+		methodName: "Oper",
+		pipeKind:   outputString,
+		want:       false,
+	},
+}
+
+// methodIsUsable unit test cases
+
+type methodIsUsableTestCase struct {
+	name       string
+	nilFunc    bool   // construct MethodType with Func=nil
+	methodName string // otherwise look up an Order method
+	want       bool
+}
+
+var methodIsUsableTestCases = []methodIsUsableTestCase{
+	{name: "nil func returns false", nilFunc: true, want: false},
+	{name: "single return value is usable", methodName: "DisplayName", want: true},
+	{name: "second return error is usable", methodName: "Summary", want: true},
+}
+
+// toNamed unit test cases
+
+type toNamedTestCase struct {
+	name    string
+	input   string // "nil"|"named"|"pointer"|"basic"
+	wantNil bool
+}
+
+var toNamedTestCases = []toNamedTestCase{
+	{name: "nil input returns nil", input: "nil", wantNil: true},
+	{name: "named type returns the named", input: "named", wantNil: false},
+	{name: "pointer to named returns underlying named", input: "pointer", wantNil: false},
+	{name: "basic type returns nil", input: "basic", wantNil: true},
+}
+
+// resolvePipeDotType unit test cases
+
+type resolvePipeDotTypeTestCase struct {
+	name        string
+	src         string
+	unwrapSlice bool
+	nilCtxDot   bool
+	wantNilDot  bool
+	wantName    string
+	wantOrder   bool
+}
+
+var resolvePipeDotTypeTestCases = []resolvePipeDotTypeTestCase{
+	{
+		name:        "range over slice field resolves to element type",
+		src:         `{{range .Items}}{{end}}`,
+		unwrapSlice: true,
+		wantName:    "Item",
+	},
+	{
+		name:     "with over named struct field resolves to that type",
+		src:      `{{with .Address}}{{end}}`,
+		wantName: "Address",
+	},
+	{
+		name:        "range over non-slice field returns nil DotType",
+		src:         `{{range .Address}}{{end}}`,
+		unwrapSlice: true,
+		wantNilDot:  true,
+	},
+	{
+		name:       "with over slice field returns nil DotType",
+		src:        `{{with .Items}}{{end}}`,
+		wantNilDot: true,
+	},
+	{
+		name:        "range over unknown field returns original DotType",
+		src:         `{{range .Unknown}}{{end}}`,
+		unwrapSlice: true,
+		wantOrder:   true,
+	},
+	{
+		name:      "with over unknown field returns original DotType",
+		src:       `{{with .Unknown}}{{end}}`,
+		wantOrder: true,
+	},
+	{
+		name:      "with over non-field arg (dot) returns original DotType",
+		src:       `{{with .}}{{end}}`,
+		wantOrder: true,
+	},
+	{
+		name:      "with over basic-typed field returns original DotType",
+		src:       `{{with .CustomerName}}{{end}}`,
+		wantOrder: true,
+	},
+	{
+		name:       "nil ctx.DotType returns nil",
+		src:        `{{with .Address}}{{end}}`,
+		nilCtxDot:  true,
+		wantNilDot: true,
+	},
+}
+
+// additional buildPathScope cases registered via init to cover range/with/template/chain traversal
+
+func init() {
+	buildPathScopeTestCases = append(buildPathScopeTestCases,
+		buildPathScopeTestCase{
+			name:        "range body variable not visible after end",
+			src:         `{{range $r := .}}{{end}}{{.}}`,
+			dotOccur:    1,
+			varName:     "$r",
+			wantPresent: false,
+		},
+		buildPathScopeTestCase{
+			name:        "with body variable not visible after end",
+			src:         `{{with $w := .}}{{end}}{{.}}`,
+			dotOccur:    1,
+			varName:     "$w",
+			wantPresent: false,
+		},
+		buildPathScopeTestCase{
+			name:        "template node traversed without panic",
+			src:         `{{template "t" .}}{{.}}`,
+			dotOccur:    1,
+			varName:     "$x",
+			wantPresent: false,
+		},
+		buildPathScopeTestCase{
+			name:        "chain node traversed when target is inside",
+			src:         `{{(.Address).Street}}{{.}}`,
+			dotOccur:    1,
+			varName:     "$x",
+			wantPresent: false,
+		},
+		buildPathScopeTestCase{
+			name:        "range variable visible inside body",
+			src:         `{{range $r := .}}{{.}}{{end}}`,
+			dotOccur:    1,
+			varName:     "$r",
+			wantPresent: true,
+		},
+		buildPathScopeTestCase{
+			name:        "with variable visible inside body",
+			src:         `{{with $w := .}}{{.}}{{end}}`,
+			dotOccur:    1,
+			varName:     "$w",
+			wantPresent: true,
+		},
+	)
 }
