@@ -1,4 +1,4 @@
-﻿// Package handlers provides a Language Server Protocol implementation for Go text/templates, featuring scope-aware variable completion and built-in function support.
+// Package handlers provides a Language Server Protocol implementation for Go text/templates, featuring scope-aware variable completion and built-in function support.
 package handlers
 
 import (
@@ -304,7 +304,10 @@ func suggest(
 			// TODO: not always cmd.args - 2
 			arg := cmd.Args[len(cmd.Args)-2]
 			switch arg.(type) {
-			case *serverTypes.FieldNode, *serverTypes.ChainNode, *serverTypes.VariableNode, *serverTypes.PipeNode:
+			case *serverTypes.FieldNode,
+				*serverTypes.ChainNode,
+				*serverTypes.VariableNode,
+				*serverTypes.PipeNode:
 				if t := arg.ValueType(); t != nil {
 					return fieldChainItemsT(t, wordRange)
 				}
