@@ -14,6 +14,24 @@ type completionTestCase struct {
 
 var completionTestCases = []completionTestCase{
 	{
+		name:        "chain node (.Address). — Address fields suggested",
+		src:         `{{ (.Address). }}`,
+		subStr:      ".",
+		occurrence:  1,
+		withType:    true,
+		contains:    []string{"Street", "City", "Country", "Zip"},
+		notContains: []string{"ID", "CustomerName", "len", "eq"},
+	},
+	{
+		name:        "chain node (.Address). — Address methods suggested",
+		src:         `{{ (.Address). }}`,
+		subStr:      ".",
+		occurrence:  1,
+		withType:    true,
+		contains:    []string{"Line", "IsLocal", "ZipCode"},
+		notContains: []string{"DisplayName", "ItemCount"},
+	},
+	{
 		name:        "field chain .Address. — Address fields suggested",
 		src:         `{{ .Address. }}`,
 		subStr:      ".",
