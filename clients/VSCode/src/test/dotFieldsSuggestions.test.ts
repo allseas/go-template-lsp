@@ -13,7 +13,7 @@ suite("Dot Fields Suggestions Test Suite", () => {
 
     after(() => {
         vscode.window.showInformationMessage(
-            "All dot fields suggestions tests done!"
+            "All dot fields suggestions tests done!",
         );
     });
 
@@ -499,7 +499,6 @@ suite("Dot Fields Suggestions Test Suite", () => {
             await cleanupDocument(tmplUri);
         }
     });
-
 
     test("Multiple chained dots on recursive type", async () => {
         const { tmplUri } = await createDocument(

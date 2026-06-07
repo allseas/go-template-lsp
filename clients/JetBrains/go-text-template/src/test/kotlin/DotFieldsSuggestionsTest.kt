@@ -1,7 +1,7 @@
 import com.intellij.codeInsight.completion.CompletionType
 
-//This class has to test around issues 101 and 102. There might have to be some changes to some assertions once fixed
-//However, these tests are still of value due to the fact that they verify the server can read the Go files and suggest accordingly
+// This class has to test around issues 101 and 102. There might have to be some changes to some assertions once fixed
+// However, these tests are still of value due to the fact that they verify the server can read the Go files and suggest accordingly
 class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
     override fun setUp() {
         super.setUp()
@@ -318,13 +318,13 @@ class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
         assertDoesntContain(suggestions, ".CustomerName", ".Items", ".TotalAmount")
     }
 
-    fun testMultipleChainedDots(){
+    fun testMultipleChainedDots() {
         myFixture.configureByText(
             "test_multiple_dots.txt.tmpl",
             """
             {{/*gotype: cg/model.Tree*/}}
             {{.Left.Left.Left.Left.Left.<caret>}}
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         myFixture.complete(CompletionType.BASIC)
@@ -333,7 +333,7 @@ class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
         assertContainsElements(
             suggestions!!,
             "Left",
-            "Right"
+            "Right",
         )
     }
 }
