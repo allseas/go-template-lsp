@@ -501,8 +501,6 @@ suite("Dot Fields Suggestions Test Suite", () => {
     });
 
 
-    //This test suffers from the double dot bug, but the behaviour is important so it tests as if that was intended behaviour
-    //Will have to be changed when the double dot bug is fixed
     test("Multiple chained dots on recursive type", async () => {
         const { tmplUri } = await createDocument(
             `${RESOURCE_DIR}/dot-fields-chained.tmpl`,
@@ -512,17 +510,15 @@ suite("Dot Fields Suggestions Test Suite", () => {
             await new Promise((resolve) => setTimeout(resolve, 200));
             const list = await getCompletions(
                 tmplUri,
-                new vscode.Position(1, 27),
+                new vscode.Position(1, 28),
             );
             const labels = getLabels(list);
             assert.ok(
-                //Double dot bug
-                labels.includes(".Left"),
+                labels.includes("Left"),
                 `Expected 'Left' in chained completions, got: ${labels}`,
             );
             assert.ok(
-                //Double dot bug
-                labels.includes(".Right"),
+                labels.includes("Right"),
                 `Expected 'Right' in chained completions, got: ${labels}`,
             );
         } finally {
