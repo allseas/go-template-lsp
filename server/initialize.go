@@ -95,10 +95,6 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 			log.Warn().
 				Str("workspaceRoot", handlers.WorkspaceRoot).
 				Msg("initialize: workspace root does not exist on disk, we will keep it but `go list` may fail later")
-
-			// If it's literally an empty IDE or deleted folder etc, let's fallback to CWD only if we really want.
-			// But since tests fail, it's better to NOT overwrite it if the client explicitly sent it.
-			// We will remove the strict fallback here.
 		}
 	}
 
