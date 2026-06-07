@@ -107,3 +107,9 @@ func (o Order) badReturn() (string, int, error) {
 func (o Order) wrongSecond() (string, int) {
 	return "", 0
 }
+
+// Tree is a tree
+type Tree struct {
+	Left *Tree
+	Right *Tree
+}

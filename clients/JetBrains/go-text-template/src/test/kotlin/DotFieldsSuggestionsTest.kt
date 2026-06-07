@@ -1,22 +1,12 @@
 import com.intellij.codeInsight.completion.CompletionType
 
+//This class has to test around issues 101 and 102. There might have to be some changes to some assertions once fixed
+//However, these tests are still of value due to the fact that they verify the server can read the Go files and suggest accordingly
 class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
     override fun setUp() {
         super.setUp()
-        myFixture.copyDirectoryToProject("DotFieldTestResources/", "")
+        myFixture.copyDirectoryToProject("", "")
     }
-//
-//    private fun printVfsTree(
-//        dir: VirtualFile,
-//        indent: String,
-//    ) {
-//        for (child in dir.children) {
-//            println("$indent${child.name}${if (child.isDirectory) "/" else ""}")
-//            if (child.isDirectory) {
-//                printVfsTree(child, "$indent  ")
-//            }
-//        }
-//    }
 
     fun testAllCompletionsRecommended() {
         myFixture.configureByText(
@@ -26,17 +16,6 @@ class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
             {{<caret>}}
             """.trimIndent(),
         )
-//        val root = myFixture.tempDirFixture.getFile("")!!
-//        root.refresh(false, true)
-//        println("=== VFS Tree ===")
-//        println("Root path: ${root.path}")
-//        println("Project base path: ${myFixture.project.basePath}")
-//        println("File URI: ${myFixture.file.virtualFile.url}")
-//        printVfsTree(root, "")
-//        println("=== End VFS Tree ===")
-
-        // Wait for language server indexing to catch up
-//        Thread.sleep(2500)
 
         myFixture.complete(CompletionType.BASIC)
         val suggestions = myFixture.lookupElementStrings
@@ -51,6 +30,310 @@ class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
             ".Paid",
             ".TotalAmount",
         )
-//        assertSize(6, suggestions)
+    }
+
+    fun testNestedFieldCompletionsOnStructField() {
+        myFixture.configureByText(
+            "test_nested.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{.Address.<caret>}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            "Street",
+            "City",
+            "Country",
+            "Zip",
+        )
+        assertDoesntContain(suggestions, "CustomerName", "Items", "Paid")
+    }
+
+    fun testNestedMethodCompletionsOnStructField() {
+        myFixture.configureByText(
+            "test_nested_methods.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{.Address.<caret>}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            "Line",
+            "IsLocal",
+            "ZipCode",
+        )
+        assertDoesntContain(suggestions, "DisplayName", "ItemCount", "IsLargeOrder")
+    }
+
+    fun testMethodsRecommended() {
+        myFixture.configureByText(
+            "test_methods.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{<caret>}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            ".DisplayName",
+            ".Summary",
+            ".ItemCount",
+            ".IsLargeOrder",
+            ".Format",
+        )
+    }
+
+    fun testInvalidMethodsExcluded() {
+        myFixture.configureByText(
+            "test_invalid_methods.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{<caret>}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertDoesntContain(suggestions!!, ".badReturn", ".wrongSecond")
+    }
+
+//    Currently Broken, see issue 101
+//    fun testNoCompletionsOnPrimitiveField() {
+//        myFixture.configureByText(
+//            "test_primitive.txt.tmpl",
+//            """
+//            {{/*gotype: cg/model.Order*/}}
+//            {{.CustomerName.<caret>}}
+//            """.trimIndent(),
+//        )
+//
+//        myFixture.complete(CompletionType.BASIC)
+//        val suggestions = myFixture.lookupElementStrings
+//        if (suggestions != null) {
+//            assertDoesntContain(suggestions, "ID", "CustomerName", "DisplayName", "Street")
+//        }
+//    }
+
+    fun testDotFieldInsideIfBlock() {
+        myFixture.configureByText(
+            "test_if.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{if .Paid}}
+                {{<caret>}}
+            {{end}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            ".Address",
+            ".CustomerName",
+            ".Items",
+            ".TotalAmount",
+        )
+    }
+
+    fun testDotFieldInsideRangeBlock() {
+        myFixture.configureByText(
+            "test_range.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{range .Items}}
+                {{<caret>}}
+            {{end}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            ".SKU",
+            ".Name",
+            ".Qty",
+            ".UnitPrice",
+        )
+    }
+
+    fun testDotFieldInsideRangeBlockMethods() {
+        myFixture.configureByText(
+            "test_range_methods.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{range .Items}}
+                {{<caret>}}
+            {{end}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            ".Label",
+            ".Total",
+            ".IsExpensive",
+            ".Describe",
+        )
+        assertDoesntContain(suggestions, ".DisplayName", ".ItemCount", ".IsLargeOrder")
+    }
+
+    fun testDotFieldInsideWithBlock() {
+        myFixture.configureByText(
+            "test_with.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{with .Address}}
+                {{<caret>}}
+            {{end}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            ".Street",
+            ".City",
+            ".Country",
+            ".Zip",
+        )
+        assertDoesntContain(suggestions, ".CustomerName", ".Items", ".TotalAmount")
+    }
+
+//    Currently Broken, see Issue 102
+//    fun testPartialFieldNameFiltering() {
+//        myFixture.configureByText(
+//            "test_partial.txt.tmpl",
+//            """
+//            {{/*gotype: cg/model.Order*/}}
+//            {{.Cus<caret>}}
+//            """.trimIndent(),
+//        )
+//
+//        myFixture.complete(CompletionType.BASIC)
+//        val suggestions = myFixture.lookupElementStrings
+//        assertNotNull(suggestions)
+//        assertContainsElements(suggestions!!, "CustomerName")
+//        assertDoesntContain(suggestions, "Address", "Items", "Paid")
+//    }
+
+    fun testNoBuiltinsInDotCompletions() {
+        myFixture.configureByText(
+            "test_no_builtins.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{.<caret>}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertDoesntContain(suggestions!!, "len", "eq", "html", "print", "not")
+    }
+
+    fun testNoCompletionsWithoutGotype() {
+        myFixture.configureByText(
+            "test_no_gotype.txt.tmpl",
+            """
+            {{.<caret>}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        if (suggestions != null) {
+            assertDoesntContain(
+                suggestions,
+                "Address",
+                "CustomerName",
+                "Items",
+                "DisplayName",
+            )
+        }
+    }
+
+    fun testDotFieldInPipeExpression() {
+        myFixture.configureByText(
+            "test_pipe.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{<caret> | len}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            ".Address",
+            ".CustomerName",
+            ".Items",
+        )
+    }
+
+    fun testMultipleTemplatesWithDifferentTypes() {
+        myFixture.configureByText(
+            "test_multi_define.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Address*/}}
+            {{<caret>}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            ".Street",
+            ".City",
+            ".Country",
+            ".Zip",
+        )
+        assertDoesntContain(suggestions, ".CustomerName", ".Items", ".TotalAmount")
+    }
+
+    fun testMultipleChainedDots(){
+        myFixture.configureByText(
+            "test_multiple_dots.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Tree*/}}
+            {{.Left.Left.Left.Left.Left.<caret>}}
+            """.trimIndent()
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        assertNotNull(suggestions)
+        assertContainsElements(
+            suggestions!!,
+            "Left",
+            "Right"
+        )
     }
 }

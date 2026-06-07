@@ -12,7 +12,7 @@ abstract class CustomFixtureHeavyTestCase : UsefulTestCase() {
         val builder = factory.createFixtureBuilder(name)
 
         myFixture = factory.createCodeInsightFixture(builder.fixture)
-        myFixture.testDataPath = "src/test/resources"
+        myFixture.testDataPath = "../../../test/resources/templ-tests"
         myFixture.setUp()
 
         val tempDir = myFixture.tempDirFixture.getFile("")?.path
