@@ -128,6 +128,27 @@ func TestCompletionSuggestions(t *testing.T) {
 	}
 }
 
+func TestChainEditCompletions(t *testing.T) {
+	lt := orderLoadedType(t)
+	for _, tc := range chainEditTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			offset := offsetOf(t, tc.src, tc.subStr, tc.occurrence) + tc.offsetAdj
+			var labels []string
+			if tc.withType {
+				labels = suggestAtWithType(t, tc.src, offset, tc.isInvoked, lt)
+			} else {
+				labels = suggestAt(t, tc.src, offset)
+			}
+			for _, want := range tc.contains {
+				assert.Contains(t, labels, want)
+			}
+			for _, notWant := range tc.notContains {
+				assert.NotContains(t, labels, notWant)
+			}
+		})
+	}
+}
+
 func TestNodeFind(t *testing.T) {
 	for _, tc := range nodeFindTestCases {
 		t.Run(tc.name, func(t *testing.T) {

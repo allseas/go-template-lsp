@@ -1,4 +1,4 @@
-﻿// Package handlers provides a Language Server Protocol implementation for Go text/templates, featuring scope-aware variable completion and built-in function support.
+// Package handlers provides a Language Server Protocol implementation for Go text/templates, featuring scope-aware variable completion and built-in function support.
 package handlers
 
 import (
@@ -579,7 +579,11 @@ func methodIsUsable(m serverTypes.MethodType) bool {
 }
 
 // newItem builds a CompletionItem whose TextEdit replaces wordRange with label.
-func newItem(label string, kind protocol.CompletionItemKind, wordRange protocol.Range) protocol.CompletionItem {
+func newItem(
+	label string,
+	kind protocol.CompletionItemKind,
+	wordRange protocol.Range,
+) protocol.CompletionItem {
 	return protocol.CompletionItem{
 		Label:    label,
 		Kind:     &kind,
@@ -588,7 +592,11 @@ func newItem(label string, kind protocol.CompletionItemKind, wordRange protocol.
 }
 
 // newDetailItem is newItem plus a Detail string.
-func newDetailItem(label, detail string, kind protocol.CompletionItemKind, wordRange protocol.Range) protocol.CompletionItem {
+func newDetailItem(
+	label, detail string,
+	kind protocol.CompletionItemKind,
+	wordRange protocol.Range,
+) protocol.CompletionItem {
 	item := newItem(label, kind, wordRange)
 	item.Detail = &detail
 	return item
