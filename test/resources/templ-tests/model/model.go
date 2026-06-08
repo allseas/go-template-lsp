@@ -8,6 +8,12 @@ type Address struct {
 	City    string
 	Country string
 	Zip     string
+	Info	InfoS
+}
+
+type InfoS struct {
+	Info1 string
+	Info2 string
 }
 
 // Line returns a single-line formatted address.
