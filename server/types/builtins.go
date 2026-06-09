@@ -15,10 +15,10 @@ var builtinPkg = types.NewPackage("text/template/builtin", "tmplbuiltin")
 // Signatures use interface{} ("any") for polymorphic positions. Variadic builtins
 // use a variadic signature so that argument-count checking downstream is accurate.
 func BuiltinFuncs() map[string]*types.Func {
-	anyT := types.NewInterfaceType(nil, nil).Complete()
-	intT := types.Universe.Lookup("int").Type()
-	boolT := types.Universe.Lookup("bool").Type()
-	stringT := types.Universe.Lookup("string").Type()
+	anyT := types.NewInterfaceType(nil, nil).Complete() // everything implements the empty interface
+	intT := types.Typ[types.Int]
+	boolT := types.Typ[types.Bool]
+	stringT := types.Typ[types.String]
 
 	// helpers
 	v := func(name string, t types.Type) *types.Var {
