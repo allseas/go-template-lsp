@@ -5,4 +5,5 @@ node_modules/
 !.vscode/launch.json
 
 .vscode-test/
-test/resources
+test/resources/**
+!test/resources/.gitkeep
