@@ -12,6 +12,83 @@ type completionTestCase struct {
 	notContains []string
 }
 
+var chainEditTestCases = []completionTestCase{
+	// FieldNode cases
+	{
+		name:       "FieldNode mid-chain — suggest fields/methods of preceding .Address",
+		src:        `{{ .Address..Street }}`,
+		subStr:     ".",
+		occurrence: 1, // dot between Address and Street
+		withType:   true,
+		contains:   []string{"Street", "City", "Country", "Zip", "Line", "IsLocal", "ZipCode"},
+		notContains: []string{
+			"ID",
+			"CustomerName",
+			"Email",
+			"Address",
+			"Items",
+			"TotalAmount",
+			"Paid",
+			"DisplayName",
+			"ItemCount",
+			"IsLargeOrder",
+		},
+	},
+	// ChainNode cases
+	{
+		name:       "ChainNode mid-chain — suggest fields/methods of preceding (.Address)",
+		src:        `{{ (.Address)..Street }}`,
+		subStr:     ".",
+		occurrence: 1, // dot between ) and Street
+		withType:   true,
+		contains:   []string{"Street", "City", "Country", "Zip", "Line", "IsLocal", "ZipCode"},
+		notContains: []string{
+			"ID",
+			"CustomerName",
+			"Email",
+			"Address",
+			"Items",
+			"TotalAmount",
+			"Paid",
+			"DisplayName",
+			"ItemCount",
+			"IsLargeOrder",
+		},
+	},
+	// VariableNode cases
+	{
+		name:       "VariableNode mid-chain — suggest fields/methods of preceding $t",
+		src:        `{{ $t := .Address }}{{ $t..Street }}`,
+		subStr:     "$t.",
+		occurrence: 0,
+		offsetAdj:  2, // skip "$t" to land on the dot before Street
+		withType:   true,
+		contains:   []string{"Street", "City", "Country", "Zip", "Line", "IsLocal", "ZipCode"},
+		notContains: []string{
+			"ID",
+			"CustomerName",
+			"Email",
+			"Address",
+			"Items",
+			"TotalAmount",
+			"Paid",
+			"DisplayName",
+			"ItemCount",
+			"IsLargeOrder",
+		},
+	},
+	{
+		name:        "VariableNode three segments — only Address fields whose path contains nested .Length",
+		src:         `{{ $t := .Address }}{{ $t..Street.Length }}`,
+		subStr:      "$t.",
+		occurrence:  0,
+		offsetAdj:   2, // dot between $t and Street
+		withType:    true,
+		contains:    []string{"Street"},
+		notContains: []string{"Address", "Items"},
+	},
+}
+
 var completionTestCases = []completionTestCase{
 	{
 		name:        "chain node (.Address). — Address fields suggested",
@@ -37,7 +114,7 @@ var completionTestCases = []completionTestCase{
 		subStr:      ".",
 		occurrence:  1,
 		withType:    true,
-		contains:    []string{"Street", "City", "Country", "Zip"},
+		contains:    []string{"Street", "City", "Country", "Zip", "Line", "IsLocal", "ZipCode"},
 		notContains: []string{"ID", "CustomerName", "len", "eq"},
 	},
 	{
@@ -607,6 +684,7 @@ var completionTestCases = []completionTestCase{
 		name:        "after html pipe — string-accepting builtins only",
 		src:         `{{html . | len .}}`,
 		subStr:      "l",
+		occurrence:  1,
 		withType:    true,
 		contains:    []string{"len", "index"},
 		notContains: []string{"and", "not"},

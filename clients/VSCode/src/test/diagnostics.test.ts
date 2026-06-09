@@ -3,7 +3,7 @@ import { after, before } from "mocha";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
-const waitTime = 300;
+const waitTime = 400;
 
 async function getDiagnosticsFor(
     filename: string,
