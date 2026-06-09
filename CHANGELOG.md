@@ -9,13 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Inspections
+- Inspections: on incorrect syntax, duplicate variable names.
+- Go to Definition: on template variables <!-- and field accesses (goes to the Go source file). -->
+- Configuration in a workspace file: config can be saved in `gotmpl.config.json`.
+- Auto completions on chained field accesses.
+<!-- - Semantic syntax highlighting. -->
+
+- Released for JetBrains!
 
 ### Changed
+
+- Improved hover messages to be more informative and similar in style to Go.
 
 ### Removed
 
 ### Fixed
+
+- Static grammar rules are now correct. They are generated with Haskell.
+- Comment syntax is now correct on auto toggling.
+- Server would sometimes panic on syntactically incorrect templates.
 
 ## [0.1.0] - 2026-05-21
 
