@@ -45,7 +45,7 @@ func (s *documentStore) Set(uri, text string) {
 			); lerr == nil {
 				lt = loaded
 			} else {
-				log.Debug().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
+				log.Warn().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
 			}
 		}
 	}

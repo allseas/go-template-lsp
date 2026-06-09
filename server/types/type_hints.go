@@ -8,6 +8,9 @@ import (
 	"go/token"
 	"go/types"
 	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -74,6 +77,30 @@ type ParamType struct {
 	TypeName string
 }
 
+// goEnv returns the current process environment, augmenting PATH with the
+// directory of the Go binary if it is not already resolvable. This ensures
+// that packages.Load can invoke `go list` even when the server process is
+// started without the Go toolchain on its PATH.
+func goEnv() []string {
+	if _, err := exec.LookPath("go"); err == nil {
+		return os.Environ()
+	}
+	// Fallback: check common well-known Go installation directories.
+	candidates := []string{
+		"/usr/local/go/bin",
+		"/usr/lib/go/bin",
+		"/usr/local/bin",
+		"/usr/bin",
+	}
+	for _, dir := range candidates {
+		if _, statErr := os.Stat(filepath.Join(dir, "go")); statErr == nil {
+			env := os.Environ()
+			return append(env, "PATH="+dir+":"+os.Getenv("PATH"))
+		}
+	}
+	return os.Environ()
+}
+
 // LoadTypeFromHint loads the Go package identified by the hint and returns a
 // Tree with DotType and Pkg set.
 func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
@@ -85,6 +112,7 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		Mode: packages.NeedTypes,
 		Dir:  workspaceRoot,
 		Fset: fset,
+		Env:  goEnv(),
 	}
 
 	pkgs, err := packages.Load(cfg, importPath)
