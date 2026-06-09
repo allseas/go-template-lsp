@@ -1,7 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs";
 import { after, before } from "mocha";
-import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
@@ -11,23 +10,6 @@ const definitionTestsSourceDir = path.join(
     __dirname,
     "../../../../test/resources/definition-tests-client",
 );
-
-const serverDebugLog = path.join(os.tmpdir(), "gotmpl-server-debug.log");
-// Set before the extension activates so the spawned server inherits it.
-process.env.GOTMPL_DEBUG_LOG = serverDebugLog;
-try {
-    fs.unlinkSync(serverDebugLog);
-} catch {
-    // ignore — file may not exist
-}
-
-function readServerDebugLog(): string {
-    try {
-        return fs.readFileSync(serverDebugLog, "utf8");
-    } catch {
-        return "(no server debug log produced)";
-    }
-}
 
 suite("Definition Test Suite", () => {
     before(() => {
@@ -149,7 +131,7 @@ suite("Definition Test Suite", () => {
             assert.ok(definitions, "Definitions should be returned");
             assert.ok(
                 definitions.length >= 1,
-                `Expected at least 1 definition, got ${definitions.length}. Server log:\n${readServerDebugLog()}`,
+                `Expected at least 1 definition, got ${definitions.length}`,
             );
             assert.ok(
                 definitions[0].uri.fsPath.endsWith("model.go"),
@@ -180,7 +162,7 @@ suite("Definition Test Suite", () => {
             assert.ok(definitions, "Definitions should be returned");
             assert.ok(
                 definitions.length >= 1,
-                `Expected at least 1 definition, got ${definitions.length}. Server log:\n${readServerDebugLog()}`,
+                `Expected at least 1 definition, got ${definitions.length}`,
             );
             assert.ok(
                 definitions[0].uri.fsPath.endsWith("model.go"),
@@ -212,7 +194,7 @@ suite("Definition Test Suite", () => {
             assert.ok(definitions, "Definitions should be returned");
             assert.ok(
                 definitions.length >= 1,
-                `Expected at least 1 definition, got ${definitions.length}. Server log:\n${readServerDebugLog()}`,
+                `Expected at least 1 definition, got ${definitions.length}`,
             );
             assert.ok(
                 definitions[0].uri.fsPath.endsWith("model.go"),
@@ -244,7 +226,7 @@ suite("Definition Test Suite", () => {
             assert.ok(definitions, "Definitions should be returned");
             assert.ok(
                 definitions.length >= 1,
-                `Expected at least 1 definition, got ${definitions.length}. Server log:\n${readServerDebugLog()}`,
+                `Expected at least 1 definition, got ${definitions.length}`,
             );
             assert.ok(
                 definitions[0].uri.fsPath.endsWith("model.go"),

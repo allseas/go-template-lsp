@@ -105,17 +105,6 @@ func goEnv() []string {
 	return os.Environ()
 }
 
-// lookupPATH returns the PATH entry from the given environment slice.
-func lookupPATH(env []string) string {
-	last := ""
-	for _, kv := range env {
-		if strings.HasPrefix(kv, "PATH=") {
-			last = kv[len("PATH="):]
-		}
-	}
-	return last
-}
-
 // LoadTypeFromHint loads the Go package identified by the hint and returns a
 // Tree with DotType and Pkg set.
 func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
@@ -132,10 +121,10 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 
 	pkgs, err := packages.Load(cfg, importPath)
 	if err != nil {
-		return nil, fmt.Errorf("packages.Load(%q) in %q with PATH=%q: %w", importPath, workspaceRoot, lookupPATH(cfg.Env), err)
+		return nil, fmt.Errorf("packages.Load(%q): %w", importPath, err)
 	}
 	if len(pkgs) == 0 {
-		return nil, fmt.Errorf("no packages found for import path %q in %q", importPath, workspaceRoot)
+		return nil, fmt.Errorf("no packages found for import path %q", importPath)
 	}
 
 	pkg := pkgs[0]
