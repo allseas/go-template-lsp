@@ -82,6 +82,14 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 		TriggerCharacters: []string{"$", "."},
 		ResolveProvider:   &resolveProvider,
 	}
+
+	capabilities.SemanticTokensProvider = &protocol.SemanticTokensOptions{
+		Legend: protocol.SemanticTokensLegend{
+			TokenTypes:     handlers.TokenTypes,
+			TokenModifiers: handlers.TokenModifiers,
+		},
+		Full: true,
+	}
 	v := version
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
