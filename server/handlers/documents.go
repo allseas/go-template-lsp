@@ -2,12 +2,13 @@
 package handlers
 
 import (
-	"go/types"
 	"strings"
 	"sync"
 	parse "text-template-parser"
-	serverTypes "text-template-server/types"
+	"text-template-server/types"
 	"text-template-server/utils"
+
+	gotypes "go/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -18,9 +19,11 @@ import (
 var WorkspaceRoot string
 
 type document struct {
-	text       string
-	tree       *parse.Tree
-	loadedType *serverTypes.Tree
+	text string
+	tree *parse.Tree
+	// deprecated, typedTree is enough, but functions should be rewritten
+	loadedType *types.Tree
+	typedTree  *types.Tree
 }
 
 type documentStore struct {
@@ -35,14 +38,11 @@ var store = &documentStore{
 func (s *documentStore) Set(uri, text string) {
 	tree, err := parseTemplate(uri, text)
 
-	var lt *serverTypes.Tree
+	var lt *types.Tree
 	if WorkspaceRoot != "" {
-		hints := serverTypes.ParseTypeHints(strings.NewReader(text))
+		hints := types.ParseTypeHints(strings.NewReader(text))
 		if len(hints) > 0 {
-			if loaded, lerr := serverTypes.LoadTypeFromHint(
-				hints[0].Type,
-				WorkspaceRoot,
-			); lerr == nil {
+			if loaded, lerr := types.LoadTypeFromHint(hints[0].Type, WorkspaceRoot); lerr == nil {
 				lt = loaded
 			} else {
 				log.Warn().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
@@ -59,7 +59,32 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 
-	s.docs[uri] = &document{text: text, tree: tree, loadedType: lt}
+	s.docs[uri] = &document{
+		text:       text,
+		tree:       tree,
+		loadedType: lt,
+		typedTree:  buildTypedTree(tree, lt),
+	}
+}
+
+// buildTypedTree returns the analysed (typed) tree if the parse tree exists.
+// It carries dot-type / package info from the loaded type hint when available.
+func buildTypedTree(tree *parse.Tree, lt *types.Tree) *types.Tree {
+	if tree == nil {
+		return nil
+	}
+	var dotType gotypes.Type
+	var pkg *gotypes.Package
+	if lt != nil {
+		dotType = lt.DotType
+		pkg = lt.Pkg
+	}
+	t := types.NewTree(*tree, nil, dotType, pkg)
+	if lt != nil {
+		t.DotType = lt.DotType
+		t.Pkg = lt.Pkg
+	}
+	return &t
 }
 
 func (s *documentStore) Get(uri string) (*document, bool) {
@@ -150,6 +175,7 @@ func DidClose(_ *glsp.Context, params *protocol.DidCloseTextDocumentParams) erro
 }
 
 // nodeFind finds a node in a tree given the offset
+// deprecated, NodeFind should now find the correct node in a type tree
 func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 	best := root
 	bestPos := parse.Pos(0)
@@ -364,8 +390,8 @@ func WasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
 func ResolveVarInfo(
 	_ parse.Node,
 	target *parse.VariableNode,
-	_ *serverTypes.Tree,
-) (value any, goType types.Type) {
+	_ *types.Tree,
+) (value any, goType gotypes.Type) {
 	if target == nil || len(target.Ident) == 0 {
 		return nil, nil
 	}

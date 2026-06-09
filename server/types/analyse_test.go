@@ -38,6 +38,32 @@ func TestAnalyze(t *testing.T) {
 	}
 }
 
+func TestAnalyseNode_UnknownNodeTypePanics(t *testing.T) {
+	for _, tc := range analyseNodePanicTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatal("expected panic, got none")
+				}
+				msg, ok := r.(string)
+				if !ok {
+					t.Fatalf("expected panic value to be a string, got %T: %v", r, r)
+				}
+				if msg != tc.wantPanic {
+					t.Fatalf("panic message: got %q, want %q", msg, tc.wantPanic)
+				}
+			}()
+
+			ctx := &analysisCtx{
+				funcs: make(map[string]*types.Func),
+				vars:  []*VariableNode{},
+			}
+			analyseNode(tc.node, nil, ctx)
+		})
+	}
+}
+
 // CompareTypeTrees reports where two type trees first differ, returning an
 // empty string if they are structurally and type-annotation identical.
 // Parent pointers are ignored so hand-built expected values in tests do not

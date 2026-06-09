@@ -8,7 +8,13 @@ type Address struct {
 	City    string
 	Country string
 	Zip     string
-	Desc Description
+	Info    InfoS
+}
+
+type InfoS struct {
+	Info1 string
+	Info2 string
+	Desc  Description
 }
 
 // Copy returns a copy of the address.
@@ -18,7 +24,7 @@ func (a Address) Copy() Address {
 		City:    a.City,
 		Country: a.Country,
 		Zip:     a.Zip,
-		Desc:    a.Desc,
+		Info:    a.Info,
 	}
 }
 
@@ -38,9 +44,9 @@ func (a Address) ZipCode() string {
 }
 
 type Description struct {
-	Long string
+	Long  string
 	Short string
-	Tags []string
+	Tags  []string
 }
 
 func (d Description) Summarize() string {
@@ -53,7 +59,7 @@ type Item struct {
 	Name      string
 	Qty       int
 	UnitPrice float64
-	Desc Description
+	Desc      Description
 }
 
 // Label returns a short display label for the item.
