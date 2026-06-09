@@ -2,6 +2,8 @@
 package handlers
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"sync"
 	parse "text-template-parser"
@@ -46,6 +48,7 @@ func (s *documentStore) Set(uri, text string) {
 				lt = loaded
 			} else {
 				log.Warn().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
+				debugLog(fmt.Sprintf("type hint load failed: hint=%q workspaceRoot=%q err=%v", hints[0].Type, WorkspaceRoot, lerr))
 			}
 		}
 	}
@@ -98,6 +101,22 @@ func (s *documentStore) Delete(uri string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.docs, uri)
+}
+
+// debugLog appends a line to the file specified by GOTMPL_DEBUG_LOG, if set.
+// This is used to surface server-side errors in environments where stderr is
+// not captured (e.g. the VS Code test runner in CI).
+func debugLog(msg string) {
+	path := os.Getenv("GOTMPL_DEBUG_LOG")
+	if path == "" {
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(msg + "\n")
 }
 
 func parseTemplate(uri, text string) (*parse.Tree, error) {
