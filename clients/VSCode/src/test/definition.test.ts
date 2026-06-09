@@ -113,6 +113,15 @@ suite("Definition Test Suite", () => {
         );
 
         try {
+            assert.ok(
+                fs.existsSync(path.join(testResourcesDir, "go.mod")),
+                "go.mod file should exist",
+            );
+            assert.ok(
+                fs.existsSync(path.join(testResourcesDir, "model")),
+                "model directory should exist",
+            );
+
             // char 5 is inside "CustomerName" (after "{{ .")
             const definitions = await pollDefinitions(
                 tmplUri,
