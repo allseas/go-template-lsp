@@ -110,6 +110,10 @@ When completions are chained with `|`, the item list is narrowed to functions th
 
 `pipeFilteredItems` converts the `outputKind` to an allowlist from `functionsAccepting`, then returns only those built-in names together with dot and in-scope variables. When the kind is `outputUntyped` or `outputAny`, the full unfiltered list is returned.
 
+### User-defined global functions
+
+The non-AST [`completion`](../../server/handlers/completion.go) handler merges its hard-coded `builtinFunctions` list with names harvested from `//tmpl:func "global"` annotations across the workspace's Go sources. See [func_hints.md](func_hints.md) for the discovery flow. `allGlobalFunctions()` de-duplicates against the builtins so a project may register additional names but cannot shadow a builtin's identifier.
+
 ### Scope-aware variable collection - `buildPath()`
 
 Variable tracking is performed inside `buildPath` / `buildPathChildren` as the ancestor chain is being reconstructed. When a `PipeNode` with declarations is encountered, each declared variable is registered in `ctx.Vars` before recursing into its children. `buildPathBranch` takes a snapshot of `ctx.Vars` and restores it if the target is not found in that branch, preventing variables from leaking across sibling branches.
