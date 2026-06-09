@@ -50,7 +50,7 @@ Extension features:
 | Definition on hover                             | ✅       | ✅         | Must     |
 | Toggling features                               |         |           | Must     |
 | Find usages of a variable or function           | ✅       | ✅         | Must     |
-| Type checking on template                       | ✅       | ✅         | Must     |
+| Type checking on template block                 |         |           | Must     |
 | Type checking on function                       |         |           | Should   |
 | Wrap selection in a comment                     | ✅       | ✅         | Should   |
 | Highlight end of the current block              |         |           | Should   |
