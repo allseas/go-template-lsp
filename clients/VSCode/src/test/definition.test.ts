@@ -1,9 +1,29 @@
 import * as assert from "assert";
-import { after } from "mocha";
+import * as fs from "fs";
+import { after, before } from "mocha";
+import * as path from "path";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
+const testResourcesDir = path.join(__dirname, "../../test/resources");
+const definitionTestsSourceDir = path.join(
+    __dirname,
+    "../../../../test/resources/definition-tests",
+);
+
 suite("Definition Test Suite", () => {
+    before(() => {
+        fs.mkdirSync(path.join(testResourcesDir, "model"), { recursive: true });
+        fs.copyFileSync(
+            path.join(definitionTestsSourceDir, "go.mod"),
+            path.join(testResourcesDir, "go.mod"),
+        );
+        fs.copyFileSync(
+            path.join(definitionTestsSourceDir, "model", "model.go"),
+            path.join(testResourcesDir, "model", "model.go"),
+        );
+    });
+
     after(() => {
         vscode.window.showInformationMessage("All definition tests done!");
     });
