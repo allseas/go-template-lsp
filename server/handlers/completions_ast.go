@@ -81,15 +81,17 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
 		return nil
 	}
-	if doc.typedTree == nil || doc.typedTree.Root == nil {
-		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no typed tree")
-		return nil
-	}
 
 	text := doc.text
 	offset := positionToOffset(text, params.Position)
 
 	if !isInsideTemplate(text, offset) {
+		return nil
+	}
+
+	typedTree := doc.typedTreeAt(parse.Pos(offset))
+	if typedTree == nil || typedTree.Root == nil {
+		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no typed tree")
 		return nil
 	}
 
@@ -123,7 +125,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	if sChar == '.' && findOffset > 0 {
 		findOffset--
 	}
-	cur := serverTypes.NodeFind(doc.typedTree.Root, serverTypes.Pos(findOffset))
+	cur := serverTypes.NodeFind(typedTree.Root, serverTypes.Pos(findOffset))
 	if cur == nil {
 		log.Error().Msg("The target node is not found")
 		return nil
