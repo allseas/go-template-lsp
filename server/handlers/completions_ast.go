@@ -36,45 +36,6 @@ const (
 	outputUntyped            // call, index, slice — dynamic, don't restrict
 )
 
-// functionsAccepting maps an outputKind to the curated list of builtin names
-// that semantically accept that kind as a piped input. For builtins all
-// parameters are interface{} so we cannot derive this from signatures alone;
-// for user-defined globals funcAcceptsKind uses concrete param types instead.
-var functionsAccepting = map[outputKind][]string{
-	outputInt: {
-		"eq", "ne", "lt", "le", "gt", "ge",
-		"print", "printf", "println",
-	},
-	outputBool: {
-		"and", "or", "not",
-		"print", "printf", "println",
-	},
-	outputString: {
-		"html", "js", "urlquery",
-		"len",
-		"print", "printf", "println",
-		"index",
-	},
-}
-
-// funcOutputKind returns the output kind produced by the named function,
-// derived from its return-type signature in GlobalFuncs().
-func funcOutputKind(name string) outputKind {
-	fn := serverTypes.GlobalFuncs()[name]
-	if fn == nil {
-		return outputAny
-	}
-	sig, ok := fn.Type().(*types.Signature)
-	if !ok {
-		return outputAny
-	}
-	results := sig.Results()
-	if results.Len() == 0 {
-		return outputAny
-	}
-	return typeToOutputKind(results.At(0).Type())
-}
-
 // funcAcceptsKind reports whether funcName can receive a piped value of kind.
 //
 // For functions with at least one concrete (non-interface{}) parameter the
@@ -122,21 +83,27 @@ func funcAcceptsKind(funcName string, kind outputKind) bool {
 	}
 	return false
 }
-
-// funcsAcceptingKind returns the names of all functions in GlobalFuncs that
-// can receive a piped value of kind, using funcAcceptsKind per entry.
-func funcsAcceptingKind(kind outputKind) []string {
-	if kind == outputAny || kind == outputUntyped {
-		return nil
-	}
-	all := serverTypes.GlobalFuncs()
-	names := make([]string, 0, len(all))
-	for name := range all {
-		if funcAcceptsKind(name, kind) {
-			names = append(names, name)
-		}
-	}
-	return names
+// deprecated, built in output can be derived from the type tree
+var builtinOutput = map[string]outputKind{
+	"len":      outputInt,
+	"not":      outputBool,
+	"and":      outputBool,
+	"or":       outputBool,
+	"eq":       outputBool,
+	"ne":       outputBool,
+	"lt":       outputBool,
+	"le":       outputBool,
+	"gt":       outputBool,
+	"ge":       outputBool,
+	"html":     outputString,
+	"js":       outputString,
+	"urlquery": outputString,
+	"print":    outputString,
+	"printf":   outputString,
+	"println":  outputString,
+	"call":     outputUntyped,
+	"index":    outputUntyped,
+	"slice":    outputUntyped,
 }
 
 // CompletionWithFallback is an entry point that has a fallback option
@@ -217,6 +184,23 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	}
 }
 
+var functionsAccepting = map[outputKind][]string{
+	outputInt: {
+		"eq", "ne", "lt", "le", "gt", "ge",
+		"print", "printf", "println",
+	},
+	outputBool: {
+		"and", "or", "not",
+		"print", "printf", "println",
+	},
+	outputString: {
+		"html", "js", "urlquery",
+		"len",
+		"print", "printf", "println",
+		"index",
+	},
+}
+
 func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	if ctx.Pipe == nil {
 		log.Debug().Msg("no pipe")
@@ -240,7 +224,10 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	if !ok {
 		return outputAny
 	}
-	return funcOutputKind(id.Ident)
+	if kind, found := builtinOutput[id.Ident]; found {
+		return kind
+	}
+	return outputAny
 }
 
 // precedingCmd returns the command whose output flows into the current node
@@ -286,7 +273,10 @@ func pipeOutputInfo(cur serverTypes.Node, isInvoked bool) (types.Type, outputKin
 	}
 	if len(cmd.Args) > 0 {
 		if id, ok := cmd.Args[0].(*serverTypes.IdentifierNode); ok {
-			return nil, funcOutputKind(id.Ident)
+			// TODO: get rid of the deprecated builtin
+			if k, found := builtinOutput[id.Ident]; found {
+				return nil, k
+			}
 		}
 	}
 	return nil, outputAny
@@ -480,8 +470,8 @@ func pipeFilteredItemsT(
 	if effectiveKind == outputAny && inputType != nil {
 		effectiveKind = typeToOutputKind(inputType)
 	}
-	names := funcsAcceptingKind(effectiveKind)
-	if len(names) == 0 {
+	names, ok := functionsAccepting[effectiveKind]
+	if !ok {
 		return append(items, builtinItems(wordRange)...)
 	}
 	for _, name := range names {
