@@ -8,7 +8,7 @@ import { cleanupDocument, createDocument } from "./utils";
 const testResourcesDir = path.join(__dirname, "../../test/resources");
 const definitionTestsSourceDir = path.join(
     __dirname,
-    "../../../../test/resources/definition-tests",
+    "../../../../test/resources/definition-tests-client",
 );
 
 suite("Definition Test Suite", () => {

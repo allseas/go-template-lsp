@@ -226,7 +226,7 @@ func definitionOrderType(t *testing.T) *serverTypes.Tree {
 	t.Helper()
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax | packages.NeedFiles,
-		Dir:  "../../test/resources/definition-tests",
+		Dir:  "../../test/resources/definition-tests-server",
 	}
 	pkgs, err := packages.Load(cfg, "text-template-server/src/model")
 	require.NoError(t, err)
