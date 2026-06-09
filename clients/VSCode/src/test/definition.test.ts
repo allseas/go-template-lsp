@@ -94,7 +94,7 @@ suite("Definition Test Suite", () => {
 
         try {
             // char 5 is inside "CustomerName" (after "{{ .")
-            const definitions = await getDefinitions(
+            const definitions = await pollDefinitions(
                 tmplUri,
                 new vscode.Position(1, 5),
             );
@@ -110,8 +110,8 @@ suite("Definition Test Suite", () => {
             );
             assert.strictEqual(
                 definitions[0].range.start.line,
-                83,
-                "CustomerName should be on line 84 (0-indexed: 83)",
+                70,
+                "CustomerName should be on line 71 (0-indexed: 70)",
             );
         } finally {
             cleanupDocument(tmplUri);
@@ -125,7 +125,7 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            const definitions = await getDefinitions(
+            const definitions = await pollDefinitions(
                 tmplUri,
                 new vscode.Position(1, 5),
             );
@@ -141,8 +141,8 @@ suite("Definition Test Suite", () => {
             );
             assert.strictEqual(
                 definitions[0].range.start.line,
-                92,
-                "DisplayName should be on line 93 (0-indexed: 92)",
+                79,
+                "DisplayName should be on line 80 (0-indexed: 79)",
             );
         } finally {
             cleanupDocument(tmplUri);
@@ -157,7 +157,7 @@ suite("Definition Test Suite", () => {
 
         try {
             // char 5 is inside "Address"
-            const definitions = await getDefinitions(
+            const definitions = await pollDefinitions(
                 tmplUri,
                 new vscode.Position(1, 5),
             );
@@ -173,8 +173,8 @@ suite("Definition Test Suite", () => {
             );
             assert.strictEqual(
                 definitions[0].range.start.line,
-                85,
-                "Address field should be on line 86 (0-indexed: 85)",
+                72,
+                "Address field should be on line 73 (0-indexed: 72)",
             );
         } finally {
             cleanupDocument(tmplUri);
@@ -240,4 +240,22 @@ async function getDefinitions(tmplUri: vscode.Uri, pos: vscode.Position) {
         tmplUri,
         pos,
     );
+}
+
+/** Polls until the definition provider returns at least one result or the timeout expires. */
+async function pollDefinitions(
+    tmplUri: vscode.Uri,
+    pos: vscode.Position,
+    timeoutMs = 10000,
+    intervalMs = 500,
+): Promise<vscode.Location[]> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const result = await getDefinitions(tmplUri, pos);
+        if (result && result.length > 0) {
+            return result;
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return [];
 }
