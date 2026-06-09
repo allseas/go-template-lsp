@@ -203,8 +203,7 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 	case *parse.UndefinedNode:
 		return analyseUndefined(n, parent)
 	default:
-		// Unknown node type
-		return nil
+		panic(fmt.Sprintf("unknown node type: %T", node))
 	}
 }
 
