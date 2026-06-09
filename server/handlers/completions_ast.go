@@ -226,6 +226,7 @@ func pipeOutputInfo(cur serverTypes.Node, isInvoked bool) (types.Type, outputKin
 	}
 	if len(cmd.Args) > 0 {
 		if id, ok := cmd.Args[0].(*serverTypes.IdentifierNode); ok {
+			// TODO: get rid of the deprecated builtin
 			if k, found := builtinOutput[id.Ident]; found {
 				return nil, k
 			}
