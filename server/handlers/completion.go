@@ -14,35 +14,19 @@ import (
 var (
 	variablePattern = regexp.MustCompile(`\$[a-zA-Z_][a-zA-Z0-9_]*`)
 
-	builtinFunctions = []string{
-		"len", "index", "slice", "print", "printf", "println",
-		"urlquery", "html", "js", "eq", "ne", "lt", "gt", "le", "ge",
-		"and", "or", "not", "call",
-	}
-
 	templateKeywords = []string{
 		"range", "if", "with", "else", "end", "template", "block", "define",
 	}
 )
 
-// allGlobalFunctions returns the union of hard-coded builtins and any
-// functions discovered via `//tmpl:func "global"` hints in the workspace.
+// allGlobalFunctions returns the names of all functions available to templates:
+// builtins and any workspace-defined functions from `//tmpl:func "global"` hints.
+// The list is derived from the process-wide GlobalFuncs cache, which is seeded
+// at initialize and refreshed on every *.go file change.
 func allGlobalFunctions() []string {
 	hinted := types.GlobalFuncs()
-	out := make([]string, 0, len(builtinFunctions)+len(hinted))
-	seen := make(map[string]bool, cap(out))
-	for _, fn := range builtinFunctions {
-		if seen[fn] {
-			continue
-		}
-		seen[fn] = true
-		out = append(out, fn)
-	}
+	out := make([]string, 0, len(hinted))
 	for name := range hinted {
-		if seen[name] {
-			continue
-		}
-		seen[name] = true
 		out = append(out, name)
 	}
 	return out

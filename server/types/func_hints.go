@@ -49,7 +49,8 @@ func GlobalFuncs() map[string]*types.Func {
 // LoadGlobalFuncs scans every Go package under workspaceRoot for FuncMap
 // literals annotated with `//tmpl:func "global"` and returns the union of
 // their entries. Values are *types.Func when the signature can be resolved,
-// otherwise nil.
+// otherwise nil. Builtin functions are NOT included; use ComputeGlobalFuncs
+// to obtain the merged set.
 func LoadGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
@@ -68,6 +69,33 @@ func LoadGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
 		}
 	}
 	return out, nil
+}
+
+// ComputeGlobalFuncs returns the full set of functions that should be available
+// to every template: the language builtins merged with any workspace-defined
+// functions discovered via `//tmpl:func "global"` annotations.
+//
+// Workspace-defined names that collide with a builtin are silently dropped, as
+// builtins cannot be shadowed.
+//
+// If workspaceRoot is empty only the builtins are returned.
+func ComputeGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
+	merged := BuiltinFuncs()
+
+	if workspaceRoot == "" {
+		return merged, nil
+	}
+
+	workspace, err := LoadGlobalFuncs(workspaceRoot)
+	if err != nil {
+		return merged, fmt.Errorf("LoadGlobalFuncs: %w", err)
+	}
+	for k, v := range workspace {
+		if _, isBuiltin := merged[k]; !isBuiltin {
+			merged[k] = v
+		}
+	}
+	return merged, nil
 }
 
 // collectGlobalFuncs walks file and merges FuncMap entries marked with

@@ -49,7 +49,7 @@ func DidChangeWatchedFiles(ctx *glsp.Context, params *protocol.DidChangeWatchedF
 		return nil
 	}
 
-	funcs, err := types.LoadGlobalFuncs(WorkspaceRoot)
+	funcs, err := types.ComputeGlobalFuncs(WorkspaceRoot)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to reload global tmpl:func hints")
 		return nil

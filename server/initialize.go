@@ -68,13 +68,14 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 		handlers.WorkspaceRoot = *params.RootPath
 	}
 
-	if handlers.WorkspaceRoot != "" {
-		if funcs, err := types.LoadGlobalFuncs(handlers.WorkspaceRoot); err != nil {
+	// Always seed the cache: builtins first, then workspace-defined globals.
+	{
+		funcs, err := types.ComputeGlobalFuncs(handlers.WorkspaceRoot)
+		if err != nil {
 			log.Warn().Err(err).Msg("failed to load global tmpl:func hints")
-		} else {
-			types.SetGlobalFuncs(funcs)
-			log.Debug().Int("count", len(funcs)).Msg("loaded global tmpl:func hints")
 		}
+		types.SetGlobalFuncs(funcs)
+		log.Debug().Int("count", len(funcs)).Msg("global funcs cache seeded")
 	}
 	capabilities := handler.CreateServerCapabilities()
 

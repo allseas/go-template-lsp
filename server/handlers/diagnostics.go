@@ -131,26 +131,28 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 				funcName := identNode.Ident
 				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
 				offset := int(identNode.Position())
-				if _, exists := builtinOutput[funcName]; !exists {
-					if _, hinted := types.GlobalFuncs()[funcName]; !hinted {
-						diagnostics = append(
-							diagnostics,
-							createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
-						)
-					}
-				} else if currentKind := pipeOutputKind(ctx, false); currentKind != outputAny && currentKind != outputUntyped {
-					isMatch := false
-					for _, allowed := range functionsAccepting[currentKind] {
-						if allowed == funcName {
-							isMatch = true
-							break
+				if _, known := types.GlobalFuncs()[funcName]; !known {
+					diagnostics = append(
+						diagnostics,
+						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
+					)
+				} else if _, isBuiltin := builtinOutput[funcName]; isBuiltin {
+					currentKind := pipeOutputKind(ctx, false)
+					if currentKind != outputAny && currentKind != outputUntyped {
+						isMatch := false
+						for _, allowed := range functionsAccepting[currentKind] {
+							if allowed == funcName {
+								isMatch = true
+								break
+							}
 						}
-					}
-					if !isMatch {
-						diagnostics = append(
-							diagnostics,
-							createDiagnostic(msgTypeMismatch(text, offset, funcName), rng, true),
-						)
+						if !isMatch {
+							msg := msgTypeMismatch(text, offset, funcName)
+							diagnostics = append(
+								diagnostics,
+								createDiagnostic(msg, rng, true),
+							)
+						}
 					}
 				}
 			}

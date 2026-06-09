@@ -655,29 +655,19 @@ func methodCompletionItems(
 	return items
 }
 
-// builtinNames is the static list of builtins surfaced when nothing in the pipe
-// constrains the suggestion to a typed set.
-var builtinNames = []string{
-	"and", "call", "html", "index", "slice", "js", "len",
-	"not", "or", "print", "printf", "println", "urlquery",
-	"eq", "ne", "lt", "le", "gt", "ge", "if", "range",
-}
+// templateActionNames lists the Go-template control keywords that should be
+// suggested alongside functions when no pipe constraint is active.
+// These are NOT in any FuncMap so they are kept separately from GlobalFuncs.
+var templateActionNames = []string{"if", "range"}
 
 func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
-	items := make([]protocol.CompletionItem, 0, len(builtinNames))
-	for _, name := range builtinNames {
+	funcs := serverTypes.GlobalFuncs()
+	items := make([]protocol.CompletionItem, 0, len(funcs)+len(templateActionNames))
+	for name := range funcs {
 		items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
 	}
-	seen := make(map[string]bool, len(builtinNames))
-	for _, name := range builtinNames {
-		seen[name] = true
-	}
-	for name := range serverTypes.GlobalFuncs() {
-		if seen[name] {
-			continue
-		}
-		seen[name] = true
-		items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
+	for _, name := range templateActionNames {
+		items = append(items, newItem(name, protocol.CompletionItemKindKeyword, wordRange))
 	}
 	return items
 }
