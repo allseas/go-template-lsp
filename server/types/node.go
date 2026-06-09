@@ -190,7 +190,13 @@ func (l *ListNode) CopyList() *ListNode {
 	if l == nil {
 		return l
 	}
-	n := &ListNode{NodeType: NodeList, Pos: l.Pos, endPos: l.endPos, parent: l.parent, isElse: l.isElse}
+	n := &ListNode{
+		NodeType: NodeList,
+		Pos:      l.Pos,
+		endPos:   l.endPos,
+		parent:   l.parent,
+		isElse:   l.isElse,
+	}
 	for _, elem := range l.Nodes {
 		n.append(elem.Copy())
 	}
@@ -377,7 +383,14 @@ func (p *PipeNode) CopyPipe() *PipeNode {
 	for i, d := range p.Decl {
 		vars[i] = d.Copy().(*VariableNode)
 	}
-	n := &PipeNode{NodeType: NodePipe, Pos: p.Pos, endPos: p.endPos, parent: p.parent, Line: p.Line, Decl: vars}
+	n := &PipeNode{
+		NodeType: NodePipe,
+		Pos:      p.Pos,
+		endPos:   p.endPos,
+		parent:   p.parent,
+		Line:     p.Line,
+		Decl:     vars,
+	}
 	n.IsAssign = p.IsAssign
 	for _, c := range p.Cmds {
 		n.append(c.Copy().(*CommandNode))
@@ -490,7 +503,13 @@ func (c *CommandNode) Copy() Node {
 	if c == nil {
 		return c
 	}
-	n := &CommandNode{NodeType: NodeCommand, Pos: c.Pos, endPos: c.endPos, parent: c.parent, isElse: c.isElse}
+	n := &CommandNode{
+		NodeType: NodeCommand,
+		Pos:      c.Pos,
+		endPos:   c.endPos,
+		parent:   c.parent,
+		isElse:   c.isElse,
+	}
 	for _, c := range c.Args {
 		n.append(c.Copy())
 	}
@@ -702,7 +721,13 @@ func (n *NilNode) Parent() Node {
 }
 
 func (n *NilNode) Copy() Node {
-	return &NilNode{NodeType: NodeNil, Pos: n.Pos, endPos: n.endPos, parent: n.parent, isElse: n.isElse}
+	return &NilNode{
+		NodeType: NodeNil,
+		Pos:      n.Pos,
+		endPos:   n.endPos,
+		parent:   n.parent,
+		isElse:   n.isElse,
+	}
 }
 
 func (n *NilNode) ValueType() types.Type {

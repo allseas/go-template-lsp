@@ -22,7 +22,15 @@ const (
 )
 
 // TokenTypes is the legend of semantic token types advertised to LSP clients.
-var TokenTypes = []string{"keyword", "function", "variable", "property", "string", "number", "comment"}
+var TokenTypes = []string{
+	"keyword",
+	"function",
+	"variable",
+	"property",
+	"string",
+	"number",
+	"comment",
+}
 
 // Token modifier bit flags.
 const (
@@ -47,7 +55,10 @@ type rawToken struct {
 	modifiers uint32
 }
 
-func SemanticTokensFull(_ *glsp.Context, params *protocol.SemanticTokensParams) (*protocol.SemanticTokens, error) {
+func SemanticTokensFull(
+	_ *glsp.Context,
+	params *protocol.SemanticTokensParams,
+) (*protocol.SemanticTokens, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !ok || doc.typedTree == nil || doc.typedTree.Root == nil {
 		return nil, nil
@@ -95,7 +106,13 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 	case *serverTypes.PipeNode:
 		for _, decl := range n.Decl {
 			if decl != nil {
-				emitToken(tokens, int(decl.Position()), len(decl.String()), ttVariable, tmDeclaration)
+				emitToken(
+					tokens,
+					int(decl.Position()),
+					len(decl.String()),
+					ttVariable,
+					tmDeclaration,
+				)
 			}
 		}
 		for _, cmd := range n.Cmds {
