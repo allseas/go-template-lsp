@@ -3,6 +3,7 @@ package handlers
 import (
 	"strings"
 	parse "text-template-parser"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -131,10 +132,12 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
 				offset := int(identNode.Position())
 				if _, exists := builtinOutput[funcName]; !exists {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
-					)
+					if _, hinted := types.GlobalFuncs()[funcName]; !hinted {
+						diagnostics = append(
+							diagnostics,
+							createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
+						)
+					}
 				} else if currentKind := pipeOutputKind(ctx, false); currentKind != outputAny && currentKind != outputUntyped {
 					isMatch := false
 					for _, allowed := range functionsAccepting[currentKind] {
