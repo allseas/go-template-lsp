@@ -1345,3 +1345,35 @@ func init() {
 		},
 	)
 }
+
+type multiDefineCompletionTestCase struct {
+	name string
+	needle string
+	occurrence int
+	contains   []string
+	notContains []string
+}
+
+var multiDefineCompletionTestCases = []multiDefineCompletionTestCase{
+	{
+		name:        "root tree dot completion suggests Order fields",
+		needle:      "ROOT: {{ .",
+		occurrence:  0,
+		contains:    []string{"CustomerName", "ID", "Items", "Address"},
+		notContains: []string{"SKU", "Street"},
+	},
+	{
+		name:        "ItemLine define dot completion suggests Item fields",
+		needle:      "- {{ .",
+		occurrence:  0,
+		contains:    []string{"SKU", "Name", "Qty", "UnitPrice", "Total"},
+		notContains: []string{"CustomerName", "Street"},
+	},
+	{
+		name:        "AddressBlock define dot completion suggests Address fields",
+		needle:      "model.Address*/}}\n{{ .",
+		occurrence:  0,
+		contains:    []string{"Street", "City", "Country", "Zip"},
+		notContains: []string{"CustomerName", "SKU"},
+	},
+}

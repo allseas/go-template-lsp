@@ -215,10 +215,15 @@ func TestDefinitionNoDefinition(t *testing.T) {
 // bypassing the type-hint loading mechanism that requires a workspace root.
 func setDocWithType(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	t.Helper()
-	tree, err := tryParse(src)
+	tree, treeSet, err := tryParse(src)
 	require.NoError(t, err)
 	store.mu.Lock()
-	store.docs[uri] = &document{text: src, tree: tree, loadedType: lt}
+	store.docs[uri] = &document{
+		text:       src,
+		tree:       tree,
+		trees:      treeSet,
+		loadedType: lt,
+	}
 	store.mu.Unlock()
 }
 

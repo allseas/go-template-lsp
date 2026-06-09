@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"strings"
 	"sync"
 	"testing"
+
+	parse "text-template-parser"
 
 	"github.com/stretchr/testify/assert"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -132,6 +135,50 @@ func TestDocumentStore(t *testing.T) {
 		_, ok := ds.Get(uriToDelete)
 		assert.False(t, ok, "Document should be deleted from the store")
 	})
+}
+
+func TestDocumentMultipleDefines(t *testing.T) {
+	src := "{{- define \"A\"}}\n" +
+		"{{- /*gotype: cg/model.A*/}}\n" +
+		"alpha-body\n" +
+		"{{- end }}\n" +
+		"{{- define \"B\" }}\n" +
+		"{{- /*gotype: cg/model.B*/}}\n" +
+		"beta-body\n" +
+		"{{- end }}\n"
+
+	tree, treeSet, err := tryParse(src)
+	assert.NoError(t, err)
+	assert.NotNil(t, tree)
+	// 3 entries: root + A + B
+	assert.Contains(t, treeSet, "A")
+	assert.Contains(t, treeSet, "B")
+	assert.Contains(t, treeSet, tree.Name)
+
+	// per-tree type hint lookup
+	rootHint := hintTypeForTree(src, tree, true)
+	hintA := hintTypeForTree(src, treeSet["A"], false)
+	hintB := hintTypeForTree(src, treeSet["B"], false)
+	assert.Equal(t, "", rootHint, "no hint expected on first line of file")
+	assert.Equal(t, "cg/model.A", hintA)
+	assert.Equal(t, "cg/model.B", hintB)
+
+	// treeAt selects the right tree for an offset inside each define
+	doc := &document{text: src, tree: tree, trees: treeSet}
+	offA := strings.Index(src, "alpha-body")
+	offB := strings.Index(src, "beta-body")
+	assert.Equal(t, treeSet["A"], doc.treeAt(parse.Pos(offA)))
+	assert.Equal(t, treeSet["B"], doc.treeAt(parse.Pos(offB)))
+}
+
+func TestDocumentRootHintOnFirstLine(t *testing.T) {
+	src := "{{- /*gotype: cg/model.Root*/ -}}\nhello {{ . }}\n"
+	tree, treeSet, err := tryParse(src)
+	assert.NoError(t, err)
+	assert.NotNil(t, tree)
+	hint := hintTypeForTree(src, tree, true)
+	assert.Equal(t, "cg/model.Root", hint)
+	_ = treeSet
 }
 
 func TestDidOpenAndChange(t *testing.T) {
