@@ -35,6 +35,7 @@ func setupHandlers() {
 		TextDocumentDefinition:          handlers.Definition,
 		SetTrace:                        handlers.SetTrace,
 		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
+		WorkspaceDidChangeWatchedFiles:  handlers.DidChangeWatchedFiles,
 		TextDocumentReferences:          handlers.References,
 		TextDocumentHover:               handlers.Hover,
 	}
@@ -108,6 +109,7 @@ func initialized(context *glsp.Context, _ *protocol.InitializedParams) error {
 		if err := handlers.RequestConfig(ctx); err != nil {
 			log.Error().Err(err).Msg("failed to request config")
 		}
+		handlers.RegisterGoFileWatcher(ctx)
 	}(context)
 
 	return nil
