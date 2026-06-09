@@ -79,7 +79,7 @@ func buildTypedTree(tree *parse.Tree, lt *types.Tree) *types.Tree {
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	t := types.NewTree(*tree, nil, dotType, pkg)
+	t := types.NewTree(*tree, types.GlobalFuncs(), dotType, pkg)
 	if lt != nil {
 		t.DotType = lt.DotType
 		t.Pkg = lt.Pkg

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"text-template-server/handlers"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -64,6 +65,15 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 		handlers.WorkspaceRoot = path
 	} else if params.RootPath != nil {
 		handlers.WorkspaceRoot = *params.RootPath
+	}
+
+	if handlers.WorkspaceRoot != "" {
+		if funcs, err := types.LoadGlobalFuncs(handlers.WorkspaceRoot); err != nil {
+			log.Warn().Err(err).Msg("failed to load global tmpl:func hints")
+		} else {
+			types.SetGlobalFuncs(funcs)
+			log.Debug().Int("count", len(funcs)).Msg("loaded global tmpl:func hints")
+		}
 	}
 	capabilities := handler.CreateServerCapabilities()
 
