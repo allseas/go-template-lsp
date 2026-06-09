@@ -1,9 +1,24 @@
 package types
 
 import (
+	"fmt"
 	"go/types"
 	parse "text-template-parser"
 )
+
+type analyseNodePanicTestCase struct {
+	name      string
+	node      parse.Node
+	wantPanic string
+}
+
+var analyseNodePanicTestCases = []analyseNodePanicTestCase{
+	{
+		name:      "unknown node type panics",
+		node:      &parse.BranchNode{},
+		wantPanic: fmt.Sprintf("unknown node type: %T", &parse.BranchNode{}),
+	},
+}
 
 type analyseTestCase struct {
 	name           string

@@ -304,7 +304,10 @@ func suggest(
 			// TODO: not always cmd.args - 2
 			arg := cmd.Args[len(cmd.Args)-2]
 			switch arg.(type) {
-			case *serverTypes.FieldNode, *serverTypes.ChainNode, *serverTypes.VariableNode:
+			case *serverTypes.FieldNode,
+				*serverTypes.ChainNode,
+				*serverTypes.VariableNode,
+				*serverTypes.PipeNode:
 				if t := arg.ValueType(); t != nil {
 					return fieldChainItemsT(t, wordRange)
 				}

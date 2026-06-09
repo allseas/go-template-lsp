@@ -200,9 +200,20 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 		return analyseContinue(n, parent, ctx)
 	case *parse.PipeNode:
 		return analysePipe(n, parent, ctx)
+	case *parse.UndefinedNode:
+		return analyseUndefined(n, parent)
 	default:
-		// Unknown node type
-		return nil
+		panic(fmt.Sprintf("unknown node type: %T", node))
+	}
+}
+
+func analyseUndefined(n *parse.UndefinedNode, parent Node) Node {
+	return &UndefinedNode{
+		NodeType: NodeUndefined,
+		Pos:      Pos(n.Position()),
+		parent:   parent,
+		Err:      n.Err,
+		str:      n.String(),
 	}
 }
 
