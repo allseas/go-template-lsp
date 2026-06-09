@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"go/token"
 	"go/types"
 
 	parse "text-template-parser"
@@ -23,6 +24,7 @@ type Tree struct {
 	DotType    *types.Named           // optional: type of dot context (from gotype hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
+	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
 }
 
 // ErrorType categorizes the type of an error for customization of inspections.
@@ -200,9 +202,20 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 		return analyseContinue(n, parent, ctx)
 	case *parse.PipeNode:
 		return analysePipe(n, parent, ctx)
+	case *parse.UndefinedNode:
+		return analyseUndefined(n, parent)
 	default:
-		// Unknown node type
-		return nil
+		panic(fmt.Sprintf("unknown node type: %T", node))
+	}
+}
+
+func analyseUndefined(n *parse.UndefinedNode, parent Node) Node {
+	return &UndefinedNode{
+		NodeType: NodeUndefined,
+		Pos:      Pos(n.Position()),
+		parent:   parent,
+		Err:      n.Err,
+		str:      n.String(),
 	}
 }
 
@@ -224,38 +237,36 @@ func analyseBreak(n *parse.BreakNode, parent Node, _ *analysisCtx) Node {
 	}
 }
 
-// TODO
 func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node {
-	return &TemplateNode{
+	t := &TemplateNode{
 		NodeType: NodeTemplate,
 		Pos:      Pos(n.Position()),
 		Line:     n.Line,
 		Name:     n.Name,
-		Pipe:     analysePipe(n.Pipe, parent, ctx),
 		parent:   parent,
 	}
+	t.Pipe = analysePipe(n.Pipe, t, ctx)
+	return t
 }
 
 func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
-	keepDot := ctx.dotType
-	keepVars := len(ctx.vars)
-	pipe := analysePipe(n.Pipe, parent, ctx)
-	ctx.dotType = pipe.typ
-	list := analyseList(n.List, parent, ctx)
-	ctx.dotType = keepDot
-	ctx.vars = ctx.vars[:keepVars]
-	elseList := analyseList(n.ElseList, parent, ctx)
-
-	return &WithNode{
+	w := &WithNode{
 		BranchNode{
 			NodeType: NodeWith,
 			Pos:      Pos(n.Position()),
 			Line:     n.Line,
-			Pipe:     pipe,
-			List:     list,
-			ElseList: elseList,
+			parent:   parent,
 		},
 	}
+	keepDot := ctx.dotType
+	keepVars := len(ctx.vars)
+	w.Pipe = analysePipe(n.Pipe, w, ctx)
+	ctx.dotType = w.Pipe.typ
+	w.List = analyseList(n.List, w, ctx)
+	ctx.dotType = keepDot
+	ctx.vars = ctx.vars[:keepVars]
+	w.ElseList = analyseList(n.ElseList, w, ctx)
+	return w
 }
 
 func getRangeableType(typ types.Type) types.Type {
@@ -296,53 +307,52 @@ func (ctx *analysisCtx) errorf(node Node, typ ErrorType, format string, args ...
 }
 
 func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
-	keepDot := ctx.dotType
-	keepVars := len(ctx.vars)
-	pipe := analysePipe(n.Pipe, parent, ctx)
-	typ := getRangeableType(pipe.typ)
-	if pipe.typ == nil {
-		ctx.errorf(pipe, ErrorTypeInvalidRange, "cannot range over untyped value")
-	} else if typ == nil {
-		ctx.errorf(pipe, ErrorTypeInvalidRange, "cannot range over type %s", pipe.typ.String())
-		ctx.dotType = nil
-	} else {
-		ctx.dotType = typ
-		// override the range var if it was set
-		if len(pipe.Decl) == 1 {
-			pipe.Decl[0].typ = typ
-		} else if len(pipe.Decl) == 2 {
-			pipe.Decl[1].typ = typ
-		}
-	}
-	list := analyseList(n.List, parent, ctx)
-	ctx.dotType = keepDot
-	ctx.vars = ctx.vars[:keepVars]
-	elseList := analyseList(n.ElseList, parent, ctx)
-
-	return &RangeNode{
+	r := &RangeNode{
 		BranchNode{
 			NodeType: NodeRange,
 			Pos:      Pos(n.Position()),
 			Line:     n.Line,
-			Pipe:     pipe,
-			List:     list,
-			ElseList: elseList,
+			parent:   parent,
 		},
 	}
+	keepDot := ctx.dotType
+	keepVars := len(ctx.vars)
+	r.Pipe = analysePipe(n.Pipe, r, ctx)
+	typ := getRangeableType(r.Pipe.typ)
+	if r.Pipe.typ == nil {
+		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over untyped value")
+	} else if typ == nil {
+		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over type %v", r.Pipe.typ)
+		ctx.dotType = nil
+	} else {
+		ctx.dotType = typ
+		// override the range var if it was set
+		if len(r.Pipe.Decl) == 1 {
+			r.Pipe.Decl[0].typ = typ
+		} else if len(r.Pipe.Decl) == 2 {
+			r.Pipe.Decl[1].typ = typ
+		}
+	}
+	r.List = analyseList(n.List, r, ctx)
+	ctx.dotType = keepDot
+	ctx.vars = ctx.vars[:keepVars]
+	r.ElseList = analyseList(n.ElseList, r, ctx)
+	return r
 }
 
 func analyseIf(n *parse.IfNode, parent Node, ctx *analysisCtx) Node {
-	keepVars := len(ctx.vars)
 	i := &IfNode{
 		BranchNode{
 			NodeType: NodeIf,
 			Pos:      Pos(n.Position()),
 			Line:     n.Line,
-			Pipe:     analysePipe(n.Pipe, parent, ctx),
-			List:     analyseList(n.List, parent, ctx),
-			ElseList: analyseList(n.ElseList, parent, ctx),
+			parent:   parent,
 		},
 	}
+	keepVars := len(ctx.vars)
+	i.Pipe = analysePipe(n.Pipe, i, ctx)
+	i.List = analyseList(n.List, i, ctx)
+	i.ElseList = analyseList(n.ElseList, i, ctx)
 
 	ctx.vars = ctx.vars[:keepVars] // Pop any variables declared in this if block
 	return i
@@ -411,18 +421,17 @@ func analyseDot(n *parse.DotNode, parent Node, ctx *analysisCtx) Node {
 }
 
 func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
-	keepVars := len(ctx.vars)
-	base := analyseNode(n.Node, parent, ctx)
-	ctx.vars = ctx.vars[:keepVars] // Pop any variables declared in the base node
 	cn := &ChainNode{
 		NodeType: NodeChain,
 		Pos:      Pos(n.Position()),
-		Node:     base,
 		Field:    n.Field,
 		parent:   parent,
 	}
+	keepVars := len(ctx.vars)
+	cn.Node = analyseNode(n.Node, cn, ctx)
+	ctx.vars = ctx.vars[:keepVars]
 
-	baseType := getNodeType(base)
+	baseType := getNodeType(cn.Node)
 	if baseType == nil || len(n.Field) == 0 {
 		return cn
 	}
@@ -505,15 +514,34 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 	}
 
 	name := n.Ident
-	typ := ctx.funcs[name]
-
-	if typ != nil {
-		ident.typ = typ.Type()
-	} else {
-		ctx.errorf(ident, ErrorTypeInvalidFunction, "undefined function: %s", name)
+	if fn := ctx.funcs[name]; fn != nil {
+		ident.typ = fn.Type()
+		return ident
 	}
 
+	// if no function with that name -> resolve a method on the current dot type
+	if named := dotAsNamed(ctx.dotType); named != nil {
+		for _, m := range NamedMethods(named) {
+			if m.Name == name && m.Func != nil {
+				ident.typ = m.Func.Type()
+				return ident
+			}
+		}
+	}
+
+	ctx.errorf(ident, ErrorTypeInvalidFunction, "undefined function: %s", name)
 	return ident
+}
+
+func dotAsNamed(t types.Type) *types.Named {
+	if t == nil {
+		return nil
+	}
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	n, _ := t.(*types.Named)
+	return n
 }
 
 func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *VariableNode {
@@ -624,12 +652,16 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 
 		// TODO: type checking between pipe segments
 		resType := getNodeType(typePipe.Cmds[len(typePipe.Cmds)-1])
-		switch resType.Underlying().(type) {
-		case *types.Signature:
-			typePipe.typ = resType.Underlying().(*types.Signature).Results().At(0).Type()
-		default:
-			// not sure how to handle this, should be impossible, do we return nil or invalid?
-			typePipe.typ = types.Typ[types.Invalid]
+		if resType == nil {
+			typePipe.typ = nil
+		} else {
+			switch resType.Underlying().(type) {
+			case *types.Signature:
+				typePipe.typ = resType.Underlying().(*types.Signature).Results().At(0).Type()
+			default:
+				// not sure how to handle this, should be impossible, do we return nil or invalid?
+				typePipe.typ = types.Typ[types.Invalid]
+			}
 		}
 	}
 

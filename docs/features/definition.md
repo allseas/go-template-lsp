@@ -10,7 +10,8 @@ The definition provider enables jump-to-definition (Ctrl+Click) for nodes. It is
 | `{{ $x := 0 }}` (variable declaration)          | Shows all declarations of `$x` (same as usage - IDE shows references) |
 | `.` inside `{{ range .Items }}...{{ . }}...end` | Jumps to the `range` pipe that redefines the dot context              |
 | `.` inside `{{ with .Obj }}...{{ . }}...end`    | Jumps to the `with` pipe that redefines the dot context               |
-| `.FieldName` (field access)                     | No in-template definition (field is defined in Go source)             |
+| `.FieldName` (field access)                     | Jumps to the field or method declaration in the Go source file        |
+| `.Nested.Field` (nested field access)           | Jumps to whichever identifier the cursor is on                        |
 
 ## Supported node types
 
@@ -37,4 +38,17 @@ When the cursor is on a `DotNode`, the handler uses `buildPath` to reconstruct t
 
 ### Fields (`.FieldName`)
 
-Field nodes refer to fields on the Go data structure passed to the template. Since there is no in-template definition, the handler returns `nil` (no result).
+When the cursor is on a `FieldNode`, the handler resolves the Go type using the `gotype` hint comment (e.g. `{{/*gotype: cg/model.Order*/}}`) and calls `gotypes.LookupFieldOrMethod` to locate the field or method declaration in the Go source. It returns a `Location` pointing to the exact line in the Go source file.
+
+For chained access like `.Address.City`, the handler determines which identifier the cursor is over by comparing byte offsets, resolves each intermediate type in turn, and jumps to the correct target.
+
+Methods are also supported: the handler follows the method's return type when resolving chained access through a method call.
+
+If no `gotype` hint is present, or the type cannot be loaded, the handler returns `nil`.
+
+```gotmpl
+{{/*gotype: cg/model.Order*/}}
+{{ .CustomerName }}   {{-/* ctrl+click jumps to CustomerName field in model.go */-}}
+{{ .DisplayName }}    {{-/* ctrl+click jumps to DisplayName method in model.go */-}}
+{{ .Address.City }}   {{-/* ctrl+click on Address → Address field; on City → City field */-}}
+```

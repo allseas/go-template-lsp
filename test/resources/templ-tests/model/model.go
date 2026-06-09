@@ -8,6 +8,24 @@ type Address struct {
 	City    string
 	Country string
 	Zip     string
+	Info    InfoS
+}
+
+type InfoS struct {
+	Info1 string
+	Info2 string
+	Desc  Description
+}
+
+// Copy returns a copy of the address.
+func (a Address) Copy() Address {
+	return Address{
+		Street:  a.Street,
+		City:    a.City,
+		Country: a.Country,
+		Zip:     a.Zip,
+		Info:    a.Info,
+	}
 }
 
 // Line returns a single-line formatted address.
@@ -25,12 +43,23 @@ func (a Address) ZipCode() string {
 	return a.Zip
 }
 
+type Description struct {
+	Long  string
+	Short string
+	Tags  []string
+}
+
+func (d Description) Summarize() string {
+	return "You are exactly right! It's not just ... -- it's ..."
+}
+
 // Item is one line in an order.
 type Item struct {
 	SKU       string
 	Name      string
 	Qty       int
 	UnitPrice float64
+	Desc      Description
 }
 
 // Label returns a short display label for the item.

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"go/token"
 	"go/types"
 	"io"
 	"regexp"
@@ -79,9 +80,11 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 	importPath, typeName := splitTypeHint(hint)
 
 	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
+	fset := token.NewFileSet()
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes,
 		Dir:  workspaceRoot,
+		Fset: fset,
 	}
 
 	pkgs, err := packages.Load(cfg, importPath)
@@ -107,7 +110,7 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
 	}
 
-	tree := &Tree{DotType: named, Pkg: pkg.Types}
+	tree := &Tree{DotType: named, Pkg: pkg.Types, Fset: fset}
 	return tree, nil
 }
 

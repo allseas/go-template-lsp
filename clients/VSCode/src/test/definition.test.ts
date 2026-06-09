@@ -1,13 +1,27 @@
 import * as assert from "assert";
+import * as fs from "fs";
 import { after, before } from "mocha";
+import * as path from "path";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
-const waitTime = 300;
+const testResourcesDir = path.join(__dirname, "../../test/resources");
+const definitionTestsSourceDir = path.join(
+    __dirname,
+    "../../../../test/resources/definition-tests-client",
+);
 
 suite("Definition Test Suite", () => {
-    before(async () => {
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
+    before(() => {
+        fs.mkdirSync(path.join(testResourcesDir, "model"), { recursive: true });
+        fs.copyFileSync(
+            path.join(definitionTestsSourceDir, "go.mod"),
+            path.join(testResourcesDir, "go.mod"),
+        );
+        fs.copyFileSync(
+            path.join(definitionTestsSourceDir, "model", "model.go"),
+            path.join(testResourcesDir, "model", "model.go"),
+        );
     });
 
     after(() => {
@@ -21,12 +35,7 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, waitTime));
-
-            const definitions = await vscode.commands.executeCommand<
-                vscode.Location[]
-            >(
-                "vscode.executeDefinitionProvider",
+            const definitions = await getDefinitions(
                 tmplUri,
                 new vscode.Position(1, 4),
             );
@@ -53,13 +62,8 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, waitTime));
-
             // Execute definition provider on last $test usage (line 3, char 4)
-            const definitions = await vscode.commands.executeCommand<
-                vscode.Location[]
-            >(
-                "vscode.executeDefinitionProvider",
+            const definitions = await getDefinitions(
                 tmplUri,
                 new vscode.Position(3, 4),
             );
@@ -82,13 +86,7 @@ suite("Definition Test Suite", () => {
         );
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, waitTime));
-
-            // Execute definition provider on the dot (line 1, char 3)
-            const definitions = await vscode.commands.executeCommand<
-                vscode.Location[]
-            >(
-                "vscode.executeDefinitionProvider",
+            const definitions = await getDefinitions(
                 tmplUri,
                 new vscode.Position(1, 3),
             );
@@ -108,3 +106,10 @@ suite("Definition Test Suite", () => {
         }
     });
 });
+async function getDefinitions(tmplUri: vscode.Uri, pos: vscode.Position) {
+    return await vscode.commands.executeCommand<vscode.Location[]>(
+        "vscode.executeDefinitionProvider",
+        tmplUri,
+        pos,
+    );
+}
