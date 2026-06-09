@@ -83,6 +83,7 @@ func funcAcceptsKind(funcName string, kind outputKind) bool {
 	}
 	return false
 }
+
 // deprecated, built in output can be derived from the type tree
 var builtinOutput = map[string]outputKind{
 	"len":      outputInt,

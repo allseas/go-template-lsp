@@ -19,11 +19,8 @@ var (
 	}
 )
 
-// allGlobalFunctions returns the names of all functions available to templates:
-// builtins and any workspace-defined functions from `//tmpl:func "global"` hints.
-// The list is derived from the process-wide GlobalFuncs cache, which is seeded
-// at initialize and refreshed on every *.go file change.
-func allGlobalFunctions() []string {
+// globalFunctionNames returns the names of all global functions
+func globalFunctionNames() []string {
 	hinted := types.GlobalFuncs()
 	out := make([]string, 0, len(hinted))
 	for name := range hinted {
@@ -77,7 +74,7 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 
 	vars := extractVariables(text, offset)
 
-	globalFns := allGlobalFunctions()
+	globalFns := globalFunctionNames()
 
 	items := make([]protocol.CompletionItem, 0, len(vars)+len(globalFns))
 	seen := make(map[string]bool)
