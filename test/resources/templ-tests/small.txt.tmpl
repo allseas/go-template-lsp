@@ -2,7 +2,19 @@
 
 {{ $test := 0 }}
 
-{{ .Address.Country }}
+{{ .CustomerName }}
+
+{{ .DisplayName }}
+
+{{ range .Items }}
+    {{ .Desc }}
+{{ end }}
+
+{{ with .Address }}
+    {{ .Country }}
+{{ end }}
+
+{{ .Address.Desc.Long }}
 
 {{ $test }}
 
