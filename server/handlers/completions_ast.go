@@ -668,6 +668,17 @@ func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
 	for _, name := range builtinNames {
 		items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
 	}
+	seen := make(map[string]bool, len(builtinNames))
+	for _, name := range builtinNames {
+		seen[name] = true
+	}
+	for name := range serverTypes.GlobalFuncs() {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
+	}
 	return items
 }
 

@@ -4,6 +4,7 @@ package handlers
 import (
 	"regexp"
 	"strings"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -13,7 +14,7 @@ import (
 var (
 	variablePattern = regexp.MustCompile(`\$[a-zA-Z_][a-zA-Z0-9_]*`)
 
-	globalFunctions = []string{
+	builtinFunctions = []string{
 		"len", "index", "slice", "print", "printf", "println",
 		"urlquery", "html", "js", "eq", "ne", "lt", "gt", "le", "ge",
 		"and", "or", "not", "call",
@@ -23,6 +24,29 @@ var (
 		"range", "if", "with", "else", "end", "template", "block", "define",
 	}
 )
+
+// allGlobalFunctions returns the union of hard-coded builtins and any
+// functions discovered via `//tmpl:func "global"` hints in the workspace.
+func allGlobalFunctions() []string {
+	hinted := types.GlobalFuncs()
+	out := make([]string, 0, len(builtinFunctions)+len(hinted))
+	seen := make(map[string]bool, cap(out))
+	for _, fn := range builtinFunctions {
+		if seen[fn] {
+			continue
+		}
+		seen[fn] = true
+		out = append(out, fn)
+	}
+	for name := range hinted {
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
+}
 
 // completion handles LSP "textDocument/completion" requests by identifying
 // the current template context and returning relevant globalFunctions and variable names.
@@ -69,7 +93,9 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 
 	vars := extractVariables(text, offset)
 
-	items := make([]protocol.CompletionItem, 0, len(vars)+len(globalFunctions))
+	globalFns := allGlobalFunctions()
+
+	items := make([]protocol.CompletionItem, 0, len(vars)+len(globalFns))
 	seen := make(map[string]bool)
 
 	varKind := protocol.CompletionItemKindVariable
@@ -91,7 +117,7 @@ func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error)
 		})
 	}
 
-	for _, fn := range globalFunctions {
+	for _, fn := range globalFns {
 		fnLabel := fn
 		items = append(items, protocol.CompletionItem{
 			Label:      fn,
