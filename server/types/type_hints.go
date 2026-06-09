@@ -78,9 +78,12 @@ type ParamType struct {
 }
 
 // goEnv returns the current process environment, augmenting PATH with the
-// directory of the Go binary if it is not already resolvable. This ensures
-// that packages.Load can invoke `go list` even when the server process is
-// started without the Go toolchain on its PATH.
+// directory of the Go binary if it is not already resolvable. It also mutates
+// the process PATH (os.Setenv) because golang.org/x/tools/go/packages calls
+// exec.LookPath("go") against the *process* PATH (not cfg.Env) before
+// invoking `go list`. This is needed when the server is spawned by a client
+// (e.g. VS Code's test runner) that does not inherit the shell PATH where
+// the Go toolchain lives.
 func goEnv() []string {
 	if _, err := exec.LookPath("go"); err == nil {
 		return os.Environ()
@@ -94,8 +97,9 @@ func goEnv() []string {
 	}
 	for _, dir := range candidates {
 		if _, statErr := os.Stat(filepath.Join(dir, "go")); statErr == nil {
-			env := os.Environ()
-			return append(env, "PATH="+dir+":"+os.Getenv("PATH"))
+			newPATH := dir + string(os.PathListSeparator) + os.Getenv("PATH")
+			_ = os.Setenv("PATH", newPATH)
+			return os.Environ()
 		}
 	}
 	return os.Environ()
