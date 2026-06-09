@@ -136,17 +136,10 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 						diagnostics,
 						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
 					)
-				} else if _, isBuiltin := builtinOutput[funcName]; isBuiltin {
+				} else {
 					currentKind := pipeOutputKind(ctx, false)
 					if currentKind != outputAny && currentKind != outputUntyped {
-						isMatch := false
-						for _, allowed := range functionsAccepting[currentKind] {
-							if allowed == funcName {
-								isMatch = true
-								break
-							}
-						}
-						if !isMatch {
+						if !funcAcceptsKind(funcName, currentKind) {
 							msg := msgTypeMismatch(text, offset, funcName)
 							diagnostics = append(
 								diagnostics,

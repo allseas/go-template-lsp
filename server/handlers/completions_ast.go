@@ -36,27 +36,107 @@ const (
 	outputUntyped            // call, index, slice — dynamic, don't restrict
 )
 
-// deprecated, built in output can be derived from the type tree
-var builtinOutput = map[string]outputKind{
-	"len":      outputInt,
-	"not":      outputBool,
-	"and":      outputBool,
-	"or":       outputBool,
-	"eq":       outputBool,
-	"ne":       outputBool,
-	"lt":       outputBool,
-	"le":       outputBool,
-	"gt":       outputBool,
-	"ge":       outputBool,
-	"html":     outputString,
-	"js":       outputString,
-	"urlquery": outputString,
-	"print":    outputString,
-	"printf":   outputString,
-	"println":  outputString,
-	"call":     outputUntyped,
-	"index":    outputUntyped,
-	"slice":    outputUntyped,
+// functionsAccepting maps an outputKind to the curated list of builtin names
+// that semantically accept that kind as a piped input. For builtins all
+// parameters are interface{} so we cannot derive this from signatures alone;
+// for user-defined globals funcAcceptsKind uses concrete param types instead.
+var functionsAccepting = map[outputKind][]string{
+	outputInt: {
+		"eq", "ne", "lt", "le", "gt", "ge",
+		"print", "printf", "println",
+	},
+	outputBool: {
+		"and", "or", "not",
+		"print", "printf", "println",
+	},
+	outputString: {
+		"html", "js", "urlquery",
+		"len",
+		"print", "printf", "println",
+		"index",
+	},
+}
+
+// funcOutputKind returns the output kind produced by the named function,
+// derived from its return-type signature in GlobalFuncs().
+func funcOutputKind(name string) outputKind {
+	fn := serverTypes.GlobalFuncs()[name]
+	if fn == nil {
+		return outputAny
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return outputAny
+	}
+	results := sig.Results()
+	if results.Len() == 0 {
+		return outputAny
+	}
+	return typeToOutputKind(results.At(0).Type())
+}
+
+// funcAcceptsKind reports whether funcName can receive a piped value of kind.
+//
+// For functions with at least one concrete (non-interface{}) parameter the
+// check is performed by type: the function accepts the kind iff at least one
+// concrete param matches. For functions whose every parameter is interface{}
+// (all current builtins) the check falls back to the curated functionsAccepting
+// table, preserving the existing semantic filtering.
+func funcAcceptsKind(funcName string, kind outputKind) bool {
+	if kind == outputAny || kind == outputUntyped {
+		return true
+	}
+	fn := serverTypes.GlobalFuncs()[funcName]
+	if fn == nil {
+		return true // unknown signature — don't flag
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return true
+	}
+	params := sig.Params()
+	hasConcreteParam := false
+	for i := range params.Len() {
+		t := params.At(i).Type()
+		// Unwrap variadic slice wrapper.
+		if sl, isSl := t.Underlying().(*types.Slice); isSl {
+			t = sl.Elem()
+		}
+		if _, isIface := t.Underlying().(*types.Interface); isIface {
+			continue
+		}
+		hasConcreteParam = true
+		if basicTypeMatchesKind(t, kind) {
+			return true
+		}
+	}
+	if hasConcreteParam {
+		return false // concrete params present but none matched
+	}
+	// All params are interface{} — use the curated semantic list.
+	allowed := functionsAccepting[kind]
+	for _, name := range allowed {
+		if name == funcName {
+			return true
+		}
+	}
+	return false
+}
+
+// funcsAcceptingKind returns the names of all functions in GlobalFuncs that
+// can receive a piped value of kind, using funcAcceptsKind per entry.
+func funcsAcceptingKind(kind outputKind) []string {
+	if kind == outputAny || kind == outputUntyped {
+		return nil
+	}
+	all := serverTypes.GlobalFuncs()
+	names := make([]string, 0, len(all))
+	for name := range all {
+		if funcAcceptsKind(name, kind) {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // CompletionWithFallback is an entry point that has a fallback option
@@ -137,23 +217,6 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	}
 }
 
-var functionsAccepting = map[outputKind][]string{
-	outputInt: {
-		"eq", "ne", "lt", "le", "gt", "ge",
-		"print", "printf", "println",
-	},
-	outputBool: {
-		"and", "or", "not",
-		"print", "printf", "println",
-	},
-	outputString: {
-		"html", "js", "urlquery",
-		"len",
-		"print", "printf", "println",
-		"index",
-	},
-}
-
 func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	if ctx.Pipe == nil {
 		log.Debug().Msg("no pipe")
@@ -177,10 +240,7 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	if !ok {
 		return outputAny
 	}
-	if kind, found := builtinOutput[id.Ident]; found {
-		return kind
-	}
-	return outputAny
+	return funcOutputKind(id.Ident)
 }
 
 // precedingCmd returns the command whose output flows into the current node
@@ -226,10 +286,7 @@ func pipeOutputInfo(cur serverTypes.Node, isInvoked bool) (types.Type, outputKin
 	}
 	if len(cmd.Args) > 0 {
 		if id, ok := cmd.Args[0].(*serverTypes.IdentifierNode); ok {
-			// TODO: get rid of the deprecated builtin
-			if k, found := builtinOutput[id.Ident]; found {
-				return nil, k
-			}
+			return nil, funcOutputKind(id.Ident)
 		}
 	}
 	return nil, outputAny
@@ -423,8 +480,8 @@ func pipeFilteredItemsT(
 	if effectiveKind == outputAny && inputType != nil {
 		effectiveKind = typeToOutputKind(inputType)
 	}
-	names, ok := functionsAccepting[effectiveKind]
-	if !ok {
+	names := funcsAcceptingKind(effectiveKind)
+	if len(names) == 0 {
 		return append(items, builtinItems(wordRange)...)
 	}
 	for _, name := range names {
