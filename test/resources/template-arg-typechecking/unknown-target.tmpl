@@ -1,0 +1,14 @@
+{{- /*
+  unknown-target.tmpl
+  Demonstrates a {{template}} call to a block that has NO gotype hint.
+  No type-check diagnostic should be emitted — the target's input type is unknown.
+*/ -}}
+
+{{- define "untyped-block" -}}
+Hello, {{ .Name }}
+{{- end -}}
+
+{{- define "caller" -}}
+{{- /*gotype: text-template-server/src/model.Person*/ -}}
+{{ template "untyped-block" . }}
+{{- end -}}
