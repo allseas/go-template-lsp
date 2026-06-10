@@ -734,17 +734,20 @@ func (n *NilNode) ValueType() types.Type {
 	return types.Typ[types.UntypedNil]
 }
 
-// FieldNode holds a field (identifier starting with '.').
-// The names may be chained ('.x.y').
-// The period is dropped from each ident.
+// FieldNode holds a field access expression starting with '.' (e.g. ".Name" or ".Address.City").
+// Identifiers are stored without the leading period in lexical order (Ident).
+// Each identifier may resolve to either a struct field or a method call;
+// the isMethod slice records which is the case for each identifier.
+// isMethod is populated during type analysis; a nil slice means type info was not available.
 type FieldNode struct {
 	NodeType
 	Pos
-	endPos Pos
-	parent Node
-	Ident  []string   // The identifiers in lexical order.
-	typ    types.Type // Resolved type of the final field (set during analysis)
-	isElse bool       // Whether this is in an else list.
+	endPos   Pos
+	parent   Node
+	Ident    []string   // The identifiers in lexical order (period stripped).
+	typ      types.Type // Resolved type of the final segment (set during analysis).
+	isElse   bool       // Whether this node appears inside an else list.
+	isMethod []bool     // Per-identifier: true if the segment resolves to a method, false for a struct field. (set during analysis)
 }
 
 func (f *FieldNode) End() Pos {
@@ -776,7 +779,18 @@ func (f *FieldNode) Copy() Node {
 		endPos:   f.endPos,
 		Ident:    append([]string{}, f.Ident...),
 		isElse:   f.isElse,
+		isMethod: append([]bool{}, f.isMethod...),
 	}
+}
+
+// IdentIsMethod reports whether the i-th identifier in the field chain (0-based) resolves to
+// a method rather than a plain struct field.
+// Returns false when i is out of range or when type analysis did not resolve the node.
+func (f *FieldNode) IdentIsMethod(i int) bool {
+	if i < 0 || i >= len(f.isMethod) {
+		return false
+	}
+	return f.isMethod[i]
 }
 
 func (f *FieldNode) Parent() Node {

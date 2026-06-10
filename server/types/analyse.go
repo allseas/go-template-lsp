@@ -505,6 +505,71 @@ func walkFieldChain(
 	return currentType, true
 }
 
+// walkFieldChainWithMethodInfo is like walkFieldChain but additionally returns an isMethod slice
+// whose i-th element is true when path[i] resolves to a *types.Func (method) and false when it
+// resolves to a *types.Var (struct field). On failure the returned slice is nil.
+func walkFieldChainWithMethodInfo(
+	ctx *analysisCtx,
+	errNode Node,
+	base types.Type,
+	path []string,
+) (types.Type, []bool, bool) {
+	pkg := ctx.tree.Pkg
+	currentType := base
+	isMethod := make([]bool, len(path))
+	for i, name := range path {
+		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
+		if obj == nil {
+			ctx.errorf(
+				errNode,
+				ErrorTypeInvalidField,
+				"type %s has no field or method %q",
+				currentType.String(),
+				name,
+			)
+			return nil, nil, false
+		}
+		switch o := obj.(type) {
+		case *types.Var:
+			currentType = o.Type()
+			isMethod[i] = false
+		case *types.Func:
+			sig, ok := o.Type().Underlying().(*types.Signature)
+			if !ok || sig.Results().Len() == 0 {
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidField,
+					"method %q on type %s returns no values",
+					name,
+					currentType.String(),
+				)
+				return nil, nil, false
+			}
+			if sig.Results().Len() > 2 {
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidField,
+					"method %q on type %s returns more than 2 parameters",
+					name,
+					currentType.String(),
+				)
+			}
+			currentType = sig.Results().At(0).Type()
+			isMethod[i] = true
+		default:
+			ctx.errorf(
+				errNode,
+				ErrorTypeInvalidField,
+				"unexpected object type for %q on %s",
+				name,
+				currentType.String(),
+			)
+			return nil, nil, false
+		}
+	}
+	return currentType, isMethod, true
+}
+
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
 	ident := &IdentifierNode{
 		NodeType: NodeIdentifier,
@@ -593,8 +658,9 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		return fn
 	}
 
-	if typ, ok := walkFieldChain(ctx, fn, ctx.dotType, n.Ident); ok {
+	if typ, isMethod, ok := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); ok {
 		fn.typ = typ
+		fn.isMethod = isMethod
 	}
 	return fn
 }

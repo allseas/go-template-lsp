@@ -167,12 +167,21 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 	}
 }
 
+// walkFieldNode emits one semantic token per segment of a FieldNode chain.
+// Segments that resolve to methods (e.g. ".DisplayName") are emitted as ttFunction;
+// plain struct-field segments (e.g. ".Address") are emitted as ttProperty.
+// When type information is not available every segment falls back to ttProperty.
 func walkFieldNode(n *serverTypes.FieldNode, tokens *[]rawToken) {
-	l := 0
-	for _, id := range n.Ident {
-		l += 1 + len(id) // "." + ident
+	pos := int(n.Position())
+	for i, id := range n.Ident {
+		segLen := 1 + len(id) // "." + ident
+		tt := ttProperty
+		if n.IdentIsMethod(i) {
+			tt = ttFunction
+		}
+		emitToken(tokens, pos, segLen, tt, 0)
+		pos += segLen
 	}
-	emitToken(tokens, int(n.Position()), l, ttProperty, 0)
 }
 
 func walkWithNode(tokens *[]rawToken, text string, n *serverTypes.WithNode) {
