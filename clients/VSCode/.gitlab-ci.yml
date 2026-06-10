@@ -50,11 +50,24 @@ testing:
     stage: test
     image:
         name: $CI_REGISTRY_IMAGE/vscode-ci:latest
+    variables:
+        GO_VERSION: "1.26.2"
     before_script:
         - apt-get update
         - apt-get upgrade -y
-        - apt-get install -y --no-install-recommends xvfb xauth chromium
+        - apt-get install -y --no-install-recommends xvfb xauth chromium curl ca-certificates
+        - |
+            if ! /usr/local/go/bin/go version >/dev/null 2>&1; then
+                echo "Installing Go ${GO_VERSION}"
+                curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz
+                rm -rf /usr/local/go
+                tar -C /usr/local -xzf /tmp/go.tar.gz
+                rm -f /tmp/go.tar.gz
+            fi
+        - export PATH="/usr/local/go/bin:$PATH"
+        - go version
         - npm ci
     script:
         - echo "running tests"
+        - export PATH="/usr/local/go/bin:$PATH"
         - xvfb-run --server-args="-screen 0 1920x1080x24" npm test -w clients/VSCode
