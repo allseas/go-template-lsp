@@ -59,12 +59,16 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 
-	s.docs[uri] = &document{
+	doc := &document{
 		text:       text,
 		tree:       tree,
 		loadedType: lt,
 		typedTree:  buildTypedTree(tree, lt),
 	}
+	if doc.typedTree != nil {
+		types.SetEndsForTree(*doc.typedTree, types.Pos(len(text)), &doc.text)
+	}
+	s.docs[uri] = doc
 }
 
 // buildTypedTree returns the analysed (typed) tree if the parse tree exists.

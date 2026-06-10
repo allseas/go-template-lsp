@@ -66,8 +66,6 @@ func SemanticTokensFull(
 		return nil, nil
 	}
 
-	serverTypes.SetEndsForTree(*doc.typedTree, serverTypes.Pos(len(doc.text)), &doc.text)
-
 	var tokens []rawToken
 	walkSemanticNode(doc.typedTree.Root, doc.text, &tokens)
 

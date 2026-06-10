@@ -41,8 +41,12 @@ func setDocWithTypedTree(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	tree, err := tryParse(src)
 	require.NoError(t, err)
 	typedTree := buildTypedTree(tree, lt)
+	doc := &document{text: src, tree: tree, loadedType: lt, typedTree: typedTree}
+	if doc.typedTree != nil {
+		serverTypes.SetEndsForTree(*doc.typedTree, serverTypes.Pos(len(src)), &doc.text)
+	}
 	store.mu.Lock()
-	store.docs[uri] = &document{text: src, tree: tree, loadedType: lt, typedTree: typedTree}
+	store.docs[uri] = doc
 	store.mu.Unlock()
 }
 
