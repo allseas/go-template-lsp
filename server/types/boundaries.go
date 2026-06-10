@@ -21,7 +21,11 @@ func setEndPos(node Node, end Pos, text *string) {
 	case *CommandNode:
 		endPosCommand(n, end, text)
 	case *FieldNode:
-		n.endPos = n.Position() + Pos(len(n.Ident))
+		l := 0
+		for _, id := range n.Ident {
+			l += 1 + len(id) // "." + segment
+		}
+		n.endPos = n.Position() + Pos(l)
 	case *PipeNode:
 		endPosPipe(n, end, text)
 	case *VariableNode:

@@ -139,7 +139,29 @@ var setEndsForTreeTestCases = []boundariesTestCase{
 			{start: 3, end: 10}, // ChainNode
 			{start: 3, end: 3},  // PipeNode (inner, parenthesised)
 			{start: 3, end: 3},  // CommandNode (inner)
-			{start: 3, end: 4},  // FieldNode (.Name)
+			{start: 3, end: 8},  // FieldNode (.Name)
+		},
+	},
+	{
+		name:  "field node single segment",
+		input: `{{.Name}}`,
+		expected: []struct{ start, end Pos }{
+			{start: 0, end: 9}, // ListNode (root)
+			{start: 0, end: 9}, // ActionNode
+			{start: 2, end: 7}, // PipeNode
+			{start: 2, end: 7}, // CommandNode
+			{start: 2, end: 7}, // FieldNode (.Name)
+		},
+	},
+	{
+		name:  "field node two segments",
+		input: `{{.First.Last}}`,
+		expected: []struct{ start, end Pos }{
+			{start: 0, end: 15}, // ListNode (root)
+			{start: 0, end: 15}, // ActionNode
+			{start: 2, end: 13}, // PipeNode
+			{start: 2, end: 13}, // CommandNode
+			{start: 2, end: 13}, // FieldNode (.First.Last)
 		},
 	},
 }
