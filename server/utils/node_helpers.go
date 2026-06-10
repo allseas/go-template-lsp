@@ -50,6 +50,7 @@ func IsNilNode(n parse.Node) bool {
 	}
 }
 
+// IsNilTypeNode checks if a serverTypes.Node is nil or contains nil pointers in its concrete type.
 func IsNilTypeNode(n serverTypes.Node) bool {
 	if n == nil {
 		return true

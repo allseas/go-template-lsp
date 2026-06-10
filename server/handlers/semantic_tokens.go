@@ -55,6 +55,8 @@ type rawToken struct {
 	modifiers uint32
 }
 
+// SemanticTokensFull implements the "textDocument/semanticTokens/full" LSP method.
+// It traverses the typed syntax tree of the document and emits semantic tokens for recognized nodes.
 func SemanticTokensFull(
 	_ *glsp.Context,
 	params *protocol.SemanticTokensParams,
@@ -78,7 +80,9 @@ func SemanticTokensFull(
 	}, nil
 }
 
-func DocumentSymbols(_ *glsp.Context, params *protocol.DocumentSymbolParams) (any, error) {
+// DocumentSymbols implements the "textDocument/documentSymbol" LSP method.
+// Currently returns no symbols, but can be extended to provide a hierarchical outline of template constructs.
+func DocumentSymbols(_ *glsp.Context, _ *protocol.DocumentSymbolParams) (any, error) {
 	return nil, nil
 }
 
@@ -104,35 +108,10 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 		}
 
 	case *serverTypes.PipeNode:
-		for _, decl := range n.Decl {
-			if decl != nil {
-				emitToken(
-					tokens,
-					int(decl.Position()),
-					len(decl.String()),
-					ttVariable,
-					tmDeclaration,
-				)
-			}
-		}
-		for _, cmd := range n.Cmds {
-			walkSemanticNode(cmd, text, tokens)
-		}
+		walkPipeNode(n, tokens, text)
 
 	case *serverTypes.CommandNode:
-		for i, arg := range n.Args {
-			if i == 0 {
-				if id, ok := arg.(*serverTypes.IdentifierNode); ok {
-					mod := uint32(0)
-					if builtinFuncs[id.Ident] {
-						mod = tmDefaultLibrary
-					}
-					emitToken(tokens, int(id.Position()), len(id.Ident), ttFunction, mod)
-					continue
-				}
-			}
-			walkSemanticNode(arg, text, tokens)
-		}
+		walkCommandNode(n, tokens, text)
 
 	case *serverTypes.VariableNode:
 		emitToken(tokens, int(n.Position()), len(n.String()), ttVariable, 0)
@@ -142,25 +121,10 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 		emitToken(tokens, int(n.Position()), len(n.Ident), ttFunction, 0)
 
 	case *serverTypes.FieldNode:
-		l := 0
-		for _, id := range n.Ident {
-			l += 1 + len(id) // "." + ident
-		}
-		emitToken(tokens, int(n.Position()), l, ttProperty, 0)
+		walkFieldNode(n, tokens)
 
 	case *serverTypes.ChainNode:
-		walkSemanticNode(n.Node, text, tokens)
-		if n.Node != nil && len(n.Field) > 0 {
-			baseLen := len(n.Node.String())
-			if _, ok := n.Node.(*serverTypes.PipeNode); ok {
-				baseLen += 2 // account for wrapping parens
-			}
-			fieldsLen := 0
-			for _, f := range n.Field {
-				fieldsLen += 1 + len(f)
-			}
-			emitToken(tokens, int(n.Position())+baseLen, fieldsLen, ttProperty, 0)
-		}
+		walkChainNode(n, text, tokens)
 
 	case *serverTypes.DotNode:
 		emitToken(tokens, int(n.Position()), 1, ttVariable, 0)
@@ -178,46 +142,13 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 		emitToken(tokens, int(n.Position()), 3, ttKeyword, 0)
 
 	case *serverTypes.IfNode:
-		emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "if")
-		if n.Pipe != nil {
-			walkSemanticNode(n.Pipe, text, tokens)
-		}
-		if n.List != nil {
-			walkSemanticNode(n.List, text, tokens)
-		}
-		if n.ElseList != nil {
-			emitElseKeyword(tokens, text, n.List, n.ElseList)
-			walkSemanticNode(n.ElseList, text, tokens)
-		}
-		emitEndKeyword(tokens, text, n.List, n.ElseList)
+		walkIfNode(tokens, text, n)
 
 	case *serverTypes.RangeNode:
-		emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "range")
-		if n.Pipe != nil {
-			walkSemanticNode(n.Pipe, text, tokens)
-		}
-		if n.List != nil {
-			walkSemanticNode(n.List, text, tokens)
-		}
-		if n.ElseList != nil {
-			emitElseKeyword(tokens, text, n.List, n.ElseList)
-			walkSemanticNode(n.ElseList, text, tokens)
-		}
-		emitEndKeyword(tokens, text, n.List, n.ElseList)
+		walkRangeNode(tokens, text, n)
 
 	case *serverTypes.WithNode:
-		emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "with")
-		if n.Pipe != nil {
-			walkSemanticNode(n.Pipe, text, tokens)
-		}
-		if n.List != nil {
-			walkSemanticNode(n.List, text, tokens)
-		}
-		if n.ElseList != nil {
-			emitElseKeyword(tokens, text, n.List, n.ElseList)
-			walkSemanticNode(n.ElseList, text, tokens)
-		}
-		emitEndKeyword(tokens, text, n.List, n.ElseList)
+		walkWithNode(tokens, text, n)
 
 	case *serverTypes.BreakNode:
 		emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "break")
@@ -233,6 +164,107 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 
 	case *serverTypes.UndefinedNode:
 		// skip unparseable fragments
+	}
+}
+
+func walkFieldNode(n *serverTypes.FieldNode, tokens *[]rawToken) {
+	l := 0
+	for _, id := range n.Ident {
+		l += 1 + len(id) // "." + ident
+	}
+	emitToken(tokens, int(n.Position()), l, ttProperty, 0)
+}
+
+func walkWithNode(tokens *[]rawToken, text string, n *serverTypes.WithNode) {
+	emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "with")
+	if n.Pipe != nil {
+		walkSemanticNode(n.Pipe, text, tokens)
+	}
+	if n.List != nil {
+		walkSemanticNode(n.List, text, tokens)
+	}
+	if n.ElseList != nil {
+		emitElseKeyword(tokens, text, n.List, n.ElseList)
+		walkSemanticNode(n.ElseList, text, tokens)
+	}
+	emitEndKeyword(tokens, text, n.List, n.ElseList)
+}
+
+func walkRangeNode(tokens *[]rawToken, text string, n *serverTypes.RangeNode) {
+	emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "range")
+	if n.Pipe != nil {
+		walkSemanticNode(n.Pipe, text, tokens)
+	}
+	if n.List != nil {
+		walkSemanticNode(n.List, text, tokens)
+	}
+	if n.ElseList != nil {
+		emitElseKeyword(tokens, text, n.List, n.ElseList)
+		walkSemanticNode(n.ElseList, text, tokens)
+	}
+	emitEndKeyword(tokens, text, n.List, n.ElseList)
+}
+
+func walkIfNode(tokens *[]rawToken, text string, n *serverTypes.IfNode) {
+	emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "if")
+	if n.Pipe != nil {
+		walkSemanticNode(n.Pipe, text, tokens)
+	}
+	if n.List != nil {
+		walkSemanticNode(n.List, text, tokens)
+	}
+	if n.ElseList != nil {
+		emitElseKeyword(tokens, text, n.List, n.ElseList)
+		walkSemanticNode(n.ElseList, text, tokens)
+	}
+	emitEndKeyword(tokens, text, n.List, n.ElseList)
+}
+
+func walkChainNode(n *serverTypes.ChainNode, text string, tokens *[]rawToken) {
+	walkSemanticNode(n.Node, text, tokens)
+	if n.Node != nil && len(n.Field) > 0 {
+		baseLen := len(n.Node.String())
+		if _, ok := n.Node.(*serverTypes.PipeNode); ok {
+			baseLen += 2 // account for wrapping parens
+		}
+		fieldsLen := 0
+		for _, f := range n.Field {
+			fieldsLen += 1 + len(f)
+		}
+		emitToken(tokens, int(n.Position())+baseLen, fieldsLen, ttProperty, 0)
+	}
+}
+
+func walkCommandNode(n *serverTypes.CommandNode, tokens *[]rawToken, text string) {
+	for i, arg := range n.Args {
+		if i == 0 {
+			if id, ok := arg.(*serverTypes.IdentifierNode); ok {
+				mod := uint32(0)
+				if builtinFuncs[id.Ident] {
+					mod = tmDefaultLibrary
+				}
+				emitToken(tokens, int(id.Position()), len(id.Ident), ttFunction, mod)
+				continue
+			}
+		}
+		walkSemanticNode(arg, text, tokens)
+	}
+}
+
+func walkPipeNode(n *serverTypes.PipeNode, tokens *[]rawToken, text string) {
+	for _, decl := range n.Decl {
+		if decl != nil {
+			emitToken(
+				tokens,
+				int(decl.Position()),
+				len(decl.String()),
+				ttVariable,
+				tmDeclaration,
+			)
+		}
+	}
+	for _, cmd := range n.Cmds {
+		walkSemanticNode(cmd, text, tokens)
 	}
 }
 
@@ -328,7 +360,7 @@ func encodeSemanticTokens(tokens []rawToken, text string) []uint32 {
 			deltaChar = char
 		}
 
-		length := uint32(utf16Len(text[tok.startByte:end]))
+		length := uint32(utf16Len(text[tok.startByte:end])) //nolint:gosec
 
 		data = append(data, deltaLine, deltaChar, length, tok.tokenType, tok.modifiers)
 
