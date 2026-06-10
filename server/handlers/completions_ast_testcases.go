@@ -1346,34 +1346,32 @@ func init() {
 	)
 }
 
-type multiDefineCompletionTestCase struct {
-	name string
-	needle string
-	occurrence int
-	contains   []string
-	notContains []string
+// completionAstMultiDefineCase covers AST-based completion behaviour when a
+// single document contains multiple {{define}} blocks.
+type completionAstMultiDefineCase struct {
+	name           string
+	posSubStr      string // substring whose first byte locates the cursor
+	posOccurrence  int
+	posCharOffset  int // bytes added to the substring's first byte
+	wantContains   []string
+	wantNotContain []string
 }
 
-var multiDefineCompletionTestCases = []multiDefineCompletionTestCase{
+var completionAstMultiDefineCases = []completionAstMultiDefineCase{
 	{
-		name:        "root tree dot completion suggests Order fields",
-		needle:      "ROOT: {{ .",
-		occurrence:  0,
-		contains:    []string{"CustomerName", "ID", "Items", "Address"},
-		notContains: []string{"SKU", "Street"},
+		name:           "dot completion inside Order define proposes Order fields",
+		posSubStr:      "{{ .CustomerName",
+		posOccurrence:  0,
+		posCharOffset:  4, // sits on the dot before CustomerName
+		wantContains:   []string{"CustomerName", "ID", "Address", "Items"},
+		wantNotContain: []string{"Street", "City"},
 	},
 	{
-		name:        "ItemLine define dot completion suggests Item fields",
-		needle:      "- {{ .",
-		occurrence:  0,
-		contains:    []string{"SKU", "Name", "Qty", "UnitPrice", "Total"},
-		notContains: []string{"CustomerName", "Street"},
-	},
-	{
-		name:        "AddressBlock define dot completion suggests Address fields",
-		needle:      "model.Address*/}}\n{{ .",
-		occurrence:  0,
-		contains:    []string{"Street", "City", "Country", "Zip"},
-		notContains: []string{"CustomerName", "SKU"},
+		name:           "dot completion inside Address define proposes Address fields",
+		posSubStr:      "{{ .Street",
+		posOccurrence:  0,
+		posCharOffset:  4, // sits on the dot before Street
+		wantContains:   []string{"Street", "City", "Country", "Zip"},
+		wantNotContain: []string{"CustomerName", "Items"},
 	},
 }

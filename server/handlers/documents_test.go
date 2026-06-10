@@ -138,6 +138,7 @@ func TestDocumentStore(t *testing.T) {
 }
 
 func TestDocumentMultipleDefines(t *testing.T) {
+	// ai
 	src := "{{- define \"A\"}}\n" +
 		"{{- /*gotype: cg/model.A*/}}\n" +
 		"alpha-body\n" +

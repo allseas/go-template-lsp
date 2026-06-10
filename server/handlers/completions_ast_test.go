@@ -586,3 +586,43 @@ func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
 	assert.Contains(t, labels, "top")
 	assert.NotContains(t, labels, "$top")
 }
+
+// TestCompletionAstMultiDefines drives completionAst across multiple
+// {{define}} blocks in one document, each carrying its own gotype hint, to
+// verify that dot-completion uses the per-tree loaded type.
+func TestCompletionAstMultiDefines(t *testing.T) {
+	enableServer(t)
+
+	loaded := loadModelTypes(t, "Order", "Address")
+	perTree := map[string]*serverTypes.Tree{
+		"OrderTpl":   loaded["Order"],
+		"AddressTpl": loaded["Address"],
+	}
+
+	src := multiDefinesTemplate
+	uri := "file:///comp-multidefines.tmpl"
+	setDocMulti(t, uri, src, perTree)
+	t.Cleanup(func() { store.Remove(uri) })
+
+	for _, tc := range completionAstMultiDefineCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pos := posOfSubStr(t, src, tc.posSubStr, tc.posOccurrence)
+			pos.Character += uint32(tc.posCharOffset) //nolint:gosec
+
+			result := completionAst(nil, &protocol.CompletionParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+					Position:     pos,
+				},
+			})
+			require.NotNil(t, result)
+			labels := labelsFrom(t, result)
+			for _, want := range tc.wantContains {
+				assert.Contains(t, labels, want)
+			}
+			for _, notWant := range tc.wantNotContain {
+				assert.NotContains(t, labels, notWant)
+			}
+		})
+	}
+}
