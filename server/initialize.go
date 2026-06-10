@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"text-template-server/handlers"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -34,6 +35,7 @@ func setupHandlers() {
 		TextDocumentDefinition:          handlers.Definition,
 		SetTrace:                        handlers.SetTrace,
 		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
+		WorkspaceDidChangeWatchedFiles:  handlers.DidChangeWatchedFiles,
 		TextDocumentReferences:          handlers.References,
 		TextDocumentHover:               handlers.Hover,
 		TextDocumentSemanticTokensFull:  handlers.SemanticTokensFull,
@@ -66,6 +68,16 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 		handlers.WorkspaceRoot = path
 	} else if params.RootPath != nil {
 		handlers.WorkspaceRoot = *params.RootPath
+	}
+
+	// Always seed the cache: builtins first, then workspace-defined globals.
+	{
+		funcs, err := types.ComputeGlobalFuncs(handlers.WorkspaceRoot)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to load global tmpl:func hints")
+		}
+		types.SetGlobalFuncs(funcs)
+		log.Debug().Int("count", len(funcs)).Msg("global funcs cache seeded")
 	}
 	capabilities := handler.CreateServerCapabilities()
 
@@ -108,6 +120,7 @@ func initialized(context *glsp.Context, _ *protocol.InitializedParams) error {
 		if err := handlers.RequestConfig(ctx); err != nil {
 			log.Error().Err(err).Msg("failed to request config")
 		}
+		handlers.RegisterGoFileWatcher(ctx)
 	}(context)
 
 	return nil
