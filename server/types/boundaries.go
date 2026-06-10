@@ -63,8 +63,16 @@ func setEndPos(node Node, end Pos, text *string) {
 		n.endPos = end
 	case *BreakNode:
 		n.endPos = end
+		// set end pos to end of }}, if it exists
+		if l := strings.Index((*text)[n.Position():end], "}}"); l != -1 {
+			n.endPos = n.Position() + Pos(l) + 2
+		}
 	case *ContinueNode:
 		n.endPos = end
+		// set end pos to end of }}, if it exists
+		if l := strings.Index((*text)[n.Position():end], "}}"); l != -1 {
+			n.endPos = n.Position() + Pos(l) + 2
+		}
 	}
 }
 
