@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
@@ -47,6 +48,9 @@ var builtinFuncs = map[string]bool{
 	"printf": true, "println": true, "urlquery": true,
 	"eq": true, "ne": true, "lt": true, "le": true, "gt": true, "ge": true,
 }
+
+// reEnd matches a {{end}} delimiter, with optional whitespace-trimming dashes.
+var reEnd = regexp.MustCompile(`\{\{-?\s*end\s*-?\}\}`)
 
 type rawToken struct {
 	startByte int
@@ -343,12 +347,17 @@ func emitEndKeyword(tokens *[]rawToken, text string, list, elseList *serverTypes
 	if searchFrom < 0 || searchFrom >= len(text) {
 		return
 	}
-	searchTo := min(searchFrom+30, len(text))
-	idx := strings.Index(text[searchFrom:searchTo], "end")
+	m := reEnd.FindStringIndex(text[searchFrom:])
+	if m == nil {
+		return
+	}
+	// Emit only the "end" identifier within the delimiter.
+	delim := text[searchFrom+m[0] : searchFrom+m[1]]
+	idx := strings.Index(delim, "end")
 	if idx < 0 {
 		return
 	}
-	emitToken(tokens, searchFrom+idx, 3, ttKeyword, 0)
+	emitToken(tokens, searchFrom+m[0]+idx, 3, ttKeyword, 0)
 }
 
 func emitToken(tokens *[]rawToken, startByte, length int, tokenType, modifiers uint32) {
