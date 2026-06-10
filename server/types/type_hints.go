@@ -17,6 +17,41 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// ParseDefineTypeHints scans template text for {{define "name"}} blocks and returns
+// a map from template name to the first gotype hint found at the top of that block.
+// It searches within the first 512 bytes after the opening {{define}} delimiter
+// so only hints placed near the top of the block are matched.
+func ParseDefineTypeHints(text string) map[string]string {
+	// Match {{define "name"}} or {{define `name`}} with optional trimming dashes/whitespace.
+	defineRe := regexp.MustCompile("\\{\\{-?\\s*define\\s+(?:\"([^\"]+)\"|`([^`]+)`)\\s*-?\\}\\}")
+	gotypeRe := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
+
+	result := make(map[string]string)
+	matches := defineRe.FindAllStringSubmatchIndex(text, -1)
+	for _, m := range matches {
+		var name string
+		if m[2] != -1 {
+			name = text[m[2]:m[3]] // double-quoted name
+		} else if m[4] != -1 {
+			name = text[m[4]:m[5]] // backtick-quoted name
+		}
+		if name == "" {
+			continue
+		}
+		// Search within the first 512 bytes of the block for a gotype hint.
+		start := m[1]
+		end := start + 512
+		if end > len(text) {
+			end = len(text)
+		}
+		snippet := text[start:end]
+		if gm := gotypeRe.FindStringSubmatch(snippet); gm != nil {
+			result[name] = gm[1]
+		}
+	}
+	return result
+}
+
 // TypeHint represents a `gotype:` type hint found in a template file.
 type TypeHint struct {
 	Line int

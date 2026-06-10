@@ -62,8 +62,12 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	var tree *parse.Tree
 
-	if doc, ok := store.Get(uri); ok && doc.tree != nil {
-		tree = doc.tree
+	var typedTree *types.Tree
+	if doc, ok := store.Get(uri); ok {
+		if doc.tree != nil {
+			tree = doc.tree
+		}
+		typedTree = doc.typedTree
 	} else {
 		var err error
 		tree, err = tryParse(text)
@@ -77,6 +81,34 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 		diagnostics = walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)
 	} else {
 		log.Debug().Msg("tree or root is nil")
+	}
+
+	// Surface template argument type errors from the typed tree.
+	if typedTree != nil {
+		diagnostics = append(diagnostics, collectTemplateArgTypeDiagnostics(typedTree, text)...)
+	}
+
+	return diagnostics
+}
+
+// collectTemplateArgTypeDiagnostics converts ErrorTypeInvalidTemplateArg entries from
+// the typed tree into protocol diagnostics.
+func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
+	var diagnostics []protocol.Diagnostic
+	for _, terr := range typedTree.TypeErrors {
+		if terr.ErrType() != types.ErrorTypeInvalidTemplateArg {
+			continue
+		}
+		if terr.Node == nil {
+			continue
+		}
+		pos := int(terr.Node.Position())
+		rng := expandToFullBracketsFromOffset(pos, text)
+		diagnostics = append(diagnostics, createDiagnostic(
+			withPos(text, pos, terr.Err),
+			rng,
+			true,
+		))
 	}
 	return diagnostics
 }

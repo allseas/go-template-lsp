@@ -27,12 +27,16 @@ type document struct {
 }
 
 type documentStore struct {
-	mu   sync.RWMutex
-	docs map[string]*document
+	mu                 sync.RWMutex
+	docs               map[string]*document
+	templateInputTypes map[string]gotypes.Type // template name → expected input type (from gotype hints on {{define}} blocks)
+	uriTemplateNames   map[string][]string      // URI → template names it contributes (for cleanup on close/update)
 }
 
 var store = &documentStore{
-	docs: make(map[string]*document),
+	docs:               make(map[string]*document),
+	templateInputTypes: make(map[string]gotypes.Type),
+	uriTemplateNames:   make(map[string][]string),
 }
 
 func (s *documentStore) Set(uri, text string) {
@@ -50,6 +54,22 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 
+	// Load gotype hints from {{define}} blocks before taking the lock (type loading can be slow).
+	var newTemplateTypes map[string]gotypes.Type
+	if WorkspaceRoot != "" {
+		defineHints := types.ParseDefineTypeHints(text)
+		if len(defineHints) > 0 {
+			newTemplateTypes = make(map[string]gotypes.Type, len(defineHints))
+			for name, hint := range defineHints {
+				if loaded, lerr := types.LoadTypeFromHint(hint, WorkspaceRoot); lerr == nil {
+					newTemplateTypes[name] = loaded.DotType
+				} else {
+					log.Warn().Str("template", name).Str("hint", hint).Err(lerr).Msg("define block type hint load failed")
+				}
+			}
+		}
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -59,17 +79,37 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 
+	// Update the template input type registry: remove stale entries for this URI,
+	// then add the newly discovered ones.
+	if oldNames, ok := s.uriTemplateNames[uri]; ok {
+		for _, name := range oldNames {
+			delete(s.templateInputTypes, name)
+		}
+	}
+	if len(newTemplateTypes) > 0 {
+		newNames := make([]string, 0, len(newTemplateTypes))
+		for name, typ := range newTemplateTypes {
+			s.templateInputTypes[name] = typ
+			newNames = append(newNames, name)
+		}
+		s.uriTemplateNames[uri] = newNames
+	} else {
+		delete(s.uriTemplateNames, uri)
+	}
+
 	s.docs[uri] = &document{
 		text:       text,
 		tree:       tree,
 		loadedType: lt,
-		typedTree:  buildTypedTree(tree, lt),
+		typedTree:  buildTypedTree(tree, lt, s.templateInputTypes),
 	}
 }
 
 // buildTypedTree returns the analysed (typed) tree if the parse tree exists.
 // It carries dot-type / package info from the loaded type hint when available.
-func buildTypedTree(tree *parse.Tree, lt *types.Tree) *types.Tree {
+// templateInputTypes maps template names to their expected input types; it is
+// consulted when analysing {{template "name" arg}} call sites.
+func buildTypedTree(tree *parse.Tree, lt *types.Tree, templateInputTypes map[string]gotypes.Type) *types.Tree {
 	if tree == nil {
 		return nil
 	}
@@ -79,7 +119,7 @@ func buildTypedTree(tree *parse.Tree, lt *types.Tree) *types.Tree {
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	t := types.NewTree(*tree, types.GlobalFuncs(), dotType, pkg)
+	t := types.NewTree(*tree, types.GlobalFuncs(), dotType, pkg, templateInputTypes)
 	if lt != nil {
 		t.DotType = lt.DotType
 		t.Pkg = lt.Pkg
@@ -97,6 +137,12 @@ func (s *documentStore) Get(uri string) (*document, bool) {
 func (s *documentStore) Delete(uri string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if oldNames, ok := s.uriTemplateNames[uri]; ok {
+		for _, name := range oldNames {
+			delete(s.templateInputTypes, name)
+		}
+		delete(s.uriTemplateNames, uri)
+	}
 	delete(s.docs, uri)
 }
 
@@ -123,6 +169,12 @@ func tryParse(text string) (*parse.Tree, error) {
 func (s *documentStore) Remove(uri string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if oldNames, ok := s.uriTemplateNames[uri]; ok {
+		for _, name := range oldNames {
+			delete(s.templateInputTypes, name)
+		}
+		delete(s.uriTemplateNames, uri)
+	}
 	delete(s.docs, uri)
 }
 
