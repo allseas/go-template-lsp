@@ -468,12 +468,21 @@ func TestDefinitionMultiDefines(t *testing.T) {
 			posOccurrence: 0,
 			posCharOffset: 1,
 			wantSameURI:   true,
-			wantLine:      9, // $local := . is on line 10 of multiDefinesTemplate
+			wantLine:      12, // $local := . is on line 13 of multiDefinesTemplate (0-indexed 12)
+		},
+		{
+			name:          "field in root template jumps to Address.Country",
+			posSubStr:     ".Country",
+			posOccurrence: 0,
+			posCharOffset: 1,
+			wantFile:      "model.go",
+			wantLine:      8, // Address.Country at line 9 (0-indexed 8)
 		},
 	}
 
 	loaded := loadModelTypes(t, "Order", "Address")
 	perTree := map[string]*serverTypes.Tree{
+		"t":          loaded["Address"],
 		"OrderTpl":   loaded["Order"],
 		"AddressTpl": loaded["Address"],
 	}

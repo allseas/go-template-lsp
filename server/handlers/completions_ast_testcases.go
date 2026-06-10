@@ -1374,4 +1374,12 @@ var completionAstMultiDefineCases = []completionAstMultiDefineCase{
 		wantContains:   []string{"Street", "City", "Country", "Zip"},
 		wantNotContain: []string{"CustomerName", "Items"},
 	},
+	{
+		name:           "dot completion in root template proposes root Address fields",
+		posSubStr:      "{{ .Country",
+		posOccurrence:  0,
+		posCharOffset:  4, // sits on the dot before Country
+		wantContains:   []string{"Street", "City", "Country", "Zip"},
+		wantNotContain: []string{"CustomerName", "Items"},
+	},
 }

@@ -66,6 +66,7 @@ func TestHover(t *testing.T) {
 func TestHoverMultiDefines(t *testing.T) {
 	loaded := loadModelTypes(t, "Order", "Address")
 	perTree := map[string]*serverTypes.Tree{
+		"t":          loaded["Address"],
 		"OrderTpl":   loaded["Order"],
 		"AddressTpl": loaded["Address"],
 	}

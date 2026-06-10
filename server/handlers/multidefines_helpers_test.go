@@ -100,11 +100,14 @@ func posOfSubStr(t *testing.T, src, substr string, occurrence int) protocol.Posi
 	return protocol.Position{Line: line, Character: char}
 }
 
-// multiDefinesTemplate is the classic template with ultiple define blocks and type hints used by feature tests
-const multiDefinesTemplate = `{{- define "OrderTpl" -}}
+// multiDefinesTemplate is the classic multi-define template 
+const multiDefinesTemplate = `{{- /*gotype: text-template-server/src/model.Address*/ -}}
+{{ .Country }}
+{{- define "OrderTpl" -}}
 {{- /*gotype: text-template-server/src/model.Order*/ -}}
 Order: {{ .CustomerName }} ({{ .ID }})
 {{- end -}}
+{{ .Zip }}
 {{- define "AddressTpl" -}}
 {{- /*gotype: text-template-server/src/model.Address*/ -}}
 Address: {{ .Street }}, {{ .City }}
@@ -113,4 +116,5 @@ Address: {{ .Street }}, {{ .City }}
 {{ $local := . }}
 no hint here {{ $local }}
 {{- end -}}
+{{ .Country }}
 `

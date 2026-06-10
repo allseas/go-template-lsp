@@ -446,4 +446,10 @@ var hoverMultiDefineCases = []hoverMultiDefineCase{
 		posOccurrence:  0,
 		wantSubstrings: []string{"$local"},
 	},
+	{
+		name:           "field in root template resolves against root Address type",
+		posSubStr:      ".Country",
+		posOccurrence:  0,
+		wantSubstrings: []string{"Country", "field"},
+	},
 }
