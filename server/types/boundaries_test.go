@@ -82,6 +82,66 @@ var setEndsForTreeTestCases = []boundariesTestCase{
 			{start: 46, end: 49},
 		},
 	},
+	{
+		name:  "comment node",
+		input: `{{/* hello */}}`,
+		expected: []struct{ start, end Pos }{
+			{start: 2, end: 15}, // ListNode
+			{start: 2, end: 15}, // CommentNode
+		},
+	},
+	{
+		name:  "break node",
+		input: `{{range .}}{{break}}{{end}}`,
+		expected: []struct{ start, end Pos }{
+			{start: 0, end: 27},  // ListNode (root)
+			{start: 2, end: 7},   // RangeNode
+			{start: 8, end: 9},   // PipeNode
+			{start: 8, end: 9},   // CommandNode
+			{start: 8, end: 9},   // DotNode
+			{start: 11, end: 27}, // ListNode (body)
+			{start: 13, end: 20}, // BreakNode
+		},
+	},
+	{
+		name:  "continue node",
+		input: `{{range .}}{{continue}}{{end}}`,
+		expected: []struct{ start, end Pos }{
+			{start: 0, end: 30},  // ListNode (root)
+			{start: 2, end: 7},   // RangeNode
+			{start: 8, end: 9},   // PipeNode
+			{start: 8, end: 9},   // CommandNode
+			{start: 8, end: 9},   // DotNode
+			{start: 11, end: 30}, // ListNode (body)
+			{start: 13, end: 23}, // ContinueNode
+		},
+	},
+	{
+		name:  "with node",
+		input: `{{with .}}{{end}}`,
+		expected: []struct{ start, end Pos }{
+			{start: 0, end: 17},  // ListNode (root)
+			{start: 2, end: 6},   // WithNode
+			{start: 7, end: 8},   // PipeNode
+			{start: 7, end: 8},   // CommandNode
+			{start: 7, end: 8},   // DotNode
+			{start: 10, end: 17}, // ListNode (body, empty)
+		},
+	},
+	{
+		name:  "chain node",
+		input: `{{(.Name).IsLocal}}`,
+		expected: []struct{ start, end Pos }{
+			{start: 0, end: 19}, // ListNode (root)
+			{start: 0, end: 19}, // ActionNode
+			{start: 2, end: 17}, // PipeNode (outer)
+			{start: 2, end: 17}, // CommandNode
+			{start: 3, end: 10}, // ChainNode
+			{start: 3, end: 3},  // PipeNode (inner, parenthesised)
+			{start: 3, end: 3},  // CommandNode (inner)
+			{start: 3, end: 4},  // FieldNode (.Name)
+		},
+	},
 }
 
 func TestSetEndsForTree(t *testing.T) {
