@@ -5,8 +5,8 @@ Completions based on AST offer context-aware suggestions when the user types in 
 ## What the user sees
 
 | Cursor position                              | Suggestions                                                                                                   |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `{{ `**`$`**` }}`                            | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix                                          |
+| -------------------------------------------- |---------------------------------------------------------------------------------------------------------------|
+| `{{ `**`$`**` }}`                            | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix and the current dot fields/methods       |
 | `{{ `**`.`**` }}`                            | `.` item, or all fields and methods of the current dot type if a type hint is resolved                        |
 | `{{ .Items\[0\].`**`▌`**` }}`                | Fields and methods available on the resolved field type (chained field accesses)                              |
 | `{{ .Items \| `**`len`**` \| `**`▌`**` }}`   | Functions that accept `int` output: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `not`, `print`, `printf`, `println`   |
