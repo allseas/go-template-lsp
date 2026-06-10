@@ -118,3 +118,26 @@ func TestIsFuncMapType(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeGlobalFuncs(t *testing.T) {
+	funcs, err := ComputeGlobalFuncs("../../test/resources/funcmap-tests")
+	require.NoError(t, err)
+
+	assert.Contains(t, funcs, "upper")
+	assert.Contains(t, funcs, "lower")
+	assert.Contains(t, funcs, "repeat")
+	assert.Contains(t, funcs, "shout")
+	assert.Contains(t, funcs, "sprintf")
+	assert.NotContains(t, funcs, "localOnly")
+}
+
+func TestComputeGlobalFuncsEmptyWorkspace(t *testing.T) {
+	funcs, err := ComputeGlobalFuncs("")
+	require.NoError(t, err)
+
+	assert.Contains(t, funcs, "len")
+	assert.Contains(t, funcs, "and")
+	assert.Contains(t, funcs, "gt")
+	assert.Contains(t, funcs, "eq")
+	assert.Contains(t, funcs, "print")
+}
