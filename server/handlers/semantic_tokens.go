@@ -157,13 +157,29 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 		emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "continue")
 
 	case *serverTypes.TemplateNode:
-		emitKeywordToken(tokens, text, int(n.Position()), int(n.End()), "template")
-		if n.Pipe != nil {
-			walkSemanticNode(n.Pipe, text, tokens)
-		}
+		walkTemplateNode(n, text, tokens)
 
 	case *serverTypes.UndefinedNode:
 		// skip unparseable fragments
+	}
+}
+
+// walkTemplateNode emits tokens for a {{template}} action.
+// TemplateNode.Position() points at the template name, not the keyword, so
+// "template" is located by searching backwards in the source from the name.
+// The template name itself is emitted as a ttString token.
+func walkTemplateNode(n *serverTypes.TemplateNode, text string, tokens *[]rawToken) {
+	namePos := int(n.Position())
+	if namePos > 0 {
+		if kwStart := strings.LastIndex(text[:namePos], "template"); kwStart >= 0 {
+			emitToken(tokens, kwStart, len("template"), ttKeyword, 0)
+		}
+	}
+	if namePos >= 0 && namePos < len(text) {
+		emitToken(tokens, namePos, len(n.Name)+2, ttString, 0)
+	}
+	if n.Pipe != nil {
+		walkSemanticNode(n.Pipe, text, tokens)
 	}
 }
 
