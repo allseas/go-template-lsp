@@ -174,17 +174,32 @@ func TestDocumentMultipleDefines(t *testing.T) {
 
 	// treeAt: position at the very start of the file (on the {{define}} directive,
 	// before any define's content) → root template
-	assert.Equal(t, tree, doc.treeAt(parse.Pos(0)), "offset at start of file (before define A content) should be root")
+	assert.Equal(
+		t,
+		tree,
+		doc.treeAt(parse.Pos(0)),
+		"offset at start of file (before define A content) should be root",
+	)
 
 	// treeAt: position at the {{define "B"}} directive (after A's {{end}},
 	// before B's content) → root template
 	offDefineB := strings.Index(src, "{{- define \"B\"")
 	assert.Greater(t, offDefineB, 0, "sanity: found define B directive")
-	assert.Equal(t, tree, doc.treeAt(parse.Pos(offDefineB)), "offset at define B directive should be root")
+	assert.Equal(
+		t,
+		tree,
+		doc.treeAt(parse.Pos(offDefineB)),
+		"offset at define B directive should be root",
+	)
 
 	// treeAt: position at the very last byte of the source (after all {{end}}s)
 	// → root template
-	assert.Equal(t, tree, doc.treeAt(parse.Pos(len(src)-1)), "offset after all defines should be root")
+	assert.Equal(
+		t,
+		tree,
+		doc.treeAt(parse.Pos(len(src)-1)),
+		"offset after all defines should be root",
+	)
 }
 
 func TestDocumentRootHintOnFirstLine(t *testing.T) {

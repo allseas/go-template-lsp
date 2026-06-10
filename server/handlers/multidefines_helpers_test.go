@@ -100,7 +100,7 @@ func posOfSubStr(t *testing.T, src, substr string, occurrence int) protocol.Posi
 	return protocol.Position{Line: line, Character: char}
 }
 
-// multiDefinesTemplate is the classic multi-define template 
+// multiDefinesTemplate is the classic multi-define template
 const multiDefinesTemplate = `{{- /*gotype: text-template-server/src/model.Address*/ -}}
 {{ .Country }}
 {{- define "OrderTpl" -}}
