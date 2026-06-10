@@ -38,7 +38,7 @@ func semanticOrderType(t *testing.T) *serverTypes.Tree {
 // bypassing the type-hint loading mechanism that requires a workspace root.
 func setDocWithTypedTree(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	t.Helper()
-	tree, err := tryParse(src)
+	tree, _, err := tryParse(src)
 	require.NoError(t, err)
 	typedTree := buildTypedTree(tree, lt)
 	doc := &document{text: src, tree: tree, loadedType: lt, typedTree: typedTree}

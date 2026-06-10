@@ -82,10 +82,73 @@ func SemanticTokensFull(
 	}, nil
 }
 
+// reDefine matches the opening {{define "name"}} delimiter (with optional trim dashes).
+var reDefine = regexp.MustCompile(`\{\{-?\s*define\s+`)
+
 // DocumentSymbols implements the "textDocument/documentSymbol" LSP method.
-// Currently returns no symbols, but can be extended to provide a hierarchical outline of template constructs.
-func DocumentSymbols(_ *glsp.Context, _ *protocol.DocumentSymbolParams) (any, error) {
-	return nil, nil
+// Returns one symbol per {{define "name"}} block found in the document.
+func DocumentSymbols(
+	_ *glsp.Context,
+	params *protocol.DocumentSymbolParams,
+) (any, error) {
+	doc, ok := store.Get(params.TextDocument.URI)
+	if !ok || len(doc.treeSet) == 0 {
+		return nil, nil
+	}
+
+	var symbols []protocol.DocumentSymbol
+	for name, t := range doc.treeSet {
+		if t.Root == nil || name == "t" {
+			continue
+		}
+
+		bodyStart := int(t.Root.Position())
+		blockEnd := int(t.End)
+
+		// Search backward from the body start to find {{define.
+		blockStart := bodyStart
+		if m := reDefine.FindStringIndex(doc.text[:bodyStart]); m != nil {
+			blockStart = m[0]
+		}
+
+		// The name string sits between "define " and "}}" - find it for selectionRange.
+		nameStart := bodyStart
+		if bodyStart > blockStart {
+			header := doc.text[blockStart:bodyStart]
+			if idx := strings.Index(header, name); idx >= 0 {
+				nameStart = blockStart + idx
+			}
+		}
+		nameEnd := nameStart + len(name)
+
+		fullRange := bytesToRange(doc.text, blockStart, blockEnd)
+		selRange := bytesToRange(doc.text, nameStart, nameEnd)
+		kind := protocol.SymbolKindFunction
+
+		symbols = append(symbols, protocol.DocumentSymbol{
+			Name:           name,
+			Kind:           kind,
+			Range:          fullRange,
+			SelectionRange: selRange,
+		})
+	}
+
+	sort.Slice(symbols, func(i, j int) bool {
+		ri, rj := symbols[i].Range, symbols[j].Range
+		if ri.Start.Line != rj.Start.Line {
+			return ri.Start.Line < rj.Start.Line
+		}
+		return ri.Start.Character < rj.Start.Character
+	})
+
+	return symbols, nil
+}
+
+// bytesToRange converts a [start, end) byte range in text to an LSP Range.
+func bytesToRange(text string, start, end int) protocol.Range {
+	startPos := offsetToPosition(text, start)
+	endPos := offsetToPosition(text, end)
+	return protocol.Range{Start: startPos, End: endPos}
 }
 
 func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {

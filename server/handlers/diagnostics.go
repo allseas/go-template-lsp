@@ -66,7 +66,7 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 		tree = doc.tree
 	} else {
 		var err error
-		tree, err = tryParse(text)
+		tree, _, err = tryParse(text)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to parse template")
 		}

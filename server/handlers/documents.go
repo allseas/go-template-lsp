@@ -24,6 +24,8 @@ type document struct {
 	// deprecated, typedTree is enough, but functions should be rewritten
 	loadedType *types.Tree
 	typedTree  *types.Tree
+	// treeSet contains the named sub-trees produced by {{define}} blocks.
+	treeSet map[string]*parse.Tree
 }
 
 type documentStore struct {
@@ -36,7 +38,7 @@ var store = &documentStore{
 }
 
 func (s *documentStore) Set(uri, text string) {
-	tree, err := parseTemplate(uri, text)
+	tree, treeSet, err := parseTemplate(uri, text)
 
 	var lt *types.Tree
 	if WorkspaceRoot != "" {
@@ -56,6 +58,7 @@ func (s *documentStore) Set(uri, text string) {
 	if err != nil {
 		if existing, ok := s.docs[uri]; ok {
 			tree = existing.tree
+			treeSet = existing.treeSet
 		}
 	}
 
@@ -64,6 +67,7 @@ func (s *documentStore) Set(uri, text string) {
 		tree:       tree,
 		loadedType: lt,
 		typedTree:  buildTypedTree(tree, lt),
+		treeSet:    treeSet,
 	}
 	if doc.typedTree != nil {
 		types.SetEndsForTree(*doc.typedTree, types.Pos(len(text)), &doc.text)
@@ -104,23 +108,23 @@ func (s *documentStore) Delete(uri string) {
 	delete(s.docs, uri)
 }
 
-func parseTemplate(uri, text string) (*parse.Tree, error) {
-	tree, err := tryParse(text)
+func parseTemplate(uri, text string) (*parse.Tree, map[string]*parse.Tree, error) {
+	tree, treeSet, err := tryParse(text)
 	if err != nil {
 		log.Debug().Str("uri", uri).Err(err).Msg("full parse failed, tree is not updated")
 	}
-	return tree, err
+	return tree, treeSet, err
 }
 
-func tryParse(text string) (*parse.Tree, error) {
+func tryParse(text string) (*parse.Tree, map[string]*parse.Tree, error) {
 	t := parse.New("t")
 	t.Mode = parse.ParsePartial | parse.SkipFuncCheck | parse.ParseComments
 	treeSet := map[string]*parse.Tree{}
 	_, err := t.Parse(text, "{{", "}}", treeSet)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return t, nil
+	return t, treeSet, nil
 }
 
 // Remove deletes a document from the store, typically called when a file is closed in the editor.

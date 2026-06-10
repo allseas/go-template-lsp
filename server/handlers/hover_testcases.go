@@ -50,9 +50,9 @@ c
 `
 
 var (
-	docRootNode, _      = tryParse(docText)
-	shortDocRootNode, _ = tryParse(shortDocText)
-	elseRootNode, _     = tryParse(docElseText)
+	docRootNode, _, _      = tryParse(docText)
+	shortDocRootNode, _, _ = tryParse(shortDocText)
+	elseRootNode, _, _     = tryParse(docElseText)
 )
 
 var shortDocText = `
