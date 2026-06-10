@@ -79,7 +79,7 @@ func buildTypedTree(tree *parse.Tree, lt *types.Tree) *types.Tree {
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	t := types.NewTree(*tree, nil, dotType, pkg)
+	t := types.NewTree(*tree, types.GlobalFuncs(), dotType, pkg)
 	if lt != nil {
 		t.DotType = lt.DotType
 		t.Pkg = lt.Pkg
@@ -124,6 +124,30 @@ func (s *documentStore) Remove(uri string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.docs, uri)
+}
+
+// snapshot returns the current (uri, text) pairs in a stable order so callers
+// can re-process every open document without holding the store lock.
+func (s *documentStore) snapshot() []struct{ URI, Text string } {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]struct{ URI, Text string }, 0, len(s.docs))
+	for uri, d := range s.docs {
+		out = append(out, struct{ URI, Text string }{URI: uri, Text: d.text})
+	}
+	return out
+}
+
+// RefreshAllDocuments re-runs the document store pipeline (parse + typed tree)
+// for every open document and re-publishes diagnostics. Use this after the
+// workspace's global function map or other tree-wide inputs have changed.
+func RefreshAllDocuments(ctx *glsp.Context) {
+	for _, d := range store.snapshot() {
+		store.Set(d.URI, d.Text)
+		if ctx != nil {
+			publishDiagnostics(ctx, d.URI, d.Text)
+		}
+	}
 }
 
 // DidOpen is an LSP notification handler that registers a new document in the store when it is opened.
