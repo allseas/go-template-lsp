@@ -29,13 +29,23 @@ func TestLoadGlobalFuncs(t *testing.T) {
 
 	if fn := funcs["upper"]; assert.NotNil(t, fn, "upper should resolve to a *types.Func") {
 		assert.Equal(t, "Upper", fn.Name())
+		assert.Equal(t, 1, fn.Type().(*types.Signature).Params().Len())
+		assert.Equal(t, "string", fn.Type().(*types.Signature).Params().At(0).Type().String())
 	}
 	if fn := funcs["sprintf"]; assert.NotNil(t, fn, "sprintf should resolve to fmt.Sprintf") {
 		assert.Equal(t, "Sprintf", fn.Name())
+		assert.Equal(t, 2, fn.Type().(*types.Signature).Params().Len())
+		assert.Equal(t, "string", fn.Type().(*types.Signature).Params().At(0).Type().String())
+		assert.Equal(
+			t,
+			"[]any",
+			fn.Type().(*types.Signature).Params().At(1).Type().String(),
+		)
 	}
-	// inline literal function — no identifier to resolve, stored as nil.
-	_, present := funcs["shout"]
+	// inline literal function - no identifier to resolve, stored as nil.
+	shout, present := funcs["shout"]
 	assert.True(t, present)
+	assert.Nil(t, shout)
 }
 
 func TestGlobalFuncsCacheRoundTrip(t *testing.T) {

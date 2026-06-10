@@ -6,7 +6,6 @@ import (
 )
 
 // builtinPkg is a synthetic package used to own the builtin *types.Func objects.
-// It is never imported - it only exists so each Func has a non-nil parent package.
 var builtinPkg = types.NewPackage("text/template/builtin", "tmplbuiltin")
 
 // BuiltinFuncs returns a map of all Go text/template builtin function names to
@@ -30,6 +29,7 @@ func BuiltinFuncs() map[string]*types.Func {
 	sig := func(params []*types.Var, result types.Type) *types.Signature {
 		return types.NewSignatureType(nil, nil, nil, types.NewTuple(params...), ret(result), false)
 	}
+
 	// sigV builds a variadic signature; the last element of params is used as the
 	// variadic element type and is automatically wrapped in a slice.
 	sigV := func(params []*types.Var, result types.Type) *types.Signature {
