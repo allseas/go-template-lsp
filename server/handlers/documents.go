@@ -124,25 +124,26 @@ func buildTypedTree(tree *parse.Tree, lt *types.Tree) *types.Tree {
 	return &t
 }
 
-// treeAt returns the parse tree responsible for the given offset by picking
-// the tree whose Root.Position() is the largest one that is still <= offset.
+// treeAt returns the tightest parse tree that contains offset.
 func (d *document) treeAt(offset parse.Pos) *parse.Tree {
 	if d == nil {
 		return nil
 	}
 	var best *parse.Tree
-	var bestStart parse.Pos
+	var bestSpan parse.Pos
 	for _, t := range d.trees {
 		if t == nil || t.Root == nil {
 			continue
 		}
 		start := t.Root.Position()
-		if start > offset {
+		end := t.End
+		if start > offset || offset >= end {
 			continue
 		}
-		if best == nil || start > bestStart {
+		span := end - start
+		if best == nil || span < bestSpan {
 			best = t
-			bestStart = start
+			bestSpan = span
 		}
 	}
 	if best != nil {
