@@ -1,4 +1,4 @@
-// Package handlers provides a Language Server Protocol implementation for Go text/templates, featuring scope-aware variable completion and built-in function support.
+﻿// Package handlers provides a Language Server Protocol implementation for Go text/templates, featuring scope-aware variable completion and built-in function support.
 package handlers
 
 import (
@@ -299,8 +299,13 @@ func chainContext(cur serverTypes.Node) (types.Type, bool) {
 		return nil, false
 	}
 	switch n := arg.(type) {
-	case *serverTypes.VariableNode, *serverTypes.PipeNode:
+	case *serverTypes.PipeNode:
 		return arg.ValueType(), true
+	case *serverTypes.VariableNode:
+		if cur != arg || len(n.Ident) <= 1 {
+			return n.ValueType(), true
+		}
+		return chainPrefix(varBaseType(cur, n.Ident[0]), n.Ident[1:]), true
 	case *serverTypes.FieldNode:
 		if cur != arg {
 			return n.ValueType(), true
@@ -385,6 +390,18 @@ func chainPrefix(base types.Type, path []string) types.Type {
 		return base
 	}
 	return walkChainType(base, path[:len(path)-1])
+}
+
+// varBaseType returns the resolved type of the variable named name (e.g. "$" or
+// "$top") visible at cur, by walking the same scope used for variable
+// completions.
+func varBaseType(cur serverTypes.Node, name string) types.Type {
+	for _, v := range visibleVarsAt(cur) {
+		if v != nil && len(v.Ident) > 0 && v.Ident[0] == name {
+			return v.ValueType()
+		}
+	}
+	return nil
 }
 
 // visibleVarsAt returns variables in scope at cur. It starts from the snapshot
