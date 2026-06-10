@@ -23,6 +23,7 @@ type Tree struct {
 	Root      *ListNode // top-level root of the tree.
 	Mode      Mode      // parsing mode.
 	Errors    []error   // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
+	End       Pos       // position of the end of the template text; only set after parsing.
 	text      string    // text parsed to create the template (or its parent)
 	// Parsing only; cleared after parse.
 	funcs      []map[string]any
@@ -348,6 +349,7 @@ func (t *Tree) parse() {
 				newT.ParseName = t.ParseName
 				newT.startParse(t.funcs, t.lex, t.treeSet)
 				newT.parseDefinition()
+				newT.End = t.peek().pos
 				continue
 			}
 			t.backup2(delim)
@@ -364,6 +366,7 @@ func (t *Tree) parse() {
 			t.Root.append(n)
 		}
 	}
+	t.End = t.peek().pos
 }
 
 // parseDefinition parses a {{define}} ...  {{end}} template definition and

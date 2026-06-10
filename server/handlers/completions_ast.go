@@ -36,6 +36,54 @@ const (
 	outputUntyped            // call, index, slice — dynamic, don't restrict
 )
 
+// funcAcceptsKind reports whether funcName can receive a piped value of kind.
+//
+// For functions with at least one concrete (non-interface{}) parameter the
+// check is performed by type: the function accepts the kind iff at least one
+// concrete param matches. For functions whose every parameter is interface{}
+// (all current builtins) the check falls back to the curated functionsAccepting
+// table, preserving the existing semantic filtering.
+func funcAcceptsKind(funcName string, kind outputKind) bool {
+	if kind == outputAny || kind == outputUntyped {
+		return true
+	}
+	fn := serverTypes.GlobalFuncs()[funcName]
+	if fn == nil {
+		return true // unknown signature — don't flag
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return true
+	}
+	params := sig.Params()
+	hasConcreteParam := false
+	for i := range params.Len() {
+		t := params.At(i).Type()
+		// Unwrap variadic slice wrapper.
+		if sl, isSl := t.Underlying().(*types.Slice); isSl {
+			t = sl.Elem()
+		}
+		if _, isIface := t.Underlying().(*types.Interface); isIface {
+			continue
+		}
+		hasConcreteParam = true
+		if basicTypeMatchesKind(t, kind) {
+			return true
+		}
+	}
+	if hasConcreteParam {
+		return false // concrete params present but none matched
+	}
+	// All params are interface{} — use the curated semantic list.
+	allowed := functionsAccepting[kind]
+	for _, name := range allowed {
+		if name == funcName {
+			return true
+		}
+	}
+	return false
+}
+
 // deprecated, built in output can be derived from the type tree
 var builtinOutput = map[string]outputKind{
 	"len":      outputInt,
@@ -657,18 +705,19 @@ func methodCompletionItems(
 	return items
 }
 
-// builtinNames is the static list of builtins surfaced when nothing in the pipe
-// constrains the suggestion to a typed set.
-var builtinNames = []string{
-	"and", "call", "html", "index", "slice", "js", "len",
-	"not", "or", "print", "printf", "println", "urlquery",
-	"eq", "ne", "lt", "le", "gt", "ge", "if", "range",
-}
+// templateActionNames lists the Go-template control keywords that should be
+// suggested alongside functions when no pipe constraint is active.
+// These are NOT in any FuncMap so they are kept separately from GlobalFuncs.
+var templateActionNames = []string{"if", "range"}
 
 func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
-	items := make([]protocol.CompletionItem, 0, len(builtinNames))
-	for _, name := range builtinNames {
+	funcs := serverTypes.GlobalFuncs()
+	items := make([]protocol.CompletionItem, 0, len(funcs)+len(templateActionNames))
+	for name := range funcs {
 		items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
+	}
+	for _, name := range templateActionNames {
+		items = append(items, newItem(name, protocol.CompletionItemKindKeyword, wordRange))
 	}
 	return items
 }

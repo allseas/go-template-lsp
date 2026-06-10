@@ -20,6 +20,7 @@ type Tree struct {
 	ParseName  string                 // name of the top-level template during parsing, for error messages.
 	Root       *ListNode              // top-level root of the tree.
 	Errors     []error                // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
+	End        Pos                    // position of the end of the template text; only set after parsing.
 	funcs      map[string]*types.Func // available functions with their signatures
 	DotType    *types.Named           // optional: type of dot context (from gotype hint)
 	Pkg        *types.Package         // optional: package containing DotType
@@ -68,6 +69,7 @@ func NewTree(
 		Name:      parseTree.Name,
 		ParseName: parseTree.ParseName,
 		Errors:    parseTree.Errors,
+		End:       Pos(parseTree.End),
 		funcs:     funcs,
 		Pkg:       pkg,
 	}
