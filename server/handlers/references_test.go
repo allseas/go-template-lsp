@@ -265,3 +265,63 @@ func TestIsVarDeclNotVariable(t *testing.T) {
 	n := &parse.IdentifierNode{Ident: "printf"}
 	assert.False(t, isVarDecl(n, "id:printf"))
 }
+
+// TestReferencesMultiDefines tests References inside a document with
+// multiple {{define}} blocks.
+func TestReferencesMultiDefines(t *testing.T) {
+	src := `{{- define "A" -}}
+{{- /*gotype: text-template-server/src/model.Order*/ -}}
+{{ $local := .CustomerName }}
+A: {{ $local }} {{ $local }}
+{{- end -}}
+{{- define "B" -}}
+{{ $local := "b" }}
+B: {{ $local }}
+{{- end -}}
+`
+	uri := "file:///ref-multidefines.tmpl"
+	setDocMulti(t, uri, src, nil)
+	t.Cleanup(func() { store.Delete(uri) })
+
+	cases := []struct {
+		name          string
+		posSubStr     string
+		posOccurrence int
+		wantCount     int
+	}{
+		{
+			name:          "cursor on $local inside A finds only A's three refs",
+			posSubStr:     "$local",
+			posOccurrence: 0, // first $local: declaration in A
+			wantCount:     3,
+		},
+		{
+			name:          "cursor on $local inside B finds only B's two refs",
+			posSubStr:     "$local",
+			posOccurrence: 3, // first $local in B: declaration
+			wantCount:     2,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pos := posOfSubStr(t, src, tc.posSubStr, tc.posOccurrence)
+			pos.Character++ // land inside the identifier
+
+			params := &protocol.ReferenceParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+					Position:     pos,
+				},
+				Context: protocol.ReferenceContext{IncludeDeclaration: true},
+			}
+
+			results, err := References(nil, params)
+			require.NoError(t, err)
+			assert.Len(t, results, tc.wantCount)
+			for _, loc := range results {
+				assert.Equal(t, uri, loc.URI)
+			}
+		})
+	}
+}

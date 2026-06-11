@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 	parse "text-template-parser"
@@ -21,9 +22,16 @@ var WorkspaceRoot string
 type document struct {
 	text string
 	tree *parse.Tree
+	// trees holds every parse tree produced for this document, keyed by tree name.
+	// Includes the root tree under its own name and one entry per {{define}} block.
+	trees map[string]*parse.Tree
 	// deprecated, typedTree is enough, but functions should be rewritten
 	loadedType *types.Tree
 	typedTree  *types.Tree
+	// loadedTypes is the per-tree dot-type resolved from the gotype hint that is located directly under each tree's {{define}}
+	loadedTypes map[string]*types.Tree
+	// typedTrees is the per-tree analysed (typed) tree, paired with loadedTypes.
+	typedTrees map[string]*types.Tree
 }
 
 type documentStore struct {
@@ -36,18 +44,28 @@ var store = &documentStore{
 }
 
 func (s *documentStore) Set(uri, text string) {
-	tree, err := parseTemplate(uri, text)
+	tree, treeSet, err := parseTemplate(uri, text)
+
+	loadedTypes := make(map[string]*types.Tree)
+	if WorkspaceRoot != "" {
+		for name, tr := range treeSet {
+			isRoot := tree != nil && tr == tree
+			hint := hintTypeForTree(text, tr, isRoot)
+			if hint == "" {
+				continue
+			}
+			loaded, lerr := types.LoadTypeFromHint(hint, WorkspaceRoot)
+			if lerr != nil {
+				log.Warn().Str("hint", hint).Err(lerr).Msg("type hint load failed")
+				continue
+			}
+			loadedTypes[name] = loaded
+		}
+	}
 
 	var lt *types.Tree
-	if WorkspaceRoot != "" {
-		hints := types.ParseTypeHints(strings.NewReader(text))
-		if len(hints) > 0 {
-			if loaded, lerr := types.LoadTypeFromHint(hints[0].Type, WorkspaceRoot); lerr == nil {
-				lt = loaded
-			} else {
-				log.Warn().Str("hint", hints[0].Type).Err(lerr).Msg("type hint load failed")
-			}
-		}
+	if tree != nil {
+		lt = loadedTypes[tree.Name]
 	}
 
 	s.mu.Lock()
@@ -56,14 +74,33 @@ func (s *documentStore) Set(uri, text string) {
 	if err != nil {
 		if existing, ok := s.docs[uri]; ok {
 			tree = existing.tree
+			treeSet = existing.trees
+			if existing.loadedTypes != nil {
+				loadedTypes = existing.loadedTypes
+			}
+			if lt == nil {
+				lt = existing.loadedType
+			}
 		}
 	}
 
+	typedTrees := make(map[string]*types.Tree, len(treeSet))
+	for name, tr := range treeSet {
+		typedTrees[name] = buildTypedTree(tr, loadedTypes[name])
+	}
+	var typed *types.Tree
+	if tree != nil {
+		typed = typedTrees[tree.Name]
+	}
+
 	s.docs[uri] = &document{
-		text:       text,
-		tree:       tree,
-		loadedType: lt,
-		typedTree:  buildTypedTree(tree, lt),
+		text:        text,
+		tree:        tree,
+		trees:       treeSet,
+		loadedType:  lt,
+		typedTree:   typed,
+		loadedTypes: loadedTypes,
+		typedTrees:  typedTrees,
 	}
 }
 
@@ -87,6 +124,66 @@ func buildTypedTree(tree *parse.Tree, lt *types.Tree) *types.Tree {
 	return &t
 }
 
+// treeAt returns the tightest parse tree that contains offset.
+func (d *document) treeAt(offset parse.Pos) *parse.Tree {
+	if d == nil {
+		return nil
+	}
+	var best *parse.Tree
+	var bestSpan parse.Pos
+	for _, t := range d.trees {
+		if t == nil || t.Root == nil {
+			continue
+		}
+		start := t.Root.Position()
+		end := t.End
+		if start > offset || offset >= end {
+			continue
+		}
+		span := end - start
+		if best == nil || span < bestSpan {
+			best = t
+			bestSpan = span
+		}
+	}
+	if best != nil {
+		return best
+	}
+	return d.tree
+}
+
+// loadedTypeAt returns the loaded type for the tree that covers offset.
+// Falls back to d.loadedType for legacy callers that did not populate loadedTypes.
+func (d *document) loadedTypeAt(offset parse.Pos) *types.Tree {
+	if d == nil {
+		return nil
+	}
+	if d.loadedTypes != nil {
+		if tr := d.treeAt(offset); tr != nil {
+			if lt, ok := d.loadedTypes[tr.Name]; ok {
+				return lt
+			}
+		}
+	}
+	return d.loadedType
+}
+
+// typedTreeAt returns the typed tree for the tree that covers offset.
+// Falls back to d.typedTree for legacy callers.
+func (d *document) typedTreeAt(offset parse.Pos) *types.Tree {
+	if d == nil {
+		return nil
+	}
+	if d.typedTrees != nil {
+		if tr := d.treeAt(offset); tr != nil {
+			if tt, ok := d.typedTrees[tr.Name]; ok {
+				return tt
+			}
+		}
+	}
+	return d.typedTree
+}
+
 func (s *documentStore) Get(uri string) (*document, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -100,23 +197,106 @@ func (s *documentStore) Delete(uri string) {
 	delete(s.docs, uri)
 }
 
-func parseTemplate(uri, text string) (*parse.Tree, error) {
-	tree, err := tryParse(text)
+func parseTemplate(uri, text string) (*parse.Tree, map[string]*parse.Tree, error) {
+	tree, treeSet, err := tryParse(text)
 	if err != nil {
 		log.Debug().Str("uri", uri).Err(err).Msg("full parse failed, tree is not updated")
 	}
-	return tree, err
+	return tree, treeSet, err
 }
 
-func tryParse(text string) (*parse.Tree, error) {
+func tryParse(text string) (*parse.Tree, map[string]*parse.Tree, error) {
 	t := parse.New("t")
 	t.Mode = parse.ParsePartial | parse.SkipFuncCheck
 	treeSet := map[string]*parse.Tree{}
 	_, err := t.Parse(text, "{{", "}}", treeSet)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return t, nil
+	return t, treeSet, nil
+}
+
+// hintTypeForTree returns the gotype hint string for the given tree.
+func hintTypeForTree(text string, tree *parse.Tree, isRoot bool) string {
+	if isRoot {
+		return firstHintIn(firstLineOf(text))
+	}
+	if tree == nil {
+		return ""
+	}
+	line := findDefineLine(text, tree.Name)
+	if line <= 0 {
+		return ""
+	}
+	return firstHintIn(getLine(text, line+1))
+}
+
+func firstHintIn(line string) string {
+	if line == "" {
+		return ""
+	}
+	hints := types.ParseTypeHints(strings.NewReader(line))
+	if len(hints) == 0 {
+		return ""
+	}
+	return hints[0].Type
+}
+
+var defineRe = regexp.MustCompile(`\{\{-?\s*define\s+"([^"]*)"\s*-?\}\}`)
+
+// findDefineLine returns the 1-based line number of the {{define "name"}}
+// directive in text, or -1 if not found.
+func findDefineLine(text, name string) int {
+	for _, m := range defineRe.FindAllStringSubmatchIndex(text, -1) {
+		// m: [start, end, nameStart, nameEnd]
+		if len(m) < 4 {
+			continue
+		}
+		got := text[m[2]:m[3]]
+		if got != name {
+			continue
+		}
+		line := 1
+		for i := 0; i < m[0]; i++ {
+			if text[i] == '\n' {
+				line++
+			}
+		}
+		return line
+	}
+	return -1
+}
+
+// getLine returns the 1-based line of text, without its trailing newline.
+func getLine(text string, line int) string {
+	if line <= 0 {
+		return ""
+	}
+	start := 0
+	cur := 1
+	for cur < line && start < len(text) {
+		nl := strings.IndexByte(text[start:], '\n')
+		if nl < 0 {
+			return ""
+		}
+		start += nl + 1
+		cur++
+	}
+	if start >= len(text) {
+		return ""
+	}
+	end := strings.IndexByte(text[start:], '\n')
+	if end < 0 {
+		return text[start:]
+	}
+	return text[start : start+end]
+}
+
+func firstLineOf(text string) string {
+	if i := strings.IndexByte(text, '\n'); i >= 0 {
+		return text[:i]
+	}
+	return text
 }
 
 // Remove deletes a document from the store, typically called when a file is closed in the editor.

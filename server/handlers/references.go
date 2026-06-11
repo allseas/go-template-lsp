@@ -17,7 +17,11 @@ func References(_ *glsp.Context, params *protocol.ReferenceParams) ([]protocol.L
 	}
 
 	offset := positionToOffset(doc.text, params.Position)
-	target := nodeFind(doc.tree.Root, parse.Pos(offset))
+	tree := doc.treeAt(parse.Pos(offset))
+	if tree == nil || tree.Root == nil {
+		return nil, nil
+	}
+	target := nodeFind(tree.Root, parse.Pos(offset))
 	if target == nil {
 		return nil, nil
 	}
@@ -30,7 +34,7 @@ func References(_ *glsp.Context, params *protocol.ReferenceParams) ([]protocol.L
 	var results []protocol.Location
 	includeDecl := params.Context.IncludeDeclaration
 
-	inspect(doc.tree.Root, func(n parse.Node) bool {
+	inspect(tree.Root, func(n parse.Node) bool {
 		key, ok := nodeKey(n)
 		if !ok || key != targetKey {
 			return true

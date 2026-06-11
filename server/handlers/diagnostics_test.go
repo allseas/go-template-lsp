@@ -510,3 +510,39 @@ comment
 		})
 	}
 }
+
+// TestCollectDiagnostics_MultiDefines verifies that diagnostics are collected
+// across every {{define}} tree in a single document and that a syntax error
+// in one define does not suppress diagnostics in another.
+func TestCollectDiagnostics_MultiDefines(t *testing.T) {
+	t.Run("clean multi-define document yields no diagnostics", func(t *testing.T) {
+		src := "{{- define \"A\" -}}\n" +
+			"{{- /*gotype: text-template-server/src/model.Order*/ -}}\n" +
+			"A: {{ .CustomerName }}\n" +
+			"{{- end -}}\n" +
+			"{{- define \"B\" -}}\n" +
+			"{{ $x := . }}\nB: {{ $x }}\n" +
+			"{{- end -}}\n"
+
+		diags := collectDiagnostics(src, "file:///diag-multi-clean.tmpl")
+		assert.Empty(t, diags, "expected no diagnostics, got: %v", diagMessages(diags))
+	})
+
+	t.Run("error in one define is reported per-tree", func(t *testing.T) {
+		src := "{{- define \"A\" -}}\n" +
+			"A: {{ random }}\n" + // unsupported function
+			"{{- end -}}\n" +
+			"{{- define \"B\" -}}\n" +
+			"B: {{ .Name }}\n" +
+			"{{- end -}}\n"
+
+		diags := collectDiagnostics(src, "file:///diag-multi-err.tmpl")
+		_, ok := findDiagnosticContaining(diags, "unsupported function or unregistered command")
+		require.True(
+			t,
+			ok,
+			"expected unsupported-function diagnostic in define A, got: %v",
+			diagMessages(diags),
+		)
+	})
+}
