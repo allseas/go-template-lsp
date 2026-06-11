@@ -591,7 +591,6 @@ func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
 // {{define}} blocks in one document, each carrying its own gotype hint, to
 // verify that dot-completion uses the per-tree loaded type.
 func TestCompletionAstMultiDefines(t *testing.T) {
-
 	loaded := loadModelTypes(t, "Order", "Address")
 	perTree := map[string]*serverTypes.Tree{
 		"t":          loaded["Address"],
