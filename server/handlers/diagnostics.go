@@ -60,27 +60,55 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 
 // collectDiagnostics returns diagnostics from AST analysis using the improved parser.
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
-	var tree *parse.Tree
+	var trees map[string]*parse.Tree
 
-	var typedTree *types.Tree
-	if doc, ok := store.Get(uri); ok {
-		if doc.tree != nil {
-			tree = doc.tree
-		}
-		typedTree = doc.typedTree
+	if doc, ok := store.Get(uri); ok && len(doc.trees) > 0 {
+		trees = doc.trees
 	} else {
-		var err error
-		tree, err = tryParse(text)
+		_, parsed, err := tryParse(text)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to parse template")
 		}
+		trees = parsed
 	}
 
-	if tree != nil && tree.Root != nil {
+	if len(trees) == 0 {
+		log.Debug().Msg("no parse trees available for diagnostics")
+		return diagnostics
+	}
+
+	for _, tree := range trees {
+		if tree == nil || tree.Root == nil {
+			continue
+		}
 		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-		diagnostics = walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)
-	} else {
-		log.Debug().Msg("tree or root is nil")
+		diagnostics = append(
+			diagnostics,
+			walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)...,
+		)
+	}
+
+	return diagnostics
+}
+
+// collectTemplateArgTypeDiagnostics converts ErrorTypeInvalidTemplateArg entries from
+// the typed tree into protocol diagnostics.
+func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
+	var diagnostics []protocol.Diagnostic
+	for _, terr := range typedTree.TypeErrors {
+		if terr.ErrType() != types.ErrorTypeInvalidTemplateArg {
+			continue
+		}
+		if terr.Node == nil {
+			continue
+		}
+		pos := int(terr.Node.Position())
+		rng := expandToFullBracketsFromOffset(pos, text)
+		diagnostics = append(diagnostics, createDiagnostic(
+			withPos(text, pos, terr.Err),
+			rng,
+			true,
+		))
 	}
 
 	// Surface template argument type errors from the typed tree.
