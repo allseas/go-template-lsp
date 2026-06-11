@@ -15,6 +15,10 @@ import (
 
 // Hover handles providing the hover message
 func Hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
+	if !GetConfig().EnableHover {
+		log.Debug().Msg("hover requested but hover is disabled by config")
+		return
+	}
 	// Get document content
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !ok || doc.tree == nil {

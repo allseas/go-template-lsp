@@ -152,11 +152,6 @@ func RefreshAllDocuments(ctx *glsp.Context) {
 
 // DidOpen is an LSP notification handler that registers a new document in the store when it is opened.
 func DidOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-	if !GetConfig().EnableServer {
-		log.Debug().Msg("didOpen received but server is disabled by config")
-		return nil
-	}
-
 	store.Set(params.TextDocument.URI, params.TextDocument.Text)
 	if ctx != nil {
 		publishDiagnostics(ctx, params.TextDocument.URI, params.TextDocument.Text)
@@ -169,11 +164,6 @@ func DidChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) 
 	log.Debug().
 		Str("uri", params.TextDocument.URI).
 		Msg("document changed")
-
-	if !GetConfig().EnableServer {
-		log.Debug().Msg("didOpen received but server is disabled by config")
-		return nil
-	}
 
 	for _, change := range params.ContentChanges {
 		switch c := change.(type) {

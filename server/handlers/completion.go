@@ -33,8 +33,8 @@ func globalFunctionNames() []string {
 // the current template context and returning relevant globalFunctions and variable names.
 func completion(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !GetConfig().EnableServer {
-		log.Debug().Msg("completion requested but server is disabled by config")
+	if !GetConfig().EnableAutocompletion {
+		log.Debug().Msg("completion requested but autocompletion is disabled by config")
 		return nil, nil
 	}
 

@@ -17,17 +17,34 @@ import (
 // TraceValueMessages is the "messages" trace level. The "message" one in glsp is wrong.
 const TraceValueMessages = protocol.TraceValue("messages")
 
-// Config represents the server's configuration settings, including whether the server is enabled and the trace level for logging. It is designed to be updated based on client settings and can be safely accessed across concurrent requests.
+// DiagnosticsConfig controls which individual diagnostic categories are reported.
+type DiagnosticsConfig struct {
+	SyntaxError            bool `json:"syntaxError"`
+	VariableRedeclaration  bool `json:"variableRedeclaration"`
+	IncorrectFunction      bool `json:"incorrectFunction"`
+}
+
+// Config represents the server's configuration settings. It is designed to be updated based on client settings and can be safely accessed across concurrent requests.
 type Config struct {
-	EnableServer bool `json:"enableServer"`
-	Trace        struct {
+	EnableHover          bool              `json:"enableHover"`
+	EnableDefinition     bool              `json:"enableDefinition"`
+	EnableDiagnostics    bool              `json:"enableDiagnostics"`
+	Diagnostics          DiagnosticsConfig `json:"diagnostics"`
+	EnableAutocompletion bool              `json:"enableAutocompletion"`
+	Trace                struct {
 		Server protocol.TraceValue `json:"server"`
 	} `json:"trace"`
 }
 
 var (
-	currentConfig = Config{EnableServer: true}
-	configMu      sync.RWMutex
+	currentConfig = Config{
+		EnableHover:          true,
+		EnableDefinition:     true,
+		EnableDiagnostics:    true,
+		Diagnostics:          DiagnosticsConfig{SyntaxError: true, VariableRedeclaration: true, IncorrectFunction: true},
+		EnableAutocompletion: true,
+	}
+	configMu sync.RWMutex
 )
 
 // GetConfig safely retrieves the current configuration settings. It uses a read lock to ensure thread-safe access to the global configuration variable.

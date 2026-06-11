@@ -120,8 +120,8 @@ func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) 
 // completions that use the typed AST exclusively. All scope/context
 // information (variables, dot type, parent) is derived from traversing the typed tree
 func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
-	if !GetConfig().EnableServer {
-		log.Debug().Msg("completion requested but server is disabled by config")
+	if !GetConfig().EnableAutocompletion {
+		log.Debug().Msg("completion requested but autocompletion is disabled by config")
 		return nil
 	}
 	doc, ok := store.Get(params.TextDocument.URI)
