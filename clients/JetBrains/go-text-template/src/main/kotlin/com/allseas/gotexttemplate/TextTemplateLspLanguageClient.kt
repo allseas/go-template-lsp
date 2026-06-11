@@ -11,7 +11,18 @@ class TextTemplateLspLanguageClient(
         val config = ProjectSettings.getInstance(project).getEffectiveState()
         val json =
             JsonObject().apply {
-                addProperty("enableServer", config.enableServer)
+                addProperty("enableHover", config.enableHover)
+                addProperty("enableDefinition", config.enableDefinition)
+                addProperty("enableDiagnostics", config.enableDiagnostics)
+                add(
+                    "diagnostics",
+                    JsonObject().apply {
+                        addProperty("syntaxError", config.diagnosticsSyntaxError)
+                        addProperty("variableRedeclaration", config.diagnosticsVariableRedeclaration)
+                        addProperty("incorrectFunction", config.diagnosticsIncorrectFunction)
+                    },
+                )
+                addProperty("enableAutocompletion", config.enableAutocompletion)
                 add(
                     "trace",
                     JsonObject().apply {

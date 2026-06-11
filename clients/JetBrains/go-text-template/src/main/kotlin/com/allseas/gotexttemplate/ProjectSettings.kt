@@ -10,7 +10,13 @@ import com.intellij.openapi.project.Project
 @State(name = "com.example.gotexttemplate.ProjectSettings", storages = [Storage("goTextTemplateSettings.xml")])
 class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
     data class State(
-        var enableServerOverride: Boolean? = null,
+        var enableHoverOverride: Boolean? = null,
+        var enableDefinitionOverride: Boolean? = null,
+        var enableDiagnosticsOverride: Boolean? = null,
+        var diagnosticsSyntaxErrorOverride: Boolean? = null,
+        var diagnosticsVariableRedeclarationOverride: Boolean? = null,
+        var diagnosticsIncorrectFunctionOverride: Boolean? = null,
+        var enableAutocompletionOverride: Boolean? = null,
         var traceServerOverride: AppSettings.TraceLevel? = null,
     )
 
@@ -29,7 +35,13 @@ class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
     fun getEffectiveState(): AppSettings.State {
         val appState = AppSettings.getInstance().state
         return AppSettings.State(
-            enableServer = state.enableServerOverride ?: appState.enableServer,
+            enableHover = state.enableHoverOverride ?: appState.enableHover,
+            enableDefinition = state.enableDefinitionOverride ?: appState.enableDefinition,
+            enableDiagnostics = state.enableDiagnosticsOverride ?: appState.enableDiagnostics,
+            diagnosticsSyntaxError = state.diagnosticsSyntaxErrorOverride ?: appState.diagnosticsSyntaxError,
+            diagnosticsVariableRedeclaration = state.diagnosticsVariableRedeclarationOverride ?: appState.diagnosticsVariableRedeclaration,
+            diagnosticsIncorrectFunction = state.diagnosticsIncorrectFunctionOverride ?: appState.diagnosticsIncorrectFunction,
+            enableAutocompletion = state.enableAutocompletionOverride ?: appState.enableAutocompletion,
             traceServer = state.traceServerOverride ?: appState.traceServer,
         )
     }
