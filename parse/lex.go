@@ -77,7 +77,8 @@ const (
 
 var key = map[string]itemType{
 	".":        itemDot,
-	"block":    itemBlock,
+	"block":    itemTable,
+	"slot":     itemBlock,
 	"break":    itemBreak,
 	"continue": itemContinue,
 	"define":   itemDefine,
@@ -273,6 +274,8 @@ func lexText(l *lexer) stateFn {
 			delimEnd := l.pos + Pos(len(l.leftDelim))
 			if hasLeftTrimMarker(l.input[delimEnd:]) {
 				trimLength = rightTrimLength(l.input[l.start:l.pos])
+			} else if hasLeftLineTrimMarker(l.input[delimEnd:]) { // ALLSEAS ADDITION
+				trimLength = rightTrimCharsLength(l.input[l.start:l.pos], lineSpaceChars) // ALLSEAS ADDITION
 			}
 			l.pos -= trimLength
 			l.line += strings.Count(l.input[l.start:l.pos], "\n")
@@ -328,6 +331,8 @@ func lexLeftDelim(l *lexer) stateFn {
 		l.pos += afterMarker
 		l.ignore()
 		return lexComment
+	} else if hasLeftLineTrimMarker(l.input[l.pos:]) { // ALLSEAS ADDITION
+		afterMarker = trimLineMarkerLen // ALLSEAS ADDITION
 	}
 	i := l.thisItem(itemLeftDelim)
 	l.insideAction = true

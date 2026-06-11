@@ -497,6 +497,8 @@ func (t *Tree) action() (n Node) {
 		return t.templateControl()
 	case itemWith:
 		return t.withControl()
+	case itemTable: // ALLSEAS ADDITION
+		return t.tableControl() // ALLSEAS ADDITION
 	case itemError:
 		if t.Mode&ParsePartial != 0 {
 			recErr := t.recordError(token.pos, "unexpected token in command: %s", token)
