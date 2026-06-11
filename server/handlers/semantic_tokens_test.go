@@ -209,6 +209,289 @@ func makeSemanticParams(uri string) *protocol.SemanticTokensParams {
 	}
 }
 
+func makeDocSymParams(uri string) *protocol.DocumentSymbolParams {
+	return &protocol.DocumentSymbolParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+	}
+}
+
+// castDocSymbols casts the any result from DocumentSymbols to []protocol.DocumentSymbol.
+func castDocSymbols(t *testing.T, result any) []protocol.DocumentSymbol {
+	t.Helper()
+	if result == nil {
+		return nil
+	}
+	syms, ok := result.([]protocol.DocumentSymbol)
+	require.True(t, ok, "expected []protocol.DocumentSymbol, got %T", result)
+	return syms
+}
+
+// setDocFromSource registers a document in the global store by parsing it so that
+// doc.trees is populated (required by DocumentSymbols).
+func setDocFromSource(t *testing.T, uri, src string) {
+	t.Helper()
+	store.Set(uri, src)
+}
+
+// TestDocumentSymbolsNoDocument verifies nil is returned when the document is absent.
+func TestDocumentSymbolsNoDocument(t *testing.T) {
+	result, err := DocumentSymbols(nil, makeDocSymParams("file:///sym-missing.tmpl"))
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+// TestDocumentSymbolsNoDefines verifies that a document with no {{define}} blocks
+// produces no symbols (only the root "t" tree exists, which is skipped).
+func TestDocumentSymbolsNoDefines(t *testing.T) {
+	uri := "file:///sym-nodefines.tmpl"
+	setDocFromSource(t, uri, `Hello {{.Name}}`)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+	assert.Empty(t, syms)
+}
+
+// TestDocumentSymbolsSingleDefine verifies that a single {{define}} block produces
+// exactly one symbol with the correct name, kind, and well-formed ranges.
+func TestDocumentSymbolsSingleDefine(t *testing.T) {
+	uri := "file:///sym-single.tmpl"
+	src := `{{define "header"}}Hello World{{end}}`
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+	require.Len(t, syms, 1)
+
+	sym := syms[0]
+	assert.Equal(t, "header", sym.Name)
+	assert.Equal(t, protocol.SymbolKindFunction, sym.Kind)
+
+	// Full range must span the whole define block.
+	assert.LessOrEqual(t, sym.Range.Start.Line, sym.Range.End.Line)
+	// Full range must end after it starts.
+	assert.True(
+		t,
+		sym.Range.End.Character > sym.Range.Start.Character ||
+			sym.Range.End.Line > sym.Range.Start.Line,
+	)
+}
+
+// TestDocumentSymbolsMultipleDefines verifies that multiple {{define}} blocks are
+// all reported, regardless of iteration order.
+func TestDocumentSymbolsMultipleDefines(t *testing.T) {
+	uri := "file:///sym-multi.tmpl"
+	src := "{{define \"header\"}}top{{end}}\n{{define \"footer\"}}bottom{{end}}"
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+	require.Len(t, syms, 2)
+
+	names := []string{syms[0].Name, syms[1].Name}
+	assert.ElementsMatch(t, []string{"header", "footer"}, names)
+}
+
+// TestDocumentSymbolsEmptyBody verifies that a {{define}} block with an empty body
+// is still reported as a valid symbol.
+func TestDocumentSymbolsEmptyBody(t *testing.T) {
+	uri := "file:///sym-empty.tmpl"
+	src := `{{define "empty"}}{{end}}`
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+	require.Len(t, syms, 1)
+	assert.Equal(t, "empty", syms[0].Name)
+	assert.Equal(t, protocol.SymbolKindFunction, syms[0].Kind)
+}
+
+// TestDocumentSymbolsRangePositions verifies that the full range of a {{define}} block
+// starts before (or at) the selection range and ends after (or at) it.
+func TestDocumentSymbolsRangePositions(t *testing.T) {
+	uri := "file:///sym-ranges.tmpl"
+	src := `{{define "myBlock"}}some content{{end}}`
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+	require.Len(t, syms, 1)
+
+	sym := syms[0]
+	fullStart := sym.Range.Start.Line*10000 + sym.Range.Start.Character
+	fullEnd := sym.Range.End.Line*10000 + sym.Range.End.Character
+	selStart := sym.SelectionRange.Start.Line*10000 + sym.SelectionRange.Start.Character
+	selEnd := sym.SelectionRange.End.Line*10000 + sym.SelectionRange.End.Character
+
+	assert.LessOrEqual(
+		t,
+		fullStart,
+		selStart,
+		"full range should start at or before selection range",
+	)
+	assert.GreaterOrEqual(t, fullEnd, selEnd, "full range should end at or after selection range")
+}
+
+// TestDocumentSymbolsMultilineDefine verifies range positions for a multi-line block.
+func TestDocumentSymbolsMultilineDefine(t *testing.T) {
+	uri := "file:///sym-multiline.tmpl"
+	src := "{{define \"layout\"}}\n  <h1>{{.Title}}</h1>\n{{end}}"
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+	require.Len(t, syms, 1)
+
+	sym := syms[0]
+	assert.Equal(t, "layout", sym.Name)
+	// The block spans multiple lines so End.Line > Start.Line.
+	assert.Greater(t, sym.Range.End.Line, sym.Range.Start.Line)
+}
+
+// TestDocumentSymbolsThreeDefines verifies that three defines are all reported.
+func TestDocumentSymbolsThreeDefines(t *testing.T) {
+	uri := "file:///sym-three.tmpl"
+	src := "{{define \"a\"}}A{{end}}\n{{define \"b\"}}B{{end}}\n{{define \"c\"}}C{{end}}"
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+	require.Len(t, syms, 3)
+
+	names := make([]string, len(syms))
+	for i, s := range syms {
+		names[i] = s.Name
+	}
+	assert.ElementsMatch(t, []string{"a", "b", "c"}, names)
+}
+
+// TestSemanticTokensAdditionalCases covers node kinds not exercised by
+// TestSemanticTokenNodeTypes, including else/if branches, pipes with assignment,
+// and template calls with a pipeline argument.
+func TestSemanticTokensAdditionalCases(t *testing.T) {
+	lt := semanticOrderType(t)
+
+	tests := []struct {
+		name          string
+		src           string
+		noType        bool
+		wantTypes     []uint32
+		wantModifiers []uint32
+	}{
+		{
+			// if/else if/else/end
+			// The parser converts {{else if}} into a nested IfNode, so both the
+			// inner and outer emitEndKeyword fire for the shared {{end}}, yielding
+			// 8 tokens (the final "end" appears twice at the same position).
+			name:   "if/else-if/else/end keywords",
+			src:    `{{if .}}{{else if .}}{{else}}{{end}}`,
+			noType: true,
+			wantTypes: []uint32{
+				ttKeyword,
+				ttVariable,
+				ttKeyword,
+				ttKeyword,
+				ttVariable,
+				ttKeyword,
+				ttKeyword,
+				ttKeyword,
+			},
+		},
+		{
+			// with/else/end
+			name:      "with/else/end",
+			src:       `{{with .Address}}{{else}}nothing{{end}}`,
+			wantTypes: []uint32{ttKeyword, ttProperty, ttKeyword, ttKeyword},
+		},
+		{
+			// range/else/end
+			name:      "range/else/end",
+			src:       `{{range .Items}}{{else}}empty{{end}}`,
+			wantTypes: []uint32{ttKeyword, ttProperty, ttKeyword, ttKeyword},
+		},
+		{
+			// pipeline with variable assignment: $x, $y := range ...
+			name:          "range with two-variable assignment",
+			src:           `{{range $i, $v := .Items}}{{end}}`,
+			wantTypes:     []uint32{ttKeyword, ttVariable, ttVariable, ttProperty, ttKeyword},
+			wantModifiers: []uint32{0, tmDeclaration, tmDeclaration, 0, 0},
+		},
+		{
+			// negative number literal
+			name:      "negative number",
+			src:       `{{-1}}`,
+			noType:    true,
+			wantTypes: []uint32{ttNumber},
+		},
+		{
+			// float number literal
+			name:      "float number",
+			src:       `{{3.14}}`,
+			noType:    true,
+			wantTypes: []uint32{ttNumber},
+		},
+		{
+			// template call with a pipeline argument
+			name:      "template with pipeline arg",
+			src:       `{{template "sub" .}}`,
+			noType:    true,
+			wantTypes: []uint32{ttKeyword, ttString, ttVariable},
+		},
+		{
+			// builtin call with two args
+			name:          "index builtin with two args",
+			src:           `{{index .Items 0}}`,
+			wantTypes:     []uint32{ttFunction, ttProperty, ttNumber},
+			wantModifiers: []uint32{tmDefaultLibrary, 0, 0},
+		},
+		{
+			// multiple statements in one action (pipe)
+			name:          "printf with variable",
+			src:           `{{$s := printf "%d" 42}}`,
+			noType:        true,
+			wantTypes:     []uint32{ttVariable, ttFunction, ttString, ttNumber},
+			wantModifiers: []uint32{tmDeclaration, tmDefaultLibrary, 0, 0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uri := "file:///add-tok-" + tt.name + ".tmpl"
+			useLt := lt
+			if tt.noType {
+				useLt = nil
+			}
+			setDocWithTypedTree(t, uri, tt.src, useLt)
+			defer store.Delete(uri)
+
+			result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Len(t, result.Data, len(tt.wantTypes)*5, "unexpected token count")
+
+			for i, wantType := range tt.wantTypes {
+				assert.Equal(t, wantType, result.Data[i*5+3], "token[%d] tokenType", i)
+			}
+			for i, wantMod := range tt.wantModifiers {
+				assert.Equal(t, wantMod, result.Data[i*5+4], "token[%d] modifiers", i)
+			}
+		})
+	}
+}
+
 // TestSemanticTokenNodeTypes covers each node kind handled by walkSemanticNode.
 // Each case specifies the exact token types (result.Data[i*5+3]) and, when relevant,
 // the token modifiers (result.Data[i*5+4]) expected in source order.
