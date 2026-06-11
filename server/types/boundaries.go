@@ -77,6 +77,8 @@ func setEndPos(node Node, end Pos, text *string) {
 		if l := strings.Index((*text)[n.Position():end], "}}"); l != -1 {
 			n.endPos = n.Position() + Pos(l) + 2
 		}
+	case *TableNode:
+		endPosTable(n, end, text)
 	}
 }
 
