@@ -64,17 +64,13 @@ func (s *documentStore) Set(uri, text string) {
 			if dir == "" {
 				continue
 			}
-			l, lerr := types.LoadTypeFromHint(hint, dir)
-			if lerr == nil {
-				loaded = l
-				break
+			loaded, lerr := types.LoadTypeFromHint(hint, WorkspaceRoot)
+			if lerr != nil {
+				log.Warn().Str("hint", hint).Err(lerr).Msg("type hint load failed")
+				continue
 			}
-			log.Debug().Str("hint", hint).Str("dir", dir).Err(lerr).Msg("type hint load failed")
+			loadedTypes[name] = loaded
 		}
-		if loaded == nil {
-			continue
-		}
-		loadedTypes[name] = loaded
 	}
 
 	s.mu.Lock()
@@ -197,7 +193,7 @@ func parseTemplate(uri, text string) (*parse.Tree, map[string]*parse.Tree, error
 
 func tryParse(text string) (*parse.Tree, map[string]*parse.Tree, error) {
 	t := parse.New("t")
-	t.Mode = parse.ParsePartial | parse.SkipFuncCheck
+	t.Mode = parse.ParsePartial | parse.SkipFuncCheck | parse.ParseComments
 	treeSet := map[string]*parse.Tree{}
 	_, err := t.Parse(text, "{{", "}}", treeSet)
 	if err != nil {

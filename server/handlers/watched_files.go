@@ -55,6 +55,7 @@ func DidChangeWatchedFiles(ctx *glsp.Context, params *protocol.DidChangeWatchedF
 		return nil
 	}
 	types.SetGlobalFuncs(funcs)
+	types.InvalidateTypeHintCache()
 	log.Debug().Int("count", len(funcs)).Msg("reloaded global tmpl:func hints")
 
 	RefreshAllDocuments(ctx)

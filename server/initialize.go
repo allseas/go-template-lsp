@@ -38,6 +38,8 @@ func setupHandlers() {
 		WorkspaceDidChangeWatchedFiles:  handlers.DidChangeWatchedFiles,
 		TextDocumentReferences:          handlers.References,
 		TextDocumentHover:               handlers.Hover,
+		TextDocumentSemanticTokensFull:  handlers.SemanticTokensFull,
+		TextDocumentDocumentSymbol:      handlers.DocumentSymbols,
 	}
 }
 
@@ -91,6 +93,14 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 	capabilities.CompletionProvider = &protocol.CompletionOptions{
 		TriggerCharacters: []string{"$", "."},
 		ResolveProvider:   &resolveProvider,
+	}
+
+	capabilities.SemanticTokensProvider = &protocol.SemanticTokensOptions{
+		Legend: protocol.SemanticTokensLegend{
+			TokenTypes:     handlers.TokenTypes,
+			TokenModifiers: handlers.TokenModifiers,
+		},
+		Full: true,
 	}
 	v := version
 	return protocol.InitializeResult{
