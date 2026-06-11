@@ -58,7 +58,7 @@ func (s *documentStore) Set(uri, text string) {
 			if hint == "" {
 				continue
 			}
-			loaded, lerr := types.LoadTypeFromHint(hint, WorkspaceRoot)
+			loaded, lerr := types.CachedLoadTypeFromHint(hint, WorkspaceRoot)
 			if lerr != nil {
 				log.Warn().Str("hint", hint).Err(lerr).Msg("type hint load failed")
 				continue
