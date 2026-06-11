@@ -19,9 +19,9 @@ const TraceValueMessages = protocol.TraceValue("messages")
 
 // DiagnosticsConfig controls which individual diagnostic categories are reported.
 type DiagnosticsConfig struct {
-	SyntaxError            bool `json:"syntaxError"`
-	VariableRedeclaration  bool `json:"variableRedeclaration"`
-	IncorrectFunction      bool `json:"incorrectFunction"`
+	SyntaxError           bool `json:"syntaxError"`
+	VariableRedeclaration bool `json:"variableRedeclaration"`
+	IncorrectFunction     bool `json:"incorrectFunction"`
 }
 
 // Config represents the server's configuration settings. It is designed to be updated based on client settings and can be safely accessed across concurrent requests.
@@ -38,10 +38,14 @@ type Config struct {
 
 var (
 	currentConfig = Config{
-		EnableHover:          true,
-		EnableDefinition:     true,
-		EnableDiagnostics:    true,
-		Diagnostics:          DiagnosticsConfig{SyntaxError: true, VariableRedeclaration: true, IncorrectFunction: true},
+		EnableHover:       true,
+		EnableDefinition:  true,
+		EnableDiagnostics: true,
+		Diagnostics: DiagnosticsConfig{
+			SyntaxError:           true,
+			VariableRedeclaration: true,
+			IncorrectFunction:     true,
+		},
 		EnableAutocompletion: true,
 	}
 	configMu sync.RWMutex
