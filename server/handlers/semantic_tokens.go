@@ -105,10 +105,13 @@ func DocumentSymbols(
 		bodyStart := int(t.Root.Position())
 		blockEnd := int(t.End)
 
-		// Search backward from the body start to find {{define.
+		// Search backward from the body start to find the nearest {{define.
+		// FindAllStringIndex is used so we take the last (closest) match;
+		// FindStringIndex would return the first match and attribute the
+		// wrong block range to every define after the first one.
 		blockStart := bodyStart
-		if m := reDefine.FindStringIndex(doc.text[:bodyStart]); m != nil {
-			blockStart = m[0]
+		if ms := reDefine.FindAllStringIndex(doc.text[:bodyStart], -1); ms != nil {
+			blockStart = ms[len(ms)-1][0]
 		}
 
 		// The name string sits between "define " and "}}" - find it for selectionRange.
@@ -307,7 +310,22 @@ func walkIfNode(tokens *[]rawToken, text string, n *serverTypes.IfNode) {
 		emitElseKeyword(tokens, text, n.List, n.ElseList)
 		walkSemanticNode(n.ElseList, text, tokens)
 	}
-	emitEndKeyword(tokens, text, n.List, n.ElseList)
+	// When the ElseList contains a single nested IfNode (i.e. {{else if ...}}),
+	// the inner walkIfNode already emitted the shared {{end}} token.
+	// Emitting it here too would produce a duplicate at the same position.
+	if !isElseIfChain(n.ElseList) {
+		emitEndKeyword(tokens, text, n.List, n.ElseList)
+	}
+}
+
+// isElseIfChain reports whether elseList is the desugared form of {{else if}},
+// i.e. a ListNode whose sole child is an IfNode.
+func isElseIfChain(elseList *serverTypes.ListNode) bool {
+	if elseList == nil || len(elseList.Nodes) != 1 {
+		return false
+	}
+	_, ok := elseList.Nodes[0].(*serverTypes.IfNode)
+	return ok
 }
 
 func walkChainNode(n *serverTypes.ChainNode, text string, tokens *[]rawToken) {
