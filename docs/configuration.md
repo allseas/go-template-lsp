@@ -11,10 +11,16 @@ The Go Text Template LSP supports consistent configuration across VS Code and Je
 
 These options are supported on all platforms:
 
-| Option         | Type      | Default    | Description                                          |
-|----------------|-----------|------------|------------------------------------------------------|
-| `enableServer` | `boolean` | `true`     | Enable/disable the language server                   |
-| `trace.server` | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose` |
+| Option                                | Type      | Default    | Description                                                       |
+|---------------------------------------|-----------|------------|-------------------------------------------------------------------|
+| `enableHover`                         | `boolean` | `true`     | Enable/disable hover information                                  |
+| `enableDefinition`                    | `boolean` | `true`     | Enable/disable go-to-definition                                   |
+| `enableDiagnostics`                   | `boolean` | `true`     | Enable/disable all diagnostics                                    |
+| `diagnostics.syntaxError`             | `boolean` | `true`     | Report syntax errors                                              |
+| `diagnostics.variableRedeclaration`   | `boolean` | `true`     | Report duplicate variable declarations                            |
+| `diagnostics.incorrectFunction`       | `boolean` | `true`     | Report unknown or incorrectly used functions                      |
+| `enableAutocompletion`                | `boolean` | `true`     | Enable/disable autocompletion                                     |
+| `trace.server`                        | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose`             |
 
 ## Configuration Hierarchy
 
@@ -31,7 +37,15 @@ You can create a `gotmpl.config.json` file in your project root to configure the
 
 ```json
 {
-  "enableServer": true,
+  "enableHover": true,
+  "enableDefinition": true,
+  "enableDiagnostics": true,
+  "diagnostics": {
+    "syntaxError": true,
+    "variableRedeclaration": true,
+    "incorrectFunction": true
+  },
+  "enableAutocompletion": true,
   "trace": {
     "server": "messages"
   }
