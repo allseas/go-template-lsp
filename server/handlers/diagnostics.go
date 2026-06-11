@@ -39,10 +39,13 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	}
 
 	if !GetConfig().EnableDiagnostics {
-		ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, &protocol.PublishDiagnosticsParams{
-			URI:         uri,
-			Diagnostics: []protocol.Diagnostic{},
-		})
+		ctx.Notify(
+			protocol.ServerTextDocumentPublishDiagnostics,
+			&protocol.PublishDiagnosticsParams{
+				URI:         uri,
+				Diagnostics: []protocol.Diagnostic{},
+			},
+		)
 		return
 	}
 
