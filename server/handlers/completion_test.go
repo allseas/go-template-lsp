@@ -8,11 +8,19 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// enableServer sets EnableServer: true for the duration of the test and restores the original config afterward.
-func enableServer(t *testing.T) {
+// enableAutocompletion sets EnableAutocompletion: true for the duration of the test and restores the original config afterward.
+func enableAutocompletion(t *testing.T) {
 	t.Helper()
 	original := GetConfig()
-	setConfig(Config{EnableServer: true, Trace: original.Trace})
+	setConfig(Config{EnableAutocompletion: true, Trace: original.Trace})
+	t.Cleanup(func() { setConfig(original) })
+}
+
+// enableHover sets EnableHover: true for the duration of the test and restores the original config afterward.
+func enableHover(t *testing.T) {
+	t.Helper()
+	original := GetConfig()
+	setConfig(Config{EnableHover: true, Trace: original.Trace})
 	t.Cleanup(func() { setConfig(original) })
 }
 
@@ -29,7 +37,7 @@ func labelsFrom(t *testing.T, resp any) []string {
 
 func TestCompletionLogic(t *testing.T) {
 	t.Run("Scope-aware variable completion", func(t *testing.T) {
-		enableServer(t)
+		enableAutocompletion(t)
 
 		uri := "file:///scope.test.tmpl"
 		content := `{{ $top := . }}
@@ -72,7 +80,7 @@ func TestCompletionLogic(t *testing.T) {
 	// ai
 	t.Run("Server disabled returns nil", func(t *testing.T) {
 		original := GetConfig()
-		setConfig(Config{EnableServer: false})
+		setConfig(Config{EnableAutocompletion: false})
 		t.Cleanup(func() { setConfig(original) })
 
 		uri := "file:///disabled.tmpl"
@@ -93,7 +101,7 @@ func TestCompletionLogic(t *testing.T) {
 
 	// ai
 	t.Run("Document not found returns nil", func(t *testing.T) {
-		enableServer(t)
+		enableAutocompletion(t)
 
 		params := &protocol.CompletionParams{
 			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
@@ -109,7 +117,7 @@ func TestCompletionLogic(t *testing.T) {
 
 	// ai
 	t.Run("Cursor outside template block returns nil", func(t *testing.T) {
-		enableServer(t)
+		enableAutocompletion(t)
 
 		uri := "file:///outside.tmpl"
 		// Cursor is on line 1 ("hello"), which is plain text outside any {{ }}
@@ -130,7 +138,7 @@ func TestCompletionLogic(t *testing.T) {
 
 	// ai
 	t.Run("Variables from ended scope not visible", func(t *testing.T) {
-		enableServer(t)
+		enableAutocompletion(t)
 
 		uri := "file:///ended-scope.tmpl"
 		// $inner is declared in the range block, which closes before the cursor on line 3
@@ -155,7 +163,7 @@ func TestCompletionLogic(t *testing.T) {
 
 	// ai
 	t.Run("Nested range scopes all visible at cursor", func(t *testing.T) {
-		enableServer(t)
+		enableAutocompletion(t)
 
 		uri := "file:///nested-scope.tmpl"
 		content := "{{ $a := . }}\n{{ range $i := .Items }}\n{{ range $j := .SubItems }}\n{{ $here"
@@ -180,7 +188,7 @@ func TestCompletionLogic(t *testing.T) {
 
 	// ai
 	t.Run("If block variable visible inside block", func(t *testing.T) {
-		enableServer(t)
+		enableAutocompletion(t)
 
 		uri := "file:///if-scope.tmpl"
 		content := "{{ $x := . }}\n{{ if $cond := .Flag }}\n{{ $here"

@@ -12,7 +12,7 @@ func TestHover(t *testing.T) {
 	for _, tc := range hoverTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			for c := tc.positionCharacterStart; c <= tc.positionCharacterEnd; c++ {
-				enableServer(t)
+				enableHover(t)
 
 				uri := "file:///test/document.go"
 				content := tc.documentText
