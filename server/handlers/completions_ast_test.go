@@ -193,10 +193,10 @@ func TestCompletionAst(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.serverDisabled {
 				original := GetConfig()
-				setConfig(Config{EnableServer: false})
+				setConfig(Config{EnableAutocompletion: false})
 				t.Cleanup(func() { setConfig(original) })
 			} else {
-				enableServer(t)
+				enableAutocompletion(t)
 			}
 			if !tc.skipStore {
 				store.Set(tc.uri, tc.content)
@@ -226,7 +226,7 @@ func TestCompletionAst(t *testing.T) {
 func TestCompletionWithFallback(t *testing.T) {
 	for _, tc := range completionFallbackTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			enableServer(t)
+			enableAutocompletion(t)
 			store.Set(tc.uri, tc.content)
 			t.Cleanup(func() { store.Remove(tc.uri) })
 			resp, err := CompletionWithFallback(nil, &protocol.CompletionParams{
@@ -566,7 +566,7 @@ func TestResolvePipeDotType(t *testing.T) {
 }
 
 func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
-	enableServer(t)
+	enableAutocompletion(t)
 	uri := "file:///invoked-dollar.tmpl"
 	content := `{{$top := .}}{{$}}`
 	store.Set(uri, content)

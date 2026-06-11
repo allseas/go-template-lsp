@@ -265,7 +265,7 @@ func TestDidOpenAndChange(t *testing.T) {
 	// ai
 	t.Run("DidOpen and DidChange", func(t *testing.T) {
 		originalConfig := GetConfig()
-		applyConfig(Config{EnableServer: true})
+		applyConfig(Config{EnableHover: true, EnableDefinition: true, EnableDiagnostics: true, EnableAutocompletion: true})
 		defer applyConfig(originalConfig)
 
 		uri := "file:///test-open-change.txt"
@@ -314,7 +314,7 @@ func TestDidOpenAndChange(t *testing.T) {
 	// ai
 	t.Run("DidClose", func(t *testing.T) {
 		originalConfig := GetConfig()
-		applyConfig(Config{EnableServer: true})
+		applyConfig(Config{EnableHover: true, EnableDefinition: true, EnableDiagnostics: true, EnableAutocompletion: true})
 		defer applyConfig(originalConfig)
 
 		uri := "file:///test-open-change.txt"
