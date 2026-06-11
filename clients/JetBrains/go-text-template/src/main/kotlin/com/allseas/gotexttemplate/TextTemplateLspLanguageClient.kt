@@ -9,7 +9,7 @@ class TextTemplateLspLanguageClient(
 ) : LanguageClientImpl(project) {
     override fun createSettings(): Any {
         val config = ProjectSettings.getInstance(project).getEffectiveState()
-        val json =
+        val settings =
             JsonObject().apply {
                 addProperty("enableHover", config.enableHover)
                 addProperty("enableDefinition", config.enableDefinition)
@@ -30,6 +30,8 @@ class TextTemplateLspLanguageClient(
                     },
                 )
             }
-        return json
+        return JsonObject().apply {
+            add("goTmplSupport", settings)
+        }
     }
 }

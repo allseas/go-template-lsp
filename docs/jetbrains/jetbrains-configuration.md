@@ -110,7 +110,7 @@ In `TextTemplateLspLanguageClient.kt`, add the field to the JSON:
 ```kotlin
 override fun createSettings(): Any {
     val config = ProjectSettings.getInstance(project).getEffectiveState()
-    val json = JsonObject().apply {
+    val settings = JsonObject().apply {
         addProperty("enableHover", config.enableHover)
         addProperty("enableDefinition", config.enableDefinition)
         addProperty("enableDiagnostics", config.enableDiagnostics)
@@ -125,6 +125,10 @@ override fun createSettings(): Any {
             addProperty("server", config.traceServer.value)
         })
     }
-    return json
+    // Settings must be wrapped under "goTmplSupport" so lsp4ij can find them
+    // when the server requests workspace/configuration for section "goTmplSupport".
+    return JsonObject().apply {
+        add("goTmplSupport", settings)
+    }
 }
 ```
