@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -103,6 +104,43 @@ func goEnv() []string {
 		}
 	}
 	return os.Environ()
+}
+
+var (
+	typeHintCacheMu sync.RWMutex
+	typeHintCache   = make(map[string]*Tree)
+)
+
+// InvalidateTypeHintCache clears the cached type-hint results
+func InvalidateTypeHintCache() {
+	typeHintCacheMu.Lock()
+	defer typeHintCacheMu.Unlock()
+	typeHintCache = make(map[string]*Tree)
+}
+
+// CachedLoadTypeFromHint is like LoadTypeFromHint but returns the previously
+// computed result when the same (hint, workspaceRoot) pair has been resolved
+// before and the cache has not been invalidated.
+func CachedLoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
+	key := hint + "\x00" + workspaceRoot
+
+	typeHintCacheMu.RLock()
+	if t, ok := typeHintCache[key]; ok {
+		typeHintCacheMu.RUnlock()
+		return t, nil
+	}
+	typeHintCacheMu.RUnlock()
+
+	t, err := LoadTypeFromHint(hint, workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	typeHintCacheMu.Lock()
+	typeHintCache[key] = t
+	typeHintCacheMu.Unlock()
+
+	return t, nil
 }
 
 // LoadTypeFromHint loads the Go package identified by the hint and returns a
