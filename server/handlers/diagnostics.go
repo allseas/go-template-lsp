@@ -37,6 +37,15 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	if ctx == nil {
 		return
 	}
+
+	if !GetConfig().EnableDiagnostics {
+		ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, &protocol.PublishDiagnosticsParams{
+			URI:         uri,
+			Diagnostics: []protocol.Diagnostic{},
+		})
+		return
+	}
+
 	diagnostics := collectDiagnostics(text, uri)
 	if diagnostics == nil {
 		diagnostics = []protocol.Diagnostic{}
@@ -97,8 +106,13 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 	}
 	diagnostics = append(diagnostics, declareNode(node, text, ctx)...)
 
+	config := GetConfig()
+
 	switch n := node.(type) {
 	case *parse.UndefinedNode:
+		if !config.Diagnostics.SyntaxError {
+			break
+		}
 		if n.Err == nil && strings.TrimSpace(n.String()) == "" {
 			// Structural artifact with no attached error: skip.
 			break
@@ -135,6 +149,9 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 		}
 
 	case *parse.CommandNode:
+		if !config.Diagnostics.IncorrectFunction {
+			break
+		}
 		if len(n.Args) > 0 {
 			if identNode, ok := n.Args[0].(*parse.IdentifierNode); ok {
 				funcName := identNode.Ident
@@ -207,14 +224,16 @@ func collectDeclarations(
 				continue
 			}
 			if ctx.Vars[ident] != nil && !pipe.IsAssign {
-				diagnostics = append(
-					diagnostics,
-					createDiagnostic(
-						msgDuplicateDeclaration(text, int(decl.Position()), ident),
-						nodeToRange(decl, text),
-						false,
-					),
-				)
+				if GetConfig().Diagnostics.VariableRedeclaration {
+					diagnostics = append(
+						diagnostics,
+						createDiagnostic(
+							msgDuplicateDeclaration(text, int(decl.Position()), ident),
+							nodeToRange(decl, text),
+							false,
+						),
+					)
+				}
 				continue
 			}
 			if pipe.IsAssign {

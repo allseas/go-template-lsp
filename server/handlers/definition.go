@@ -12,6 +12,10 @@ import (
 
 // Definition handles finding the definition to jump to
 func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error) {
+	if !GetConfig().EnableDefinition {
+		log.Debug().Msg("definition requested but definition is disabled by config")
+		return nil, nil
+	}
 	uri := params.TextDocument.URI
 	position := params.Position
 	doc, ok := store.Get(uri)
