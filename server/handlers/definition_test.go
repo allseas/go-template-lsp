@@ -230,6 +230,7 @@ func setDocWithType(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 		text:       src,
 		tree:       tree,
 		trees:      treeSet,
+		loadedType: lt,
 		typedTree:  typed,
 		typedTrees: typedTrees,
 	}

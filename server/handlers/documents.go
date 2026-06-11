@@ -26,8 +26,11 @@ type document struct {
 	tree *parse.Tree
 	// trees holds every parse tree produced for this document, keyed by tree name.
 	// Includes the root tree under its own name and one entry per {{define}} block.
-	trees     map[string]*parse.Tree
-	typedTree *types.Tree
+	trees map[string]*parse.Tree
+	// Deprecated: kept for compatibility with tests/handlers that have not yet
+	// switched to typedTree. New code should use typedTree
+	loadedType *types.Tree
+	typedTree  *types.Tree
 	// loadedTypes is the per-tree dot-type resolved from the gotype hint that is located directly under each tree's {{define}}
 	loadedTypes map[string]*types.Tree
 	// typedTrees is the per-tree analysed (typed) tree, paired with loadedTypes.
@@ -63,12 +66,13 @@ func (s *documentStore) Set(uri, text string) {
 			if dir == "" {
 				continue
 			}
-			loaded, lerr := types.LoadTypeFromHint(hint, WorkspaceRoot)
+			loaded, lerr := types.CachedLoadTypeFromHint(hint, dir)
 			if lerr != nil {
-				log.Warn().Str("hint", hint).Err(lerr).Msg("type hint load failed")
+				log.Debug().Str("hint", hint).Str("dir", dir).Err(lerr).Msg("type hint load failed")
 				continue
 			}
 			loadedTypes[name] = loaded
+			break
 		}
 	}
 
@@ -151,6 +155,25 @@ func (d *document) treeAt(offset parse.Pos) *parse.Tree {
 		return best
 	}
 	return d.tree
+}
+
+// loadedTypeAt returns the loaded type for the tree that covers offset.
+// Falls back to d.loadedType for legacy callers that did not populate loadedTypes.
+//
+// Deprecated: prefer typedTreeAt — the typed tree carries DotType / Pkg / Fset
+// just like the raw loaded type, and is the new path for type-aware features.
+func (d *document) loadedTypeAt(offset parse.Pos) *types.Tree {
+	if d == nil {
+		return nil
+	}
+	if d.loadedTypes != nil {
+		if tr := d.treeAt(offset); tr != nil {
+			if lt, ok := d.loadedTypes[tr.Name]; ok {
+				return lt
+			}
+		}
+	}
+	return d.loadedType
 }
 
 // typedTreeAt returns the typed tree for the tree that covers offset.
