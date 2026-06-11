@@ -206,6 +206,8 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 		return analysePipe(n, parent, ctx)
 	case *parse.UndefinedNode:
 		return analyseUndefined(n, parent)
+	case *parse.TableNode:
+		return analyseTable(n, parent, ctx)
 	default:
 		panic(fmt.Sprintf("unknown node type: %T", node))
 	}
