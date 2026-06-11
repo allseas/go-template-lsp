@@ -28,7 +28,13 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 	}
 
 	offset := positionToOffset(doc.text, params.Position)
-	target := nodeFind(doc.tree.Root, parse.Pos(offset))
+	tree := doc.treeAt(parse.Pos(offset))
+	if tree == nil || tree.Root == nil {
+		err = errors.New("no parse tree at offset")
+		log.Debug().Err(err)
+		return
+	}
+	target := nodeFind(tree.Root, parse.Pos(offset))
 	if target == nil {
 		err = errors.New("node not found")
 		log.Debug().Err(err)
@@ -39,7 +45,7 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		target,
 		params.Position,
 		doc.text,
-		doc.tree.Root,
+		tree.Root,
 	); branchNode != nil {
 		// log.Debug().Msg("Hover on end tag of BranchNode")
 		hover = &protocol.Hover{
@@ -56,7 +62,7 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover
 		target,
 		params.Position,
 		doc.text,
-		doc.tree.Root,
+		tree.Root,
 	); branchNode != nil {
 		log.Debug().Msg("Hover on else tag of BranchNode")
 		hover = &protocol.Hover{
@@ -117,13 +123,21 @@ func buildHoverContent(target parse.Node, hover *protocol.Hover, doc *document) 
 	case *parse.VariableNode:
 		log.Debug().Any("node", target).Msg("Hover on VariableNode")
 
-		if IsIndexVariable(target, doc.tree.Root) {
+		tree := doc.treeAt(target.Position())
+		if tree == nil {
+			tree = doc.tree
+		}
+		if IsIndexVariable(target, tree.Root) {
 			hover.Contents = protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
 				Value: MessageIndexVariable(target),
 			}
 		} else {
-			varValue, goType := ResolveVarInfo(doc.tree.Root, target, doc.loadedType)
+			varValue, goType := ResolveVarInfo(
+				tree.Root,
+				target,
+				doc.loadedTypeAt(target.Position()),
+			)
 
 			hover.Contents = protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,

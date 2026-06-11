@@ -75,10 +75,18 @@ pattern is used inside branch helpers:
 ### Field / method chains
 
 `walkFieldChain` resolves a sequence of identifiers against a starting type
-using `types.LookupFieldOrMethod`. It is shared by `FieldNode`, `ChainNode`
-and dotted `VariableNode` (`$x.A.B`). Methods are accepted when they return
-one value, or two values where the second is `error`; anything else produces
-an `ErrorTypeInvalidField`.
+using `types.LookupFieldOrMethod`. It is shared by `ChainNode` and dotted
+`VariableNode` (`$x.A.B`). Methods are accepted when they return one value,
+or two values where the second is `error`; anything else produces an
+`ErrorTypeInvalidField`.
+
+`walkFieldChainWithMethodInfo` is a variant used exclusively by `analyseField`
+(i.e. `FieldNode`). It performs the same resolution but also returns an
+`isMethod []bool` slice whose i-th element is `true` when path[i] resolved to
+a method rather than a struct field. This information is stored on `FieldNode`
+and exposed via `FieldNode.IdentIsMethod(i int) bool`, allowing downstream
+consumers (e.g. semantic-token highlighting) to distinguish `.Address`
+(property) from `.DisplayName` (function call).
 
 ### Pipelines and commands
 
@@ -114,7 +122,7 @@ with the affected node left untyped.
 
 | File                                                         | Contents                                                                                                                                                                                                             |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [analyse.go](../server/types/analyse.go)                     | `Tree`, `NewTree`, `analysisCtx`, all `analyseXxx` helpers, `walkFieldChain`, `TError`.                                                                                                                              |
+| [analyse.go](../server/types/analyse.go)                     | `Tree`, `NewTree`, `analysisCtx`, all `analyseXxx` helpers, `walkFieldChain`, `walkFieldChainWithMethodInfo`, `TError`.                                                                                              |
 | [node.go](../server/types/node.go)                           | Typed `Node` interface and all concrete node structs, including `String()` / `Copy()` / `writeTo()` implementations.                                                                                                 |
 | [analyse_test.go](../server/types/analyse_test.go)           | Table-driven test runner and structural comparison helpers used to assert tree equality.                                                                                                                             |
 | [analyse_testcases.go](../server/types/analyse_testcases.go) | Test fixtures: mock types (`MockDot`, `Inner`), mock function map, parse-tree and typed-tree builder helpers, and the `analyseTestCases` table.                                                                      |

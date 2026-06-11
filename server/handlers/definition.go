@@ -25,12 +25,22 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 	}
 
 	offset := positionToOffset(doc.text, position)
-	node := nodeFind(doc.tree.Root, parse.Pos(offset))
+	tree := doc.treeAt(parse.Pos(offset))
+	if tree == nil || tree.Root == nil {
+		log.Debug().
+			Str("handler", "definition").
+			Any("position", position).
+			Msg("no parse tree at offset")
+		return nil, nil
+	}
+	node := nodeFind(tree.Root, parse.Pos(offset))
 
 	if node == nil {
 		log.Debug().Str("handler", "definition").Any("position", position).Msg("no node found")
 		return nil, nil
 	}
+
+	loadedType := doc.loadedTypeAt(parse.Pos(offset))
 
 	switch target := node.(type) {
 	case *parse.VariableNode:
@@ -38,7 +48,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 
 		var results []protocol.Location
 
-		decls := FindVarDeclarations(doc.tree.Root, varName)
+		decls := FindVarDeclarations(tree.Root, varName)
 		for _, decl := range decls {
 			results = append(results, protocol.Location{
 				URI:   uri,
@@ -53,7 +63,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 	case *parse.DotNode:
 		// TODO: decide if that is the correct behaviour to go to the previous range/with?
 		ctx := &Context{Vars: make(map[string]parse.Node)}
-		buildPath(doc.tree.Root, node, ctx)
+		buildPath(tree.Root, node, ctx)
 
 		for i := len(ctx.Path) - 1; i >= 0; i-- {
 			switch branch := ctx.Path[i].(type) {
@@ -71,7 +81,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		}
 		return nil, nil
 	case *parse.FieldNode:
-		if doc.loadedType == nil || doc.loadedType.Fset == nil || doc.loadedType.DotType == nil {
+		if loadedType == nil || loadedType.Fset == nil || loadedType.DotType == nil {
 			return nil, nil
 		}
 		if len(target.Ident) == 0 {
@@ -81,19 +91,19 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		targetIdx := getFieldIdentIdx(target, offset)
 
 		// log.Debug().
-		// 	Any("dotType", doc.loadedType.DotType).
+		// 	Any("dotType", loadedType.DotType).
 		// 	Any("Ident", target.Ident).
 		// 	Any("target", targetIdx).
 		// 	Any("cursorPosition", offset).
 		// 	Any("fieldNodePos", target.Pos).
 		// 	Msg("definition NodeField")
 
-		var currentType gotypes.Type = doc.loadedType.DotType
+		var currentType gotypes.Type = loadedType.DotType
 		for i := 0; i <= targetIdx; i++ {
 			obj, _, _ := gotypes.LookupFieldOrMethod(
 				currentType,
 				true,
-				doc.loadedType.Pkg,
+				loadedType.Pkg,
 				target.Ident[i],
 			)
 			if obj == nil {
@@ -104,7 +114,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 				if !pos.IsValid() {
 					return nil, nil
 				}
-				fpos := doc.loadedType.Fset.Position(pos)
+				fpos := loadedType.Fset.Position(pos)
 
 				var line uint32
 				var char uint32

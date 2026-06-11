@@ -60,6 +60,33 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		input:     "{{/*gotype: 123*/}}",
 		wantHints: nil,
 	},
+	{
+		name: "multiple defines each with their own gotype hint",
+		input: "{{- define \"OrderTpl\" -}}\n" +
+			"{{- /*gotype: example.com/m.Order*/ -}}\n" +
+			"body\n" +
+			"{{- end -}}\n" +
+			"{{- define \"AddressTpl\" -}}\n" +
+			"{{- /*gotype: example.com/m.Address*/ -}}\n" +
+			"body\n" +
+			"{{- end -}}\n",
+		wantHints: []TypeHint{
+			{Line: 2, Type: "example.com/m.Order"},
+			{Line: 6, Type: "example.com/m.Address"},
+		},
+	},
+	{
+		name: "multiple defines with one missing the gotype hint",
+		input: "{{- define \"OrderTpl\" -}}\n" +
+			"{{- /*gotype: example.com/m.Order*/ -}}\n" +
+			"{{- end -}}\n" +
+			"{{- define \"NoHint\" -}}\n" +
+			"no hint here\n" +
+			"{{- end -}}\n",
+		wantHints: []TypeHint{
+			{Line: 2, Type: "example.com/m.Order"},
+		},
+	},
 }
 
 // splitTypeHint test cases
