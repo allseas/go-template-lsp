@@ -36,6 +36,44 @@ store.Set(uri, text)
           (consumed by completionAst and buildPathChildren)
 ```
 
+## Multiple `{{define}}` blocks
+
+A single template file may contain any number of named sub-templates introduced with `{{define "name"}} … {{end}}`. Each block can carry its own independent type hint, allowing different blocks to resolve `.` against different Go types.
+
+### Where to place the hint
+
+| Block | Where to put the hint |
+|---|---|
+| Root template | First line of the file |
+| Named define | Line immediately after the opening `{{define "name"}}` directive |
+
+Example:
+
+```
+{{- /*gotype: github.com/example/myapp/models.Address*/ -}}
+{{ .Street }}
+
+{{define "OrderTpl"}}
+{{- /*gotype: github.com/example/myapp/models.Order*/ -}}
+Order: {{ .CustomerName }} ({{ .ID }})
+{{end}}
+
+{{define "NoHint"}}
+{{ $local := . }}
+no hint here
+{{end}}
+```
+
+In this file `.Street` resolves against `Address`, `.CustomerName` and `.ID` resolve against `Order`, and the `NoHint` block has no type resolution (type-aware features are disabled for that block only).
+
+### How it works internally
+
+The parser produces one `*parse.Tree` per `{{define}}` block plus one for the root, all stored keyed by tree name. On every `didOpen`/`didChange` the server:
+
+1. Iterates every tree and looks up the hint for that tree (`hintTypeForTree`).
+2. Calls `LoadTypeFromHint` for each tree that has a hint, storing results in a per-tree map (`loadedTypes`/`typedTrees`).
+3. At query time (`hover`, `completion`, `definition`, …), `treeAt(offset)` identifies which tree owns the cursor position, and the correct per-tree type is used — independently of every other block in the same file.
+
 ## Implementation details
 
 **Parsing**: Lines without `gotype:` are skipped. The regex `gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)` extracts the hint token; only the first match per file is used.

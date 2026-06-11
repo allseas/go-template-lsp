@@ -129,15 +129,17 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
 		return nil
 	}
-	if doc.typedTree == nil || doc.typedTree.Root == nil {
-		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no typed tree")
-		return nil
-	}
 
 	text := doc.text
 	offset := positionToOffset(text, params.Position)
 
 	if !isInsideTemplate(text, offset) {
+		return nil
+	}
+
+	typedTree := doc.typedTreeAt(parse.Pos(offset))
+	if typedTree == nil || typedTree.Root == nil {
+		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no typed tree")
 		return nil
 	}
 
@@ -171,7 +173,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	if sChar == '.' && findOffset > 0 {
 		findOffset--
 	}
-	cur := serverTypes.NodeFind(doc.typedTree.Root, serverTypes.Pos(findOffset))
+	cur := serverTypes.NodeFind(typedTree.Root, serverTypes.Pos(findOffset))
 	if cur == nil {
 		log.Error().Msg("The target node is not found")
 		return nil
@@ -299,8 +301,13 @@ func chainContext(cur serverTypes.Node) (types.Type, bool) {
 		return nil, false
 	}
 	switch n := arg.(type) {
-	case *serverTypes.VariableNode, *serverTypes.PipeNode:
+	case *serverTypes.PipeNode:
 		return arg.ValueType(), true
+	case *serverTypes.VariableNode:
+		if cur != arg || len(n.Ident) <= 1 {
+			return n.ValueType(), true
+		}
+		return chainPrefix(varBaseType(cur, n.Ident[0]), n.Ident[1:]), true
 	case *serverTypes.FieldNode:
 		if cur != arg {
 			return n.ValueType(), true
@@ -385,6 +392,18 @@ func chainPrefix(base types.Type, path []string) types.Type {
 		return base
 	}
 	return walkChainType(base, path[:len(path)-1])
+}
+
+// varBaseType returns the resolved type of the variable named name (e.g. "$" or
+// "$top") visible at cur, by walking the same scope used for variable
+// completions.
+func varBaseType(cur serverTypes.Node, name string) types.Type {
+	for _, v := range visibleVarsAt(cur) {
+		if v != nil && len(v.Ident) > 0 && v.Ident[0] == name {
+			return v.ValueType()
+		}
+	}
+	return nil
 }
 
 // visibleVarsAt returns variables in scope at cur. It starts from the snapshot

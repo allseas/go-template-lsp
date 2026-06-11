@@ -215,10 +215,15 @@ func TestDefinitionNoDefinition(t *testing.T) {
 // bypassing the type-hint loading mechanism that requires a workspace root.
 func setDocWithType(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	t.Helper()
-	tree, _, err := tryParse(src)
+	tree, treeSet, err := tryParse(src)
 	require.NoError(t, err)
 	store.mu.Lock()
-	store.docs[uri] = &document{text: src, tree: tree, loadedType: lt}
+	store.docs[uri] = &document{
+		text:       src,
+		tree:       tree,
+		trees:      treeSet,
+		loadedType: lt,
+	}
 	store.mu.Unlock()
 }
 
@@ -427,4 +432,101 @@ func TestFunctionReturn(t *testing.T) {
 		loc.URI,
 	)
 	assert.Equal(t, uint32(6), loc.Range.Start.Line)
+}
+
+// TestDefinitionMultiDefines tests Definition inside a document with
+// multiple {{define}} blocks, each (optionally) preceded by its own gotype hint.
+func TestDefinitionMultiDefines(t *testing.T) {
+	cases := []struct {
+		name          string
+		posSubStr     string
+		posOccurrence int
+		posCharOffset int
+		wantFile      string
+		wantSameURI   bool
+		wantLine      uint32
+	}{
+		{
+			name:          "field inside Order define jumps to Order.CustomerName",
+			posSubStr:     "CustomerName",
+			posOccurrence: 0,
+			posCharOffset: 1,
+			wantFile:      "model.go",
+			wantLine:      70, // Order.CustomerName at line 71 (0-indexed 70)
+		},
+		{
+			name:          "field inside Address define jumps to Address.Street",
+			posSubStr:     "Street",
+			posOccurrence: 0,
+			posCharOffset: 1,
+			wantFile:      "model.go",
+			wantLine:      6, // Address.Street at line 7 (0-indexed 6)
+		},
+		{
+			name:          "variable inside no-hint define resolves to its declaration",
+			posSubStr:     "$local }}",
+			posOccurrence: 0,
+			posCharOffset: 1,
+			wantSameURI:   true,
+			wantLine:      12, // $local := . is on line 13 of multiDefinesTemplate (0-indexed 12)
+		},
+		{
+			name:          "field in root template jumps to Address.Country",
+			posSubStr:     ".Country",
+			posOccurrence: 0,
+			posCharOffset: 1,
+			wantFile:      "model.go",
+			wantLine:      8, // Address.Country at line 9 (0-indexed 8)
+		},
+	}
+
+	loaded := loadModelTypes(t, "Order", "Address")
+	perTree := map[string]*serverTypes.Tree{
+		"t":          loaded["Address"],
+		"OrderTpl":   loaded["Order"],
+		"AddressTpl": loaded["Address"],
+	}
+
+	src := multiDefinesTemplate
+	uri := "file:///def-multidefines.tmpl"
+	setDocMulti(t, uri, src, perTree)
+	t.Cleanup(func() { store.Delete(uri) })
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pos := posOfSubStr(t, src, tc.posSubStr, tc.posOccurrence)
+			pos.Character += uint32(tc.posCharOffset) //nolint:gosec
+
+			params := &protocol.DefinitionParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+					Position:     pos,
+				},
+			}
+
+			result, err := Definition(nil, params)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			switch r := result.(type) {
+			case protocol.Location:
+				if tc.wantFile != "" {
+					assert.True(t, strings.HasSuffix(r.URI, tc.wantFile),
+						"expected URI to end with %q, got %s", tc.wantFile, r.URI)
+				}
+				if tc.wantSameURI {
+					assert.Equal(t, uri, r.URI)
+				}
+				assert.Equal(t, tc.wantLine, r.Range.Start.Line)
+			case []protocol.Location:
+				require.NotEmpty(t, r)
+				if tc.wantSameURI {
+					assert.Equal(t, uri, r[0].URI)
+				}
+				assert.Equal(t, tc.wantLine, r[0].Range.Start.Line)
+			default:
+				t.Fatalf("unexpected result type %T", r)
+			}
+		})
+	}
 }

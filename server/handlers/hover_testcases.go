@@ -417,3 +417,39 @@ var hoverTestCases = []hoverTestCase{
 		expectingError: false,
 	},
 }
+
+// hoverMultiDefineCase covers hover behaviour when a single document contains
+// multiple {{define}} blocks, each (optionally) preceded by its own gotype hint.
+type hoverMultiDefineCase struct {
+	name           string
+	posSubStr      string
+	posOccurrence  int
+	wantSubstrings []string
+}
+
+var hoverMultiDefineCases = []hoverMultiDefineCase{
+	{
+		name:           "field inside Order define resolves against Order type",
+		posSubStr:      "CustomerName",
+		posOccurrence:  0,
+		wantSubstrings: []string{"CustomerName", "field"},
+	},
+	{
+		name:           "field inside Address define resolves against Address type",
+		posSubStr:      "Street",
+		posOccurrence:  0,
+		wantSubstrings: []string{"Street", "field"},
+	},
+	{
+		name:           "variable inside no-hint define still hovers",
+		posSubStr:      "$local }}",
+		posOccurrence:  0,
+		wantSubstrings: []string{"$local"},
+	},
+	{
+		name:           "field in root template resolves against root Address type",
+		posSubStr:      ".Country",
+		posOccurrence:  0,
+		wantSubstrings: []string{"Country", "field"},
+	},
+}
