@@ -54,7 +54,7 @@ func (s *documentStore) Set(uri, text string) {
 			if hint == "" {
 				continue
 			}
-			loaded, lerr := types.LoadTypeFromHint(hint, WorkspaceRoot)
+			loaded, lerr := types.CachedLoadTypeFromHint(hint, WorkspaceRoot)
 			if lerr != nil {
 				log.Warn().Str("hint", hint).Err(lerr).Msg("type hint load failed")
 				continue
@@ -207,7 +207,7 @@ func parseTemplate(uri, text string) (*parse.Tree, map[string]*parse.Tree, error
 
 func tryParse(text string) (*parse.Tree, map[string]*parse.Tree, error) {
 	t := parse.New("t")
-	t.Mode = parse.ParsePartial | parse.SkipFuncCheck | parse.ParseComments
+	t.Mode = parse.ParsePartial | parse.SkipFuncCheck
 	treeSet := map[string]*parse.Tree{}
 	_, err := t.Parse(text, "{{", "}}", treeSet)
 	if err != nil {
