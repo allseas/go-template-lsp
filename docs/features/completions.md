@@ -142,6 +142,10 @@ When a `LoadedType` is attached to the document (resolved from a `// tmpl: Type`
 | `typeMethodItems(methods)`     | One method item per `MethodType`; `Detail` = return type name                    |
 | `pipeFilteredItems(kind, ctx)` | Dot + vars + allowlisted built-in names for the given `outputKind`               |
 
+### Ordering of completion items
+
+When both fields and methods are present, **fields are listed before methods**. This is an intentional design decision to make it more clear and readable for the user. IDEs automatically sort everything alphabetically, but we override it for user convinince
+
 ## Tests
 
 Tests live in `server/handlers/completion_ast_test.go`.
