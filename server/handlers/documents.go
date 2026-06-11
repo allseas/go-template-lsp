@@ -59,7 +59,6 @@ func (s *documentStore) Set(uri, text string) {
 		if hint == "" {
 			continue
 		}
-		var loaded *types.Tree
 		for _, dir := range loadDirs {
 			if dir == "" {
 				continue
