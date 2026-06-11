@@ -102,7 +102,6 @@ func (s *documentStore) Set(uri, text string) {
 		loadedTypes: loadedTypes,
 		typedTrees:  typedTrees,
 	}
-	s.docs[uri] = doc
 }
 
 // buildTypedTree returns the analysed (typed) tree if the parse tree exists.
