@@ -678,9 +678,12 @@ func fieldCompletionItems(
 ) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(fields))
 	for _, f := range fields {
-		items = append(items, newDetailItem(
+		item := newDetailItem(
 			prefix+f.Name, f.TypeName, protocol.CompletionItemKindField, wordRange,
-		))
+		)
+		sortText := "0_" + f.Name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	return items
 }
@@ -715,9 +718,12 @@ func methodCompletionItems(
 		if !methodIsUsable(m) || !methodAcceptsInput(m, inputType, pipeKind) {
 			continue
 		}
-		items = append(items, newDetailItem(
+		item := newDetailItem(
 			prefix+m.Name, m.ReturnName, protocol.CompletionItemKindMethod, wordRange,
-		))
+		)
+		sortText := "1_" + m.Name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	return items
 }
