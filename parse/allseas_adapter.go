@@ -52,10 +52,13 @@ func (t *Tree) parseTable(context string) (pos Pos, line int, format string, pip
 		return pipe.Position(), pipe.Line, format, pipe, list
 	}
 	if t.Mode&ParsePartial != 0 {
-		t.recordError(t.peek().pos, "expected end; found %v", next)
+		err := t.recordError(t.peek().pos, "expected end; found %v", next)
+		n := &UndefinedNode{NodeType: NodeUndefined, Pos: t.peek().pos, Err: err}
+		list.append(n)
 		return pipe.Position(), pipe.Line, format, pipe, list
 	}
 	t.errorf("expected end; found %s", next)
+	return 0, 0, "", nil, nil
 }
 
 // Table:
