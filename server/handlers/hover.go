@@ -170,12 +170,12 @@ func tagHover(
 			return ctx.Path[i], protocol.Range{
 				Start: protocol.Position{
 					Line:      pos.Line,
-					Character: uint32(match[0]),
-				}, //nolint:gosec
+					Character: uint32(match[0]), //nolint:gosec // bounded above
+				},
 				End: protocol.Position{
 					Line:      pos.Line,
-					Character: uint32(match[1]),
-				}, //nolint:gosec
+					Character: uint32(match[1]), //nolint:gosec // bounded above
+				},
 			}
 		}
 	}
