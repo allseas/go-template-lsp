@@ -36,7 +36,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		return nil, nil
 	}
 
-	loadedType := doc.loadedTypeAt(parse.Pos(offset))
+	loadedType := doc.typedTreeAt(parse.Pos(offset))
 
 	switch target := node.(type) {
 	case *parse.VariableNode:

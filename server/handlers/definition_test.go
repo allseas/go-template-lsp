@@ -217,12 +217,21 @@ func setDocWithType(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	t.Helper()
 	tree, treeSet, err := tryParse(src)
 	require.NoError(t, err)
+	typedTrees := make(map[string]*serverTypes.Tree, len(treeSet))
+	for name, tr := range treeSet {
+		typedTrees[name] = buildTypedTree(tr, lt)
+	}
+	var typed *serverTypes.Tree
+	if tree != nil {
+		typed = typedTrees[tree.Name]
+	}
 	store.mu.Lock()
 	store.docs[uri] = &document{
 		text:       src,
 		tree:       tree,
 		trees:      treeSet,
-		loadedType: lt,
+		typedTree:  typed,
+		typedTrees: typedTrees,
 	}
 	store.mu.Unlock()
 }

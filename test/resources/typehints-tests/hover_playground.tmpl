@@ -1,0 +1,59 @@
+{{- /*gotype: text-template-server/src/model.Order*/ -}}
+{{/* ============================================================
+     HOVER PLAYGROUND
+     Open this folder (test/resources/typehints-tests/) as the
+     LSP workspace root, then hover the marked symbols.
+     Legend:
+       OK   = ResolveVarInfo already returns this
+       TODO = not implemented yet (FieldNode / DotNode / Identifier
+              type rendering -- next step)
+     ============================================================ */}}
+{{/* -------- 1. Literal-initialised variables (OK) -------- */}}
+{{ $i := 0 }}              {{/* hover $i -> var $i int     */}}
+{{ $f := 1.5 }}            {{/* hover $f -> var $f float64 */}}
+{{ $s := "hello" }}        {{/* hover $s -> var $s string  */}}
+{{ $b := true }}           {{/* hover $b -> var $b bool    */}}
+{{ $n := nil }}            {{/* hover $n -> var $n nil     */}}
+{{/* -------- 2. Variables initialised from . fields (OK) -------- */}}
+{{ $id     := .ID }}              {{/* string                       */}}
+{{ $name   := .CustomerName }}    {{/* string                       */}}
+{{ $email  := .Email }}           {{/* string                       */}}
+{{ $items  := .Items }}           {{/* []model.Item                 */}}
+{{ $addr   := .Address }}         {{/* model.Address                */}}
+{{ $street := .Address.Street }}  {{/* string                       */}}
+{{ $total  := .TotalAmount }}     {{/* float64                      */}}
+{{ $paid   := .Paid }}            {{/* bool                         */}}
+{{/* -------- 3. Variables initialised from methods (OK) -------- */}}
+{{ $disp  := .DisplayName }}      {{/* string  (Order.DisplayName)  */}}
+{{ $count := .ItemCount }}        {{/* int     (Order.ItemCount)    */}}
+{{ $big   := .IsLargeOrder }}     {{/* bool    (Order.IsLargeOrder) */}}
+{{/* -------- 4. Range: index + element variables (OK) -------- */}}
+{{ range $idx, $it := .Items }}
+  {{/* $idx -> var $idx uint     */}}
+  {{/* $it  -> var $it  model.Item */}}
+  {{ $sku  := $it.SKU }}          {{/* string  */}}
+  {{ $qty  := $it.Qty }}          {{/* int     */}}
+  {{ $unit := $it.UnitPrice }}    {{/* float64 */}}
+  {{ $lbl  := $it.Label }}        {{/* string  (Item.Label)  */}}
+  {{ $tot  := $it.Total }}        {{/* float64 (Item.Total)  */}}
+{{ end }}
+{{/* -------- 5. With: dot rebinding (partial OK) -------- */}}
+{{ with .Address }}
+  {{ $h := . }}                   {{/* TODO DotNode -> would be model.Address */}}
+  {{ $c := .City }}               {{/* string  */}}
+  {{ $z := .ZipCode }}            {{/* string  (Address.ZipCode)  */}}
+  {{ $l := .IsLocal }}            {{/* bool    (Address.IsLocal)  */}}
+{{ end }}
+{{/* -------- 6. Reassignment keeps type (OK) -------- */}}
+{{ $i = 42 }}                     {{/* hover $i still -> int */}}
+{{/* -------- 7. NOT YET WIRED: bare field / dot / identifier (TODO) -------- */}}
+{{ .CustomerName }}               {{/* still shows the old syntactic blurb,
+                                       no Go type rendered                */}}
+{{ . }}                           {{/* still shows "Returns the current
+                                       context", no Go type rendered      */}}
+{{ len .Items }}                  {{/* len has a curated message;
+                                       other builtins (eq, printf, ...) and
+                                       user funcs do not                  */}}
+{{/* -------- 8. End / else tags (already worked pre-change) -------- */}}
+{{ if .Paid }}paid{{ else }}unpaid{{ end }}
+{{/* hover else / end -> reports which branch they close */}}

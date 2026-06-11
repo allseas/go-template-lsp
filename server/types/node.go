@@ -846,18 +846,17 @@ func (n *NumberNode) Parent() Node {
 }
 
 func (n *NumberNode) ValueType() types.Type {
-	// Return a basic type based on what kind of number this is
-	if n.IsComplex {
-		return types.Typ[types.Complex128]
+	if n.IsInt {
+		return types.Typ[types.Int]
+	}
+	if n.IsUint {
+		return types.Typ[types.Uint]
 	}
 	if n.IsFloat {
 		return types.Typ[types.Float64]
 	}
-	if n.IsUint {
-		return types.Typ[types.Uint64]
-	}
-	if n.IsInt {
-		return types.Typ[types.Int64]
+	if n.IsComplex {
+		return types.Typ[types.Complex128]
 	}
 	return nil
 }

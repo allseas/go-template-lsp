@@ -10,6 +10,24 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+// formatType renders a Go type using the package's short name (e.g.
+// `model.Address`) rather than the full import path. Untyped nil renders as
+// just `nil`. Returns "" if t is nil.
+func formatType(t types.Type) string {
+	if t == nil {
+		return ""
+	}
+	if b, ok := t.(*types.Basic); ok && b.Kind() == types.UntypedNil {
+		return "nil"
+	}
+	return types.TypeString(t, func(p *types.Package) string {
+		if p == nil {
+			return ""
+		}
+		return p.Name()
+	})
+}
+
 // MessageElse generates a hover message for an else tag of a BranchNode, including the branch type and line number where the if statement starts.
 func MessageElse(n *parse.Node, pos protocol.Position) string {
 	const withBranch = "```go\nelse\n```\nFrom `%s` at line %d."
@@ -66,16 +84,23 @@ func MessageBranch(n *parse.BranchNode) string {
 	return ""
 }
 
-// MessageDot generates a hover message for a DotNode.
-func MessageDot(_ *parse.DotNode) string {
+// MessageDot generates a hover message for a DotNode. If typ is non-nil the
+// Go type of the current context is included.
+func MessageDot(_ *parse.DotNode, typ types.Type) string {
 	const dotMessage = "```go\ndot\n```\nReturns the current context."
+	const dotMessageTyped = "```go\ndot %s\n```\nReturns the current context."
 
+	if s := formatType(typ); s != "" {
+		return withLink(fmt.Sprintf(dotMessageTyped, s))
+	}
 	return withLink(dotMessage)
 }
 
-// MessageField generates a hover message for a FieldNode, including the field name and context.
-func MessageField(n *parse.FieldNode) string {
+// MessageField generates a hover message for a FieldNode, including the field
+// name and (when known) the resolved Go type of the full field chain.
+func MessageField(n *parse.FieldNode, typ types.Type) string {
 	const fieldMessage = "```go\nfield %s\n```\nAccesses the `%s` field of the `.%s` context."
+	const fieldMessageTyped = "```go\nfield %s %s\n```\nAccesses the `%s` field of the `.%s` context."
 
 	ctx := ""
 	if len(n.Ident) > 1 {
@@ -84,6 +109,9 @@ func MessageField(n *parse.FieldNode) string {
 	field := ""
 	if len(n.Ident) > 0 {
 		field = n.Ident[0]
+	}
+	if s := formatType(typ); s != "" {
+		return withLink(fmt.Sprintf(fieldMessageTyped, n.String(), s, field, ctx))
 	}
 	return withLink(fmt.Sprintf(fieldMessage, n.String(), field, ctx))
 }
@@ -117,25 +145,29 @@ func MessageIndexVariable(n *parse.VariableNode) string {
 	return fmt.Sprintf(indexMessage, ident)
 }
 
-// MessageVariable generates a hover message for a VariableNode, including the variable name.
+// MessageVariable generates a hover message for a VariableNode, including the
+// variable name and (when known) its resolved Go type and/or constant value.
 func MessageVariable(n *parse.VariableNode, varValue any, typ types.Type) string {
-	const withValue = "```go\nvar %s %T = %v\n```"
-	const withType = "```go\nvar %s %v\n```"
+	const withValueAndType = "```go\nvar %s %s = %v\n```"
+	const withValue = "```go\nvar %s = %v\n```"
+	const withType = "```go\nvar %s %s\n```"
 	const unknownType = "```go\nvar %s (unknown)\n```"
 
 	ident := ""
 	if len(n.Ident) > 0 {
 		ident = n.Ident[0]
 	}
-
-	if varValue != nil {
-		return fmt.Sprintf(withValue, ident, varValue, varValue)
+	typStr := formatType(typ)
+	switch {
+	case varValue != nil && typStr != "":
+		return fmt.Sprintf(withValueAndType, ident, typStr, varValue)
+	case varValue != nil:
+		return fmt.Sprintf(withValue, ident, varValue)
+	case typStr != "":
+		return fmt.Sprintf(withType, ident, typStr)
+	default:
+		return fmt.Sprintf(unknownType, ident)
 	}
-	if typ != nil {
-		return fmt.Sprintf(withType, ident, typ)
-	}
-
-	return fmt.Sprintf(unknownType, ident)
 }
 
 // Because both `block` and `template` parse to TemplateNode, it's impossible to distinguish them
