@@ -106,7 +106,7 @@ func (s *documentStore) Set(uri, text string) {
 
 	typedTrees := make(map[string]*types.Tree, len(treeSet))
 	for name, tr := range treeSet {
-		typedTrees[name] = buildTypedTree(tr, loadedTypes[name])
+		typedTrees[name] = buildTypedTree(tr, loadedTypes[name], s.templateInputTypes)
 	}
 	var typed *types.Tree
 	if tree != nil {

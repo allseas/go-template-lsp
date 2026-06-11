@@ -17,7 +17,7 @@ func suggestAt(t *testing.T, src string, offset int) []string {
 	t.Helper()
 	trees, err := parse.Parse("test", src, "", "", builtins())
 	require.NoError(t, err)
-	tt := serverTypes.NewTree(*trees["test"], nil, nil, nil)
+	tt := serverTypes.NewTree(*trees["test"], nil, nil, nil, nil)
 	cur := serverTypes.NodeFind(tt.Root, serverTypes.Pos(offset))
 	require.NotNil(t, cur)
 	items := suggest(cur, src[offset], false, protocol.Range{})
@@ -47,7 +47,7 @@ func suggestAtWithType(
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	tt := serverTypes.NewTree(*typ, nil, dotType, pkg)
+	tt := serverTypes.NewTree(*typ, nil, dotType, pkg, nil)
 	if lt != nil {
 		tt.DotType = lt.DotType
 		tt.Pkg = lt.Pkg
@@ -268,7 +268,7 @@ func typedNodeAt(t *testing.T, src string, offset int, lt *serverTypes.Tree) ser
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	tt := serverTypes.NewTree(*typ, nil, dotType, pkg)
+	tt := serverTypes.NewTree(*typ, nil, dotType, pkg, nil)
 	cur := serverTypes.NodeFind(tt.Root, serverTypes.Pos(offset))
 	require.NotNil(t, cur)
 	return cur

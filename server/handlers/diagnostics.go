@@ -119,28 +119,6 @@ func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []pro
 	return diagnostics
 }
 
-// collectTemplateArgTypeDiagnostics converts ErrorTypeInvalidTemplateArg entries from
-// the typed tree into protocol diagnostics.
-func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
-	var diagnostics []protocol.Diagnostic
-	for _, terr := range typedTree.TypeErrors {
-		if terr.ErrType() != types.ErrorTypeInvalidTemplateArg {
-			continue
-		}
-		if terr.Node == nil {
-			continue
-		}
-		pos := int(terr.Node.Position())
-		rng := expandToFullBracketsFromOffset(pos, text)
-		diagnostics = append(diagnostics, createDiagnostic(
-			withPos(text, pos, terr.Err),
-			rng,
-			true,
-		))
-	}
-	return diagnostics
-}
-
 // analyzeNode is the visitor passed to walkAndAnalyze; it declares variables then validates the node.
 func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
 	if ctx == nil || node == nil {
