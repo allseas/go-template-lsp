@@ -25,7 +25,13 @@ In `AppSettings.kt`, add the new field to the `State` data class with a default 
 
 ```kotlin
 data class State(
-    var enableServer: Boolean = true,
+    var enableHover: Boolean = true,
+    var enableDefinition: Boolean = true,
+    var enableDiagnostics: Boolean = true,
+    var diagnosticsSyntaxError: Boolean = true,
+    var diagnosticsVariableRedeclaration: Boolean = true,
+    var diagnosticsIncorrectFunction: Boolean = true,
+    var enableAutocompletion: Boolean = true,
     var traceServer: TraceLevel = TraceLevel.MESSAGES,
     var myNewOption: String = "default",  // <-- add here
 )
@@ -37,7 +43,13 @@ In `ProjectSettings.kt`, add a nullable version so projects can optionally overr
 
 ```kotlin
 data class State(
-    var enableServerOverride: Boolean? = null,
+    var enableHoverOverride: Boolean? = null,
+    var enableDefinitionOverride: Boolean? = null,
+    var enableDiagnosticsOverride: Boolean? = null,
+    var diagnosticsSyntaxErrorOverride: Boolean? = null,
+    var diagnosticsVariableRedeclarationOverride: Boolean? = null,
+    var diagnosticsIncorrectFunctionOverride: Boolean? = null,
+    var enableAutocompletionOverride: Boolean? = null,
     var traceServerOverride: AppSettings.TraceLevel? = null,
     var myNewOptionOverride: String? = null,  // <-- add here
 )
@@ -49,7 +61,13 @@ Then update `getEffectiveState()` to merge the override:
 fun getEffectiveState(): AppSettings.State {
     val appState = AppSettings.getInstance().state
     return AppSettings.State(
-        enableServer = state.enableServerOverride ?: appState.enableServer,
+        enableHover = state.enableHoverOverride ?: appState.enableHover,
+        enableDefinition = state.enableDefinitionOverride ?: appState.enableDefinition,
+        enableDiagnostics = state.enableDiagnosticsOverride ?: appState.enableDiagnostics,
+        diagnosticsSyntaxError = state.diagnosticsSyntaxErrorOverride ?: appState.diagnosticsSyntaxError,
+        diagnosticsVariableRedeclaration = state.diagnosticsVariableRedeclarationOverride ?: appState.diagnosticsVariableRedeclaration,
+        diagnosticsIncorrectFunction = state.diagnosticsIncorrectFunctionOverride ?: appState.diagnosticsIncorrectFunction,
+        enableAutocompletion = state.enableAutocompletionOverride ?: appState.enableAutocompletion,
         traceServer = state.traceServerOverride ?: appState.traceServer,
         myNewOption = state.myNewOptionOverride ?: appState.myNewOption,  // <-- add here
     )
@@ -93,7 +111,15 @@ In `TextTemplateLspLanguageClient.kt`, add the field to the JSON:
 override fun createSettings(): Any {
     val config = ProjectSettings.getInstance(project).getEffectiveState()
     val json = JsonObject().apply {
-        addProperty("enableServer", config.enableServer)
+        addProperty("enableHover", config.enableHover)
+        addProperty("enableDefinition", config.enableDefinition)
+        addProperty("enableDiagnostics", config.enableDiagnostics)
+        add("diagnostics", JsonObject().apply {
+            addProperty("syntaxError", config.diagnosticsSyntaxError)
+            addProperty("variableRedeclaration", config.diagnosticsVariableRedeclaration)
+            addProperty("incorrectFunction", config.diagnosticsIncorrectFunction)
+        })
+        addProperty("enableAutocompletion", config.enableAutocompletion)
         addProperty("myNewOption", config.myNewOption)  // <-- add here
         add("trace", JsonObject().apply {
             addProperty("server", config.traceServer.value)

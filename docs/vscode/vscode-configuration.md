@@ -23,7 +23,25 @@ In `clients/VSCode/package.json`, add the new option under `contributes.configur
   "contributes": {
     "configuration": {
       "properties": {
-        "goTmplSupport.enableServer": {
+        "goTmplSupport.enableHover": {
+          ...
+        },
+        "goTmplSupport.enableDefinition": {
+          ...
+        },
+        "goTmplSupport.enableDiagnostics": {
+          ...
+        },
+        "goTmplSupport.diagnostics.syntaxError": {
+          ...
+        },
+        "goTmplSupport.diagnostics.variableRedeclaration": {
+          ...
+        },
+        "goTmplSupport.diagnostics.incorrectFunction": {
+          ...
+        },
+        "goTmplSupport.enableAutocompletion": {
           ...
         },
         "goTmplSupport.trace.server": {
