@@ -82,10 +82,40 @@
         "configuration": {
             "title": "text/template Support",
             "properties": {
-                "goTmplSupport.enableServer": {
+                "goTmplSupport.enableHover": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Enable/disable the language server."
+                    "description": "Enable/disable hover information."
+                },
+                "goTmplSupport.enableDefinition": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable/disable go-to-definition."
+                },
+                "goTmplSupport.enableDiagnostics": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable/disable all diagnostics."
+                },
+                "goTmplSupport.diagnostics.syntaxError": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Report syntax errors."
+                },
+                "goTmplSupport.diagnostics.variableRedeclaration": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Report duplicate variable declarations."
+                },
+                "goTmplSupport.diagnostics.incorrectFunction": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Report unknown or incorrectly used functions."
+                },
+                "goTmplSupport.enableAutocompletion": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable/disable autocompletion."
                 },
                 "goTmplSupport.trace.server": {
                     "type": "string",

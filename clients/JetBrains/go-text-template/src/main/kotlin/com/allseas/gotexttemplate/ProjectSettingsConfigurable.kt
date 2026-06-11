@@ -14,15 +14,51 @@ class ProjectSettingsConfigurable(
         panel {
             val settings = ProjectSettings.getInstance(project)
 
-            row("Enable language server:") {
-                comboBox(listOf(null, true, false), NullableBooleanRenderer())
-                    .bindItem(settings.state::enableServerOverride)
-                    .comment("Leave empty to use the application-level default")
+            group("Features") {
+                row("Enable hover information:") {
+                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
+                        .bindItem(settings.state::enableHoverOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
+                row("Enable go-to-definition:") {
+                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
+                        .bindItem(settings.state::enableDefinitionOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
+                row("Enable autocompletion:") {
+                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
+                        .bindItem(settings.state::enableAutocompletionOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
             }
-            row("Trace level:") {
-                comboBox(listOf(null) + AppSettings.TraceLevel.entries, NullableTraceLevelRenderer())
-                    .bindItem(settings.state::traceServerOverride)
-                    .comment("Leave empty to use the application-level default")
+            group("Diagnostics") {
+                row("Enable diagnostics:") {
+                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
+                        .bindItem(settings.state::enableDiagnosticsOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
+                row("Report syntax errors:") {
+                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
+                        .bindItem(settings.state::diagnosticsSyntaxErrorOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
+                row("Report duplicate variable declarations:") {
+                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
+                        .bindItem(settings.state::diagnosticsVariableRedeclarationOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
+                row("Report unknown or incorrectly used functions:") {
+                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
+                        .bindItem(settings.state::diagnosticsIncorrectFunctionOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
+            }
+            group("Advanced") {
+                row("Trace level:") {
+                    comboBox(listOf(null) + AppSettings.TraceLevel.entries, NullableTraceLevelRenderer())
+                        .bindItem(settings.state::traceServerOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
             }
         }
 }
