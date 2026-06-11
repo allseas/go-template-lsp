@@ -392,22 +392,20 @@ func TestSemanticTokensAdditionalCases(t *testing.T) {
 		wantModifiers []uint32
 	}{
 		{
-			// if/else if/else/end
-			// The parser converts {{else if}} into a nested IfNode, so both the
-			// inner and outer emitEndKeyword fire for the shared {{end}}, yielding
-			// 8 tokens (the final "end" appears twice at the same position).
+			// if/else if/else/end - the parser desugars {{else if}} into a
+			// nested IfNode inside ElseList, so the shared {{end}} must appear
+			// exactly once (7 tokens total, not 8).
 			name:   "if/else-if/else/end keywords",
 			src:    `{{if .}}{{else if .}}{{else}}{{end}}`,
 			noType: true,
 			wantTypes: []uint32{
-				ttKeyword,
-				ttVariable,
-				ttKeyword,
-				ttKeyword,
-				ttVariable,
-				ttKeyword,
-				ttKeyword,
-				ttKeyword,
+				ttKeyword,  // if
+				ttVariable, // .
+				ttKeyword,  // else
+				ttKeyword,  // if  (inner)
+				ttVariable, // .  (inner condition)
+				ttKeyword,  // else (inner)
+				ttKeyword,  // end  (shared, emitted once)
 			},
 		},
 		{
@@ -638,4 +636,69 @@ func TestSemanticTokenNodeTypes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestElseIfNoDuplicateEndToken(t *testing.T) {
+	uri := "file:///regression-elseif.tmpl"
+	setDocWithTypedTree(t, uri, `{{if .}}{{else if .}}{{else}}{{end}}`, nil)
+	defer store.Delete(uri)
+
+	result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// 7 tokens: if . else if . else end  (the {{end}} must appear exactly once)
+	require.Len(t, result.Data, 7*5, "{{end}} token must not be duplicated for else-if chains")
+
+	// The last token must be the end keyword.
+	assert.Equal(t, ttKeyword, result.Data[6*5+3], "last token must be the 'end' keyword")
+
+	// Verify no two tokens share the same byte offset (no duplicate position).
+	positions := make(map[uint32]bool)
+	prevLine, prevChar := uint32(0), uint32(0)
+	for i := 0; i < 7; i++ {
+		deltaLine := result.Data[i*5+0]
+		deltaChar := result.Data[i*5+1]
+		if deltaLine == 0 {
+			prevChar += deltaChar
+		} else {
+			prevLine += deltaLine
+			prevChar = deltaChar
+		}
+		key := prevLine*100000 + prevChar
+		assert.False(t, positions[key], "duplicate token position at token %d", i)
+		positions[key] = true
+	}
+}
+
+// TestDocumentSymbolsBlockStartRegression is a regression test for the bug where
+// DocumentSymbols used FindStringIndex (returning the first {{define}} match in the
+// file) instead of the last one before bodyStart, causing every define after the
+// first to have its Range.Start set to the first define's position.
+func TestDocumentSymbolsBlockStartRegression(t *testing.T) {
+	uri := "file:///regression-blocksym.tmpl"
+	// Three defines on separate lines; without the fix the second and third would
+	// both report Range.Start.Line == 0 (the position of "alpha").
+	src := "{{define \"alpha\"}}A{{end}}\n{{define \"beta\"}}B{{end}}\n{{define \"gamma\"}}C{{end}}"
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+	require.Len(t, syms, 3)
+
+	// Each symbol must start on a distinct line.
+	lines := map[uint32]string{}
+	for _, s := range syms {
+		line := s.Range.Start.Line
+		if prev, exists := lines[line]; exists {
+			t.Errorf(
+				"symbols %q and %q both have Range.Start.Line=%d (blockStart bug)",
+				prev, s.Name, line,
+			)
+		}
+		lines[line] = s.Name
+	}
+	assert.Len(t, lines, 3, "all three symbols must start on distinct lines")
 }
