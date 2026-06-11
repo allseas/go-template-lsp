@@ -271,7 +271,7 @@ func parseTemplate(uri, text string) (*parse.Tree, map[string]*parse.Tree, error
 
 func tryParse(text string) (*parse.Tree, map[string]*parse.Tree, error) {
 	t := parse.New("t")
-	t.Mode = parse.ParsePartial | parse.SkipFuncCheck
+	t.Mode = parse.ParsePartial | parse.SkipFuncCheck | parse.ParseComments
 	treeSet := map[string]*parse.Tree{}
 	_, err := t.Parse(text, "{{", "}}", treeSet)
 	if err != nil {
