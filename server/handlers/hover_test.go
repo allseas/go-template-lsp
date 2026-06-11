@@ -73,7 +73,7 @@ func TestHoverMultiDefines(t *testing.T) {
 
 	src := multiDefinesTemplate
 	uri := "file:///hover-multidefines.tmpl"
-	enableServer(t)
+	enableHover(t)
 	setDocMulti(t, uri, src, perTree)
 	t.Cleanup(func() { store.Remove(uri) })
 
