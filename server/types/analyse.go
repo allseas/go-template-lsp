@@ -263,7 +263,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if argType != nil && !types.AssignableTo(argType, expectedType) {
+			if argType != nil && argType.String() != expectedType.String() {
 				ctx.errorf(
 					t,
 					ErrorTypeInvalidTemplateArg,

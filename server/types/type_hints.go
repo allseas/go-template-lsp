@@ -28,7 +28,7 @@ func ParseDefineTypeHints(text string) map[string]string {
 
 	result := make(map[string]string)
 	matches := defineRe.FindAllStringSubmatchIndex(text, -1)
-	for _, m := range matches {
+	for i, m := range matches {
 		var name string
 		if m[2] != -1 {
 			name = text[m[2]:m[3]] // double-quoted name
@@ -38,11 +38,12 @@ func ParseDefineTypeHints(text string) map[string]string {
 		if name == "" {
 			continue
 		}
-		// Search within the first 512 bytes of the block for a gotype hint.
+		// Bound the search at the start of the next {{define}} tag so we don't
+		// accidentally pick up a gotype hint that belongs to the next block.
 		start := m[1]
-		end := start + 512
-		if end > len(text) {
-			end = len(text)
+		end := len(text)
+		if i+1 < len(matches) {
+			end = matches[i+1][0]
 		}
 		snippet := text[start:end]
 		if gm := gotypeRe.FindStringSubmatch(snippet); gm != nil {

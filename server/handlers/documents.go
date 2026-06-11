@@ -82,7 +82,11 @@ func (s *documentStore) Set(uri, text string) {
 				if loaded, lerr := types.LoadTypeFromHint(hint, WorkspaceRoot); lerr == nil {
 					newTemplateTypes[name] = loaded.DotType
 				} else {
-					log.Warn().Str("template", name).Str("hint", hint).Err(lerr).Msg("define block type hint load failed")
+					log.Warn().
+						Str("template", name).
+						Str("hint", hint).
+						Err(lerr).
+						Msg("define block type hint load failed")
 				}
 			}
 		}
@@ -104,6 +108,30 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 
+	// Update the template input type registry first so that same-file
+	// {{template}} calls can be type-checked against defines in this document.
+	if s.uriTemplateNames == nil {
+		s.uriTemplateNames = make(map[string][]string)
+	}
+	if s.templateInputTypes == nil {
+		s.templateInputTypes = make(map[string]gotypes.Type)
+	}
+	if oldNames, ok := s.uriTemplateNames[uri]; ok {
+		for _, name := range oldNames {
+			delete(s.templateInputTypes, name)
+		}
+	}
+	if len(newTemplateTypes) > 0 {
+		newNames := make([]string, 0, len(newTemplateTypes))
+		for name, typ := range newTemplateTypes {
+			s.templateInputTypes[name] = typ
+			newNames = append(newNames, name)
+		}
+		s.uriTemplateNames[uri] = newNames
+	} else {
+		delete(s.uriTemplateNames, uri)
+	}
+
 	typedTrees := make(map[string]*types.Tree, len(treeSet))
 	for name, tr := range treeSet {
 		typedTrees[name] = buildTypedTree(tr, loadedTypes[name], s.templateInputTypes)
@@ -111,42 +139,6 @@ func (s *documentStore) Set(uri, text string) {
 	var typed *types.Tree
 	if tree != nil {
 		typed = typedTrees[tree.Name]
-	}
-
-	// Update the template input type registry: remove stale entries for this URI,
-	// then add the newly discovered ones.
-	if oldNames, ok := s.uriTemplateNames[uri]; ok {
-		for _, name := range oldNames {
-			delete(s.templateInputTypes, name)
-		}
-	}
-	if len(newTemplateTypes) > 0 {
-		newNames := make([]string, 0, len(newTemplateTypes))
-		for name, typ := range newTemplateTypes {
-			s.templateInputTypes[name] = typ
-			newNames = append(newNames, name)
-		}
-		s.uriTemplateNames[uri] = newNames
-	} else {
-		delete(s.uriTemplateNames, uri)
-	}
-
-	// Update the template input type registry: remove stale entries for this URI,
-	// then add the newly discovered ones.
-	if oldNames, ok := s.uriTemplateNames[uri]; ok {
-		for _, name := range oldNames {
-			delete(s.templateInputTypes, name)
-		}
-	}
-	if len(newTemplateTypes) > 0 {
-		newNames := make([]string, 0, len(newTemplateTypes))
-		for name, typ := range newTemplateTypes {
-			s.templateInputTypes[name] = typ
-			newNames = append(newNames, name)
-		}
-		s.uriTemplateNames[uri] = newNames
-	} else {
-		delete(s.uriTemplateNames, uri)
 	}
 
 	s.docs[uri] = &document{
@@ -164,7 +156,11 @@ func (s *documentStore) Set(uri, text string) {
 // It carries dot-type / package info from the loaded type hint when available.
 // templateInputTypes maps template names to their expected input types; it is
 // consulted when analysing {{template "name" arg}} call sites.
-func buildTypedTree(tree *parse.Tree, lt *types.Tree, templateInputTypes map[string]gotypes.Type) *types.Tree {
+func buildTypedTree(
+	tree *parse.Tree,
+	lt *types.Tree,
+	templateInputTypes map[string]gotypes.Type,
+) *types.Tree {
 	if tree == nil {
 		return nil
 	}
