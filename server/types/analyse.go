@@ -699,7 +699,8 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 			// find the variable in the context and update its type
 			for i := len(ctx.vars) - 1; i >= 0; i-- {
 				if ctx.vars[i].Ident[0] == typePipe.Decl[0].Ident[0] {
-					if ctx.vars[i].typ != nil && typePipe.typ != nil && !types.Identical(ctx.vars[i].typ, typePipe.typ) {
+					if ctx.vars[i].typ != nil && typePipe.typ != nil &&
+						!types.Identical(ctx.vars[i].typ, typePipe.typ) {
 						ctx.errorf(
 							typePipe.Decl[0],
 							ErrorTypeInvalidCommand,
