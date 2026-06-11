@@ -156,25 +156,24 @@ func RequestConfig(context *glsp.Context) error {
 	return nil
 }
 
-// ConfigChanged is an LSP notification handler that updates the server's configuration when the client sends new settings. It parses the incoming configuration, updates the global configuration, and applies any necessary changes.
-func ConfigChanged(_ *glsp.Context, params *protocol.DidChangeConfigurationParams) error {
-	raw, err := json.Marshal(params.Settings)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to marshal changed settings")
-		return err
+// ConfigChanged is an LSP notification handler that re-fetches configuration from the client
+// and refreshes all open documents. It runs asynchronously to avoid deadlocking the jsonrpc2
+// read loop (which would otherwise block waiting for the workspace/configuration reply).
+func ConfigChanged(context *glsp.Context, _ *protocol.DidChangeConfigurationParams) error {
+	if context == nil {
+		return nil
 	}
-
-	c := GetConfig()
-	if err := json.Unmarshal(raw, &c); err != nil {
-		log.Error().Err(err).Msg("failed to parse changed settings")
-		return err
-	}
-
-	loadLocalConfig(&c)
-	applyConfig(c)
-	log.Debug().Any("config", c).Msg("config changed")
-
+	go applyConfigChange(context)
 	return nil
+}
+
+func applyConfigChange(ctx *glsp.Context) {
+	if err := RequestConfig(ctx); err != nil {
+		log.Error().Err(err).Msg("failed to request config on change")
+		return
+	}
+	RefreshAllDocuments(ctx)
+	log.Debug().Any("config", GetConfig()).Msg("config changed, documents refreshed")
 }
 
 // SetTrace is an LSP request handler that updates the server's trace level based on client requests. It updates the global configuration and applies the new trace level immediately.

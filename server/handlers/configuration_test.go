@@ -196,11 +196,17 @@ func TestLocalConfigOverridesClientConfig(t *testing.T) {
 			configPath := filepath.Join(tempDir, "gotmpl.config.json")
 			assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0o600))
 
-			params := protocol.DidChangeConfigurationParams{
-				Settings: json.RawMessage(`{"enableHover": true, "trace": {"server": "verbose"}}`),
+			context := &glsp.Context{
+				Call: func(method string, _ any, result any) {
+					if method == "workspace/configuration" {
+						*(result.(*[]json.RawMessage)) = []json.RawMessage{
+							[]byte(`{"enableHover": true, "trace": {"server": "verbose"}}`),
+						}
+					}
+				},
 			}
 
-			assert.NoError(t, ConfigChanged(nil, &params))
+			applyConfigChange(context)
 			// enableHover comes from client (not present in local file)
 			assert.Equal(t, true, GetConfig().EnableHover)
 			// trace.server comes from local file (overrides client)
@@ -366,79 +372,76 @@ func TestConfigChanged(t *testing.T) {
 	original := GetConfig()
 	t.Cleanup(func() { setConfig(original) })
 
-	// ai
-	t.Run("ConfigChanged applies new config", func(t *testing.T) {
-		initialConfig := Config{EnableHover: false}
-		setConfig(initialConfig)
+	t.Run("ConfigChanged returns nil immediately", func(t *testing.T) {
+		err := ConfigChanged(nil, &protocol.DidChangeConfigurationParams{})
+		assert.NoError(t, err)
+	})
+}
 
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(`{"trace": {"server": "verbose"}, "enableHover": true}`),
+func TestApplyConfigChange(t *testing.T) {
+	original := GetConfig()
+	t.Cleanup(func() { setConfig(original) })
+
+	t.Run("fetches fresh config from client and applies it", func(t *testing.T) {
+		context := &glsp.Context{
+			Call: func(method string, _ any, result any) {
+				if method == "workspace/configuration" {
+					*(result.(*[]json.RawMessage)) = []json.RawMessage{
+						[]byte(`{"trace": {"server": "verbose"}, "enableHover": true}`),
+					}
+				}
+			},
 		}
 
-		err := ConfigChanged(nil, &params)
-		assert.NoError(t, err)
+		applyConfigChange(context)
 		assert.Equal(t, protocol.TraceValueVerbose, GetConfig().Trace.Server)
 		assert.Equal(t, true, GetConfig().EnableHover)
 	})
 
-	// ai
-	t.Run("ConfigChanged handles invalid config", func(t *testing.T) {
-		initialConfig := Config{EnableHover: false}
-		setConfig(initialConfig)
-
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(
-				`{"trace": {"server": "invalid_trace_value"}, "enableHover": true}`,
-			),
+	t.Run("applies default trace when trace is invalid", func(t *testing.T) {
+		context := &glsp.Context{
+			Call: func(method string, _ any, result any) {
+				if method == "workspace/configuration" {
+					*(result.(*[]json.RawMessage)) = []json.RawMessage{
+						[]byte(`{"trace": {"server": "invalid_trace_value"}, "enableHover": true}`),
+					}
+				}
+			},
 		}
 
-		err := ConfigChanged(nil, &params)
-		assert.NoError(t, err)
+		applyConfigChange(context)
 		assert.Equal(t, TraceValueMessages, GetConfig().Trace.Server)
 		assert.Equal(t, true, GetConfig().EnableHover)
 	})
 
-	// ai
-	t.Run("ConfigChanged handles empty config", func(t *testing.T) {
-		initialConfig := Config{EnableHover: false}
-		setConfig(initialConfig)
-
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(`{}`),
+	t.Run("with empty response leaves config at defaults", func(t *testing.T) {
+		context := &glsp.Context{
+			Call: func(method string, _ any, result any) {
+				if method == "workspace/configuration" {
+					*(result.(*[]json.RawMessage)) = []json.RawMessage{[]byte(`{}`)}
+				}
+			},
 		}
 
-		err := ConfigChanged(nil, &params)
-		assert.NoError(t, err)
+		applyConfigChange(context)
 		assert.Equal(t, TraceValueMessages, GetConfig().Trace.Server)
-		assert.Equal(t, false, GetConfig().EnableHover)
 	})
 
-	// ai
-	t.Run("ConfigChanged handles partial config", func(t *testing.T) {
-		initialConfig := Config{EnableHover: false}
-		setConfig(initialConfig)
+	t.Run("with partial response applies provided fields", func(t *testing.T) {
+		setConfig(Config{EnableHover: false})
 
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(`{"enableHover": true}`),
+		context := &glsp.Context{
+			Call: func(method string, _ any, result any) {
+				if method == "workspace/configuration" {
+					*(result.(*[]json.RawMessage)) = []json.RawMessage{
+						[]byte(`{"enableHover": true}`),
+					}
+				}
+			},
 		}
 
-		err := ConfigChanged(nil, &params)
-		assert.NoError(t, err)
-		assert.Equal(t, TraceValueMessages, GetConfig().Trace.Server)
+		applyConfigChange(context)
 		assert.Equal(t, true, GetConfig().EnableHover)
-	})
-
-	// ai
-	t.Run("ConfigChanged handles invalid JSON config", func(t *testing.T) {
-		initialConfig := Config{EnableHover: false}
-		setConfig(initialConfig)
-		params := protocol.DidChangeConfigurationParams{
-			Settings: `{"enableHover: true}`,
-		}
-
-		err := ConfigChanged(nil, &params)
-		assert.Error(t, err)
-		assert.Equal(t, false, GetConfig().EnableHover)
 	})
 }
 
