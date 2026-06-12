@@ -6,17 +6,17 @@ The hover provider gives contextual documentation when the user holds the cursor
 
 | Cursor position                        | Tooltip                                                                      |
 |----------------------------------------|------------------------------------------------------------------------------|
-| `{{ `**`if`**` .IsAdmin }}`            | **If Branch** — conditional branch executed if `.IsAdmin` evaluates to true  |
-| `{{ `**`range`**` $i, $v := .Items }}` | **Range Branch** — branch executed for each item in a collection             |
-| `{{ range `**`$i`**`, $v := .Items }}` | **Index variable** — serves as the index variable in the range loop          |
-| `{{ range $i, `**`$v`**` := .Items }}` | **Variable** — `$v`                                                          |
-| `{{- end -}}`                          | **End Tag** — marks the end of `with`, which started at line 3               |
-| `{{- else }}`                          | **Else Branch** — marks the else branch of `if` statement starting at line 5 |
-| `.Name`                                | **Field Access** — accesses the `Name` field of the current context          |
+| `{{ `**`if`**` .IsAdmin }}`            | **If Branch** - conditional branch executed if `.IsAdmin` evaluates to true  |
+| `{{ `**`range`**` $i, $v := .Items }}` | **Range Branch** - branch executed for each item in a collection             |
+| `{{ range `**`$i`**`, $v := .Items }}` | **Index variable** - serves as the index variable in the range loop          |
+| `{{ range $i, `**`$v`**` := .Items }}` | **Variable** - `$v`                                                          |
+| `{{- end -}}`                          | **End Tag** - marks the end of `with`, which started at line 3               |
+| `{{- else }}`                          | **Else Branch** - marks the else branch of `if` statement starting at line 5 |
+| `.Name`                                | **Field Access** - accesses the `Name` field of the current context          |
 | `and` / `or` / `not` / `len`           | Dedicated descriptions for each built-in function                            |
-| `"hello"`                              | **String literal** — a literal string value                                  |
-| `42`                                   | **Number literal** — a literal numeric value                                 |
-| `nil`                                  | **Nil literal** — represents a nil value                                     |
+| `"hello"`                              | **String literal** - a literal string value                                  |
+| `42`                                   | **Number literal** - a literal numeric value                                 |
+| `nil`                                  | **Nil literal** - represents a nil value                                     |
 
 All tooltips are rendered as Markdown.
 They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over node
@@ -43,7 +43,7 @@ LSP client  ──── textDocument/hover ────►  server/handlers/hov
 
 ## Implementation details
 
-### Entry point — `hover()`
+### Entry point - `hover()`
 
 `hover.go:16` is the LSP handler registered for `textDocument/hover`. It receives a `HoverParams` value containing the document URI and the cursor position as `{line, character}`
 
@@ -52,14 +52,14 @@ hover()
  ├── store.Get(uri)                   look up the parsed document
  ├── positionToOffset(text, pos)      convert LSP position → byte offset
  ├── nodeFind(root, offset)           walk the AST to find the nearest preceeding node
- ├── endTagHover(...)                 special handling — see below
- ├── elseNodeHover(...)               special handling — see below
+ ├── endTagHover(...)                 special handling - see below
+ ├── elseNodeHover(...)               special handling - see below
  └── buildHoverContent(node, hover)   type-switch dispatch
 ```
 
 ### Special case: `{{end}}` hover
 
-`{{end}}` tags do not appear as their own AST node — the parser consumes them to close a branch (`if`, `range`, `with`, `template`) but records no node for the tag itself. As a result, `nodeFind` returns the preceding node to the closing tag, which carries no useful information on its own. It might also happen that the preceding node is not in the same level as the branch which the end tag is closing, if whitespace trims are used.
+`{{end}}` tags do not appear as their own AST node - the parser consumes them to close a branch (`if`, `range`, `with`, `template`) but records no node for the tag itself. As a result, `nodeFind` returns the preceding node to the closing tag, which carries no useful information on its own. It might also happen that the preceding node is not in the same level as the branch which the end tag is closing, if whitespace trims are used.
 
 `endTagHover` (`hover.go:211`) handles this by working at the text level:
 
@@ -81,7 +81,7 @@ Similarly to end nodes, `{{else}}` and `{{else if …}}` nodes are not distinctl
 3. **Path walk**: Finds the matching `IfNode`, `RangeNode`, or `WithNode` in the ancestor path, skipping the same number of nesting levels.
 4. **Message**: `MessageElse` reports the *type* of the controlling branch and the 1-indexed line number where it opened.
 
-### Per-node dispatch — `buildHoverContent`
+### Per-node dispatch - `buildHoverContent`
 
 For all other nodes, `buildHoverContent` (`hover.go:85`) is a `switch target.(type)` over every concrete AST node type exported by the `text-template-parser` package. Each arm calls the corresponding `MessageXxx` function in `hover_messages.go`.
 
@@ -95,14 +95,14 @@ For all other nodes, `buildHoverContent` (`hover.go:85`) is a `switch target.(ty
 
 1. It rebuilds the ancestor path for the variable node via `buildPath`.
 2. If the immediate parent in the path is a `RangeNode` *and* the variable is the first declaration in the pipe (`pipe.Decl[0] == target`), the variable is the index.
-3. If the parent is not a `RangeNode`, `wasDeclaredAsIndex` checks whether any `RangeNode` ancestor in the path has a matching `Decl[0]` — handling the case where `$i` is *used* inside the body rather than at the declaration site.
+3. If the parent is not a `RangeNode`, `wasDeclaredAsIndex` checks whether any `RangeNode` ancestor in the path has a matching `Decl[0]` - handling the case where `$i` is *used* inside the body rather than at the declaration site.
 
-### Hover messages — `hover_messages.go`
+### Hover messages - `hover_messages.go`
 
 Messages are stored in two maps:
 
-- `nodeMessage` (`hover_messages.go:12`) — keyed by `parse.NodeType`, holds a `fmt.Sprintf`-compatible Markdown template for every standard node kind.
-- `specialMessages` (`hover_messages.go:33`) — keyed by identifier string, holds overrides for the built-in functions (`and`, `or`, `not`, `len`) and the synthetic `end`/`else` messages.
+- `nodeMessage` (`hover_messages.go:12`) - keyed by `parse.NodeType`, holds a `fmt.Sprintf`-compatible Markdown template for every standard node kind.
+- `specialMessages` (`hover_messages.go:33`) - keyed by identifier string, holds overrides for the built-in functions (`and`, `or`, `not`, `len`) and the synthetic `end`/`else` messages.
 
 Each exported `MessageXxx` function picks the right template, substitutes node-specific values (pipeline text, field name, line number, etc.), and returns the formatted string. Callers in `buildHoverContent` and the two special-case handlers pass the returned string directly into a `protocol.MarkupContent{Kind: MarkdownKindMarkdown}` value.
 

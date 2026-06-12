@@ -68,8 +68,8 @@ Created when the lexer encounters a bad token (e.g. `bad character U+003F '?'`) 
 
 | Sub-case                                 | Err message                     | Action                                                                                     |
 | ---------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ |
-| `{{ }}` — empty action with no lex error | `"… missing value for command"` | Report the error; position is valid                                                        |
-| `{{ $?????` — post-lex-error recovery    | nil or unrelated message        | Skip; the real error is already covered by the non-empty `UndefinedNode` for the bad token |
+| `{{ }}` - empty action with no lex error | `"… missing value for command"` | Report the error; position is valid                                                        |
+| `{{ $?????` - post-lex-error recovery    | nil or unrelated message        | Skip; the real error is already covered by the non-empty `UndefinedNode` for the bad token |
 
 The server handles these with the following logic (`analyzeNode`):
 
@@ -94,8 +94,8 @@ This means each bad character in `{{ $?????` produces its own error token (and t
 
 Diagnostics use `expandToFullBracketsFromOffset(pos, text)` to expand a byte offset to the full surrounding `{{ … }}` block:
 
-1. Search backwards from `pos` for the nearest `{{` — that becomes the start.
-2. Search forwards from `pos` for the nearest `}}` — that becomes the end.
+1. Search backwards from `pos` for the nearest `{{` - that becomes the start.
+2. Search forwards from `pos` for the nearest `}}` - that becomes the end.
 3. If no `}}` is found before a newline, the end is capped at the newline (handles unterminated actions).
 
 Both offsets are then converted to `(line, character)` positions with `offsetToPosition`.

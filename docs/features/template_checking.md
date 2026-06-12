@@ -246,6 +246,6 @@ ctx.errorf(
 
 ## See Also
 
-- [Type Hints](type_hints.md) — How to declare template input types via `/*gotype:*/` comments
-- [Diagnostics](diagnostics.md) — How errors are reported to the user
-- [types.md](../types.md) — Architecture of the type system
+- [Type Hints](type_hints.md) - How to declare template input types via `/*gotype:*/` comments
+- [Diagnostics](diagnostics.md) - How errors are reported to the user
+- [types.md](../types.md) - Architecture of the type system

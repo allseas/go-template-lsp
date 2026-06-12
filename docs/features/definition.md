@@ -28,7 +28,7 @@ When the cursor is on any `VariableNode`, the handler walks the entire AST and c
 
 ### Dot (`.`)
 
-When the cursor is on a `DotNode`, the handler uses `buildPath` to reconstruct the path from the tree root to the node, then walks the path backwards looking for the nearest `RangeNode` or `WithNode`. The pipe of that branch node is returned as the definition — since `range` and `with` are the constructs that redefine the dot context.
+When the cursor is on a `DotNode`, the handler uses `buildPath` to reconstruct the path from the tree root to the node, then walks the path backwards looking for the nearest `RangeNode` or `WithNode`. The pipe of that branch node is returned as the definition - since `range` and `with` are the constructs that redefine the dot context.
 
 ```gotmpl
 {{- range .Join }}

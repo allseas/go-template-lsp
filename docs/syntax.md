@@ -20,19 +20,19 @@ syntax/
 └── Regex.hs        -- regex constants for syntax elements of go template
 ```
 
-**Grammar.hs** — Sum types (`TemplateNode`, `ActionBody`, `LoopAction`, `Term`,
+**Grammar.hs** - Sum types (`TemplateNode`, `ActionBody`, `LoopAction`, `Term`,
 `VariableOp`) and constants (`keywords`, `builtinFunctions`). All types derive
 `Enum`/`Bounded` for enumeration via `[minBound .. maxBound]`.
 
-**TextMate.hs** — `TmPattern` and `TmSyntax` types with type aliases for fields (`ScopeName`, `Regex`,
+**TextMate.hs** - `TmPattern` and `TmSyntax` types with type aliases for fields (`ScopeName`, `Regex`,
 `Capture`, `RepoKey`, `Named`) and JSON serialization using aeson toJson instances. Language-agnostic.
 
-**Generate.hs** — Total functions mapping each grammar constructor to TextMate
+**Generate.hs** - Total functions mapping each grammar constructor to TextMate
 patterns. `allEntries` enumerates every constructor and assembles the repository.
 
-**Regex.hs** — regex constants, specifying the elements of go template syntax
+**Regex.hs** - regex constants, specifying the elements of go template syntax
 
-**Deduplication** — `dedup` keeps the first occurrence per key. Ordering in
+**Deduplication** - `dedup` keeps the first occurrence per key. Ordering in
 `allEntries` determines priority.
 
 ## Running

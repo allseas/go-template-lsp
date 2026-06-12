@@ -15,7 +15,7 @@ type completionTestCase struct {
 var chainEditTestCases = []completionTestCase{
 	// FieldNode cases
 	{
-		name:       "FieldNode mid-chain — suggest fields/methods of preceding .Address",
+		name:       "FieldNode mid-chain - suggest fields/methods of preceding .Address",
 		src:        `{{ .Address..Street }}`,
 		subStr:     ".",
 		occurrence: 1, // dot between Address and Street
@@ -36,7 +36,7 @@ var chainEditTestCases = []completionTestCase{
 	},
 	// ChainNode cases
 	{
-		name:       "ChainNode mid-chain — suggest fields/methods of preceding (.Address)",
+		name:       "ChainNode mid-chain - suggest fields/methods of preceding (.Address)",
 		src:        `{{ (.Address)..Street }}`,
 		subStr:     ".",
 		occurrence: 1, // dot between ) and Street
@@ -57,7 +57,7 @@ var chainEditTestCases = []completionTestCase{
 	},
 	// VariableNode cases
 	{
-		name:       "VariableNode mid-chain — suggest fields/methods of preceding $t",
+		name:       "VariableNode mid-chain - suggest fields/methods of preceding $t",
 		src:        `{{ $t := .Address }}{{ $t..Street }}`,
 		subStr:     "$t.",
 		occurrence: 0,
@@ -78,7 +78,7 @@ var chainEditTestCases = []completionTestCase{
 		},
 	},
 	{
-		name:        "VariableNode three segments — only Address fields whose path contains nested .Length",
+		name:        "VariableNode three segments - only Address fields whose path contains nested .Length",
 		src:         `{{ $t := .Address }}{{ $t..Street.Length }}`,
 		subStr:      "$t.",
 		occurrence:  0,
@@ -124,7 +124,7 @@ var chainEditTestCases = []completionTestCase{
 		notContains: []string{"ID", "CustomerName", "DisplayName"},
 	},
 	{
-		name:       "$. inside with — root fields, not the rebound dot's fields",
+		name:       "$. inside with - root fields, not the rebound dot's fields",
 		src:        `{{ with .Address }}{{ $. }}{{ end }}`,
 		subStr:     ".",
 		occurrence: 1,
@@ -136,7 +136,7 @@ var chainEditTestCases = []completionTestCase{
 		notContains: []string{"Street", "City", "Line", "ZipCode"},
 	},
 	{
-		name:       "$.Cust mid-typing inside with — root fields filtered, not Address",
+		name:       "$.Cust mid-typing inside with - root fields filtered, not Address",
 		src:        `{{ with .Address }}{{ $.Cust }}{{ end }}`,
 		subStr:     ".",
 		occurrence: 1, // the dot of `$.Cust`
@@ -148,7 +148,7 @@ var chainEditTestCases = []completionTestCase{
 		notContains: []string{"Street", "City", "Line", "ZipCode"},
 	},
 	{
-		name:       "$. inside range — root fields, not the iterated element's",
+		name:       "$. inside range - root fields, not the iterated element's",
 		src:        `{{ range .Items }}{{ $. }}{{ end }}`,
 		subStr:     ".",
 		occurrence: 1, // the dot of `$.`
@@ -160,7 +160,7 @@ var chainEditTestCases = []completionTestCase{
 		notContains: []string{"SKU", "Qty", "UnitPrice", "Label", "Total"},
 	},
 	{
-		name:       "$.Address. inside with — Address fields via root $, not rebound dot",
+		name:       "$.Address. inside with - Address fields via root $, not rebound dot",
 		src:        `{{ with .Address }}{{ $.Address. }}{{ end }}`,
 		subStr:     ".",
 		occurrence: 2, // the trailing dot after $.Address
@@ -171,7 +171,7 @@ var chainEditTestCases = []completionTestCase{
 		},
 	},
 	{
-		name:       "$.Address. inside range — Address fields via root $, not range element",
+		name:       "$.Address. inside range - Address fields via root $, not range element",
 		src:        `{{ range .Items }}{{ $.Address. }}{{ end }}`,
 		subStr:     ".",
 		occurrence: 2, // the trailing dot after $.Address
@@ -186,7 +186,7 @@ var chainEditTestCases = []completionTestCase{
 
 var completionTestCases = []completionTestCase{
 	{
-		name:        "chain node (.Address). — Address fields suggested",
+		name:        "chain node (.Address). - Address fields suggested",
 		src:         `{{ (.Address). }}`,
 		subStr:      ".",
 		occurrence:  1,
@@ -195,7 +195,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"ID", "CustomerName", "len", "eq"},
 	},
 	{
-		name:        "chain node (.Address). — Address methods suggested",
+		name:        "chain node (.Address). - Address methods suggested",
 		src:         `{{ (.Address). }}`,
 		subStr:      ".",
 		occurrence:  1,
@@ -204,7 +204,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"DisplayName", "ItemCount"},
 	},
 	{
-		name:        "field chain .Address. — Address fields suggested",
+		name:        "field chain .Address. - Address fields suggested",
 		src:         `{{ .Address. }}`,
 		subStr:      ".",
 		occurrence:  1,
@@ -213,7 +213,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"ID", "CustomerName", "len", "eq"},
 	},
 	{
-		name:        "field chain .Address. — Address methods suggested",
+		name:        "field chain .Address. - Address methods suggested",
 		src:         `{{ .Address. }}`,
 		subStr:      ".",
 		occurrence:  1,
@@ -222,7 +222,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"DisplayName", "ItemCount"},
 	},
 	{
-		name:        "field chain .Address. — no dot prefix on completions",
+		name:        "field chain .Address. - no dot prefix on completions",
 		src:         `{{ .Address. }}`,
 		subStr:      ".",
 		occurrence:  1,
@@ -230,7 +230,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{".Street", ".City", ".Line"},
 	},
 	{
-		name:        "field chain on primitive type — no suggestions",
+		name:        "field chain on primitive type - no suggestions",
 		src:         `{{ .CustomerName. }}`,
 		subStr:      ".",
 		occurrence:  1,
@@ -305,9 +305,9 @@ var completionTestCases = []completionTestCase{
 		subStr:      "l",
 		notContains: []string{".DisplayName", ".ItemCount"},
 	},
-	// pipe filtering — model fields
+	// pipe filtering - model fields
 	{
-		name:        "string field piped — string-accepting builtins suggested",
+		name:        "string field piped - string-accepting builtins suggested",
 		src:         `{{.CustomerName | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -317,7 +317,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"not", "and"},
 	},
 	{
-		name:        "bool field piped — bool-accepting builtins suggested",
+		name:        "bool field piped - bool-accepting builtins suggested",
 		src:         `{{.Paid | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -327,7 +327,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"html", "len"},
 	},
 	{
-		name:      "float field piped — outputUntyped, all builtins shown",
+		name:      "float field piped - outputUntyped, all builtins shown",
 		src:       `{{.TotalAmount | }}`,
 		subStr:    "}}",
 		offsetAdj: -1,
@@ -336,7 +336,7 @@ var completionTestCases = []completionTestCase{
 		contains:  []string{"len", "html", "eq"},
 	},
 	{
-		name:      "struct field piped — outputUntyped, all builtins shown",
+		name:      "struct field piped - outputUntyped, all builtins shown",
 		src:       `{{.Address | }}`,
 		subStr:    "}}",
 		offsetAdj: -1,
@@ -344,9 +344,9 @@ var completionTestCases = []completionTestCase{
 		withType:  true,
 		contains:  []string{"len", "html", "and"},
 	},
-	// pipe filtering — model methods
+	// pipe filtering - model methods
 	{
-		name:        "string-returning method piped — string-accepting builtins",
+		name:        "string-returning method piped - string-accepting builtins",
 		src:         `{{.DisplayName | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -356,7 +356,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{".Format", "not"},
 	},
 	{
-		name:        "int-returning method piped — int-accepting builtins",
+		name:        "int-returning method piped - int-accepting builtins",
 		src:         `{{.ItemCount | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -366,7 +366,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"html", "not"},
 	},
 	{
-		name:        "bool-returning method piped — bool-accepting builtins",
+		name:        "bool-returning method piped - bool-accepting builtins",
 		src:         `{{.IsLargeOrder | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -376,7 +376,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"len", "html"},
 	},
 	{
-		name:        "string-returning method with arg piped — string builtins",
+		name:        "string-returning method with arg piped - string builtins",
 		src:         `{{.Format "$" | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -387,7 +387,7 @@ var completionTestCases = []completionTestCase{
 	},
 	// user method pipe filtering
 	{
-		name:      "string field piped — no dot-prefixed methods",
+		name:      "string field piped - no dot-prefixed methods",
 		src:       `{{.CustomerName | }}`,
 		subStr:    "}}",
 		offsetAdj: -1,
@@ -402,7 +402,7 @@ var completionTestCases = []completionTestCase{
 		},
 	},
 	{
-		name:        "bool field piped — no dot-prefixed methods",
+		name:        "bool field piped - no dot-prefixed methods",
 		src:         `{{.Paid | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -411,7 +411,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{".Format", ".DisplayName"},
 	},
 	{
-		name:        "identifier in pipe — no dot-prefixed methods",
+		name:        "identifier in pipe - no dot-prefixed methods",
 		src:         `{{.ItemCount | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -420,7 +420,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{".Format", ".DisplayName"},
 	},
 	{
-		name:        "CustomerName pipe — bare method names absent",
+		name:        "CustomerName pipe - bare method names absent",
 		src:         `{{.CustomerName | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -429,7 +429,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"DisplayName", "Format", "wrongSecond"},
 	},
 	{
-		name:        "Paid pipe — bare method names absent",
+		name:        "Paid pipe - bare method names absent",
 		src:         `{{.Paid | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -438,7 +438,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"DisplayName", "Format", "wrongSecond"},
 	},
 	{
-		name:        "identifier pipe — bare method names absent",
+		name:        "identifier pipe - bare method names absent",
 		src:         `{{.ItemCount | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -448,7 +448,7 @@ var completionTestCases = []completionTestCase{
 	},
 	// slice field pipe
 	{
-		name:        "slice field piped — len/index/slice shown, no methods",
+		name:        "slice field piped - len/index/slice shown, no methods",
 		src:         `{{.Items | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -459,7 +459,7 @@ var completionTestCases = []completionTestCase{
 	},
 	// multi-stage pipe chaining
 	{
-		name:        "html after string field — string builtins only",
+		name:        "html after string field - string builtins only",
 		src:         `{{.CustomerName | html | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -469,7 +469,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"not", "eq"},
 	},
 	{
-		name:        "not after bool field — bool builtins only",
+		name:        "not after bool field - bool builtins only",
 		src:         `{{.Paid | not | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -480,7 +480,7 @@ var completionTestCases = []completionTestCase{
 	},
 	// dot piped directly
 	{
-		name:        "dot piped — all builtins shown, no dot-prefixed fields",
+		name:        "dot piped - all builtins shown, no dot-prefixed fields",
 		src:         `{{. | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -490,7 +490,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{".", ".Address", ".Items", ".ID"},
 	},
 	{
-		name:        "struct field piped — dot-prefixed fields excluded",
+		name:        "struct field piped - dot-prefixed fields excluded",
 		src:         `{{.Address | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -501,7 +501,7 @@ var completionTestCases = []completionTestCase{
 	},
 	// builtin chained with model
 	{
-		name:      "len of items piped — int-accepting builtins",
+		name:      "len of items piped - int-accepting builtins",
 		src:       `{{.Items | len | }}`,
 		subStr:    "}}",
 		offsetAdj: -1,
@@ -518,7 +518,7 @@ var completionTestCases = []completionTestCase{
 		},
 	},
 	{
-		name:        "html of string field piped — string builtins",
+		name:        "html of string field piped - string builtins",
 		src:         `{{.CustomerName | html | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -529,7 +529,7 @@ var completionTestCases = []completionTestCase{
 	},
 	// invoked vs non-invoked
 	{
-		name:        "invoked after string pipe — string builtins, not bool",
+		name:        "invoked after string pipe - string builtins, not bool",
 		src:         `{{.CustomerName | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -538,9 +538,9 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"html", "len"},
 		notContains: []string{"not"},
 	},
-	// scope switch — range
+	// scope switch - range
 	{
-		name:        "inside range — dot trigger returns Item fields not Order fields",
+		name:        "inside range - dot trigger returns Item fields not Order fields",
 		src:         `{{range .Items}}{{.}}{{end}}`,
 		subStr:      ".",
 		occurrence:  1,
@@ -549,7 +549,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"ID", "CustomerName", "Address", "Items"},
 	},
 	{
-		name:        "inside range — dot-prefixed Item methods, Order methods absent",
+		name:        "inside range - dot-prefixed Item methods, Order methods absent",
 		src:         `{{range .Items}}{{len .SKU}}{{end}}`,
 		subStr:      "l",
 		withType:    true,
@@ -557,7 +557,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{".DisplayName", ".IsLargeOrder", ".wrongSecond"},
 	},
 	{
-		name:       "inside range pipe — Item methods excluded, none accept string",
+		name:       "inside range pipe - Item methods excluded, none accept string",
 		src:        `{{range .Items}}{{.Label | }}{{end}}`,
 		subStr:     "}}",
 		occurrence: 1,
@@ -573,7 +573,7 @@ var completionTestCases = []completionTestCase{
 		},
 	},
 	{
-		name:        "inside range — string Item method piped, string builtins",
+		name:        "inside range - string Item method piped, string builtins",
 		src:         `{{range .Items}}{{.Label | }}{{end}}`,
 		subStr:      "}}",
 		occurrence:  1,
@@ -584,7 +584,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"not", "eq"},
 	},
 	{
-		name:        "inside range — bool Item method piped, bool builtins",
+		name:        "inside range - bool Item method piped, bool builtins",
 		src:         `{{range .Items}}{{IsExpensive | }}{{end}}`,
 		subStr:      "}}",
 		occurrence:  1,
@@ -594,9 +594,9 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"not", "and"},
 		notContains: []string{"html", "len"},
 	},
-	// scope switch — with
+	// scope switch - with
 	{
-		name:        "inside with — dot-prefixed Address methods, Order methods absent",
+		name:        "inside with - dot-prefixed Address methods, Order methods absent",
 		src:         `{{with .Address}}{{len .Street}}{{end}}`,
 		subStr:      "l",
 		withType:    true,
@@ -604,7 +604,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{".DisplayName", ".IsLargeOrder", ".wrongSecond"},
 	},
 	{
-		name:        "inside with pipe — Address methods excluded, none accept string",
+		name:        "inside with pipe - Address methods excluded, none accept string",
 		src:         `{{with .Address}}{{Line | }}{{end}}`,
 		subStr:      "}}",
 		occurrence:  1,
@@ -614,7 +614,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{".Line", ".IsLocal", ".ZipCode", ".DisplayName", ".IsLargeOrder"},
 	},
 	{
-		name:        "inside with — string Address method piped, string builtins",
+		name:        "inside with - string Address method piped, string builtins",
 		src:         `{{with .Address}}{{Line | }}{{end}}`,
 		subStr:      "}}",
 		occurrence:  1,
@@ -625,7 +625,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"not", "eq"},
 	},
 	{
-		name:        "inside with — bool Address method piped, bool builtins",
+		name:        "inside with - bool Address method piped, bool builtins",
 		src:         `{{with .Address}}{{IsLocal | }}{{end}}`,
 		subStr:      "}}",
 		occurrence:  1,
@@ -637,32 +637,32 @@ var completionTestCases = []completionTestCase{
 	},
 	// dot suggestions (no type)
 	{
-		name:        "dot in if condition — no builtins",
+		name:        "dot in if condition - no builtins",
 		src:         `{{if .}}{{end}}`,
 		subStr:      ".",
 		notContains: []string{"eq", "len"},
 	},
 	{
-		name:        "dot in range pipeline — no builtins",
+		name:        "dot in range pipeline - no builtins",
 		src:         `{{range .}}{{end}}`,
 		subStr:      ".",
 		notContains: []string{"eq", "len"},
 	},
 	{
-		name:        "dot in with pipeline — no builtins",
+		name:        "dot in with pipeline - no builtins",
 		src:         `{{with .}}{{end}}`,
 		subStr:      ".",
 		notContains: []string{"eq", "len"},
 	},
 	{
-		name:        "sChar dot — dot item returned, not builtins",
+		name:        "sChar dot - dot item returned, not builtins",
 		src:         `{{.}}`,
 		subStr:      ".",
 		notContains: []string{"eq", "len"},
 	},
 	// variable suggestions
 	{
-		name:        "dollar sChar — vars returned without sigil",
+		name:        "dollar sChar - vars returned without sigil",
 		src:         `{{$top := .}}{{$}}`,
 		subStr:      "$",
 		occurrence:  1,
@@ -670,7 +670,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"$top"},
 	},
 	{
-		name:     "non-dollar sChar — full $var label included",
+		name:     "non-dollar sChar - full $var label included",
 		src:      `{{$top := .}}{{len .}}`,
 		subStr:   "l",
 		contains: []string{"$top"},
@@ -758,7 +758,7 @@ var completionTestCases = []completionTestCase{
 	},
 	// pipe filtered suggestions
 	{
-		name:        "after len pipe — int-accepting builtins only",
+		name:        "after len pipe - int-accepting builtins only",
 		src:         `{{. | len | }}`,
 		subStr:      "}}",
 		offsetAdj:   -1,
@@ -768,7 +768,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"index", "js"},
 	},
 	{
-		name:        "after not pipe — bool-accepting builtins only",
+		name:        "after not pipe - bool-accepting builtins only",
 		src:         `{{not . | and . .}}`,
 		subStr:      "a",
 		withType:    true,
@@ -776,7 +776,7 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"len", "html"},
 	},
 	{
-		name:        "after html pipe — string-accepting builtins only",
+		name:        "after html pipe - string-accepting builtins only",
 		src:         `{{html . | len .}}`,
 		subStr:      "l",
 		occurrence:  1,
@@ -785,14 +785,14 @@ var completionTestCases = []completionTestCase{
 		notContains: []string{"and", "not"},
 	},
 	{
-		name:     "no preceding pipe — full builtin list",
+		name:     "no preceding pipe - full builtin list",
 		src:      `{{len .}}`,
 		subStr:   "l",
 		contains: []string{"len", "html", "and"},
 	},
 	// command node position
 	{
-		name:     "first arg of command — builtins returned",
+		name:     "first arg of command - builtins returned",
 		src:      `{{len .}}`,
 		subStr:   "l",
 		contains: []string{"len", "eq"},

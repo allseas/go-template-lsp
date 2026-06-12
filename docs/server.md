@@ -18,12 +18,12 @@ The language server is implemented in Go using [glsp](https://github.com/tliron/
 
 #### `handlers/` Package
 
-- **initialize.go** — Handles LSP initialization, capabilities registration
-- **documents.go** — Manages document lifecycle (open, change, close)
-- **completion.go** — Provides code completion suggestions
-- **references.go** — Finds all references to a symbol
-- **configuration.go** — Manages server configuration
-- **initialize_test.go, documents_test.go, etc.** — Unit tests
+- **initialize.go** - Handles LSP initialization, capabilities registration
+- **documents.go** - Manages document lifecycle (open, change, close)
+- **completion.go** - Provides code completion suggestions
+- **references.go** - Finds all references to a symbol
+- **configuration.go** - Manages server configuration
+- **initialize_test.go, documents_test.go, etc.** - Unit tests
 
 #### Key Design Pattern
 
@@ -64,9 +64,9 @@ func initialize(ctx *glsp.Context, params *protocol.InitializeParams) (any, erro
 
 The server tracks open documents using the `documents` handler:
 
-- **didOpen** — Document opened in editor
-- **didChange** — Document content changed
-- **didClose** — Document closed
+- **didOpen** - Document opened in editor
+- **didChange** - Document content changed
+- **didClose** - Document closed
 
 ```go
 func DidOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
@@ -250,8 +250,8 @@ func TestHover(t *testing.T) {
 
 After server support is added:
 
-- **VS Code** — May auto-detect through LSP capabilities
-- **JetBrains** — Add corresponding feature in plugin
+- **VS Code** - May auto-detect through LSP capabilities
+- **JetBrains** - Add corresponding feature in plugin
 
 ## Server Configuration
 
@@ -298,9 +298,9 @@ func someHandler(ctx *glsp.Context, params *protocol.SomeParams) (any, error) {
 
 ## Dependencies
 
-- **glsp** — LSP protocol implementation
-- **zerolog** — Structured logging
-- **Go text/template parser** — Standard library template parsing
+- **glsp** - LSP protocol implementation
+- **zerolog** - Structured logging
+- **Go text/template parser** - Standard library template parsing
 
 See `server/go.mod` for version information.
 

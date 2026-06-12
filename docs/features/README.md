@@ -10,10 +10,10 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 
 ### Legend
 
-- ✅ **Implemented** — Feature is fully functional
-- 🚧 **In Progress** — Feature is currently being developed
-- ⏳ **Planned** — Feature is scheduled for development
-- ❓ **Proposed** — Feature under consideration
+- ✅ **Implemented** - Feature is fully functional
+- 🚧 **In Progress** - Feature is currently being developed
+- ⏳ **Planned** - Feature is scheduled for development
+- ❓ **Proposed** - Feature under consideration
 
 ## Editor Features
 

@@ -139,18 +139,18 @@ The actual LSP protocol communication is handled by LSP4IJ, which:
 
 Kotlin is used for the plugin because:
 
-- **Modern language** — Better null safety and extension functions
-- **Concise syntax** — Less boilerplate than Java
-- **Standard in JetBrains** — All modern JetBrains plugins use Kotlin
-- **IDE support** — Excellent tooling and refactoring in IntelliJ
+- **Modern language** - Better null safety and extension functions
+- **Concise syntax** - Less boilerplate than Java
+- **Standard in JetBrains** - All modern JetBrains plugins use Kotlin
+- **IDE support** - Excellent tooling and refactoring in IntelliJ
 
 ### Gradle Build System
 
 Gradle is used because:
 
-- **Official** — The recommended build system for JetBrains plugins
-- **gradle-intellij-plugin** — Automates many setup tasks
-- **Plugin Verifier** — Built-in testing against multiple IDE versions
+- **Official** - The recommended build system for JetBrains plugins
+- **gradle-intellij-plugin** - Automates many setup tasks
+- **Plugin Verifier** - Built-in testing against multiple IDE versions
 
 ## Adding a New Feature
 

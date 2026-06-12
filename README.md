@@ -120,10 +120,10 @@ gotemplate-lsp/
 
 Comprehensive documentation is available in the `docs/` directory:
 
-- **[features.md](docs/features/README.md)** — Complete feature matrix, design decisions, and contribution guide
-- **[server.md](docs/server.md)** — Language server architecture and guide for adding new features
-- **[vscode-extension.md](docs/vscode/README.md)** — VS Code extension development guide with examples
-- **[jetbrains-plugin.md](docs/jetbrains/README.md)** — JetBrains plugin development guide with examples
+- **[features.md](docs/features/README.md)** - Complete feature matrix, design decisions, and contribution guide
+- **[server.md](docs/server.md)** - Language server architecture and guide for adding new features
+- **[vscode-extension.md](docs/vscode/README.md)** - VS Code extension development guide with examples
+- **[jetbrains-plugin.md](docs/jetbrains/README.md)** - JetBrains plugin development guide with examples
 
 ## Development
 
@@ -340,9 +340,9 @@ This project uses a **client-server architecture** with a shared language server
 
 ### Why This Architecture?
 
-- **Single Server, Multiple Clients** — The Language Server Protocol allows a single Go backend to serve VS Code, JetBrains, and potentially other IDEs without code duplication
-- **TypeScript for VS Code** — Uses standard VS Code extension APIs for seamless integration
-- **Kotlin for JetBrains** — Follows JetBrains' modern plugin development standards
+- **Single Server, Multiple Clients** - The Language Server Protocol allows a single Go backend to serve VS Code, JetBrains, and potentially other IDEs without code duplication
+- **TypeScript for VS Code** - Uses standard VS Code extension APIs for seamless integration
+- **Kotlin for JetBrains** - Follows JetBrains' modern plugin development standards
 
 For detailed architecture information, see [server.md](docs/server.md).
 
@@ -351,17 +351,17 @@ For detailed architecture information, see [server.md](docs/server.md).
 ### Adding New Features
 
 1. **Add feature to roadmap** in [docs/features.md](docs/features/README.md)
-2. **Implement in server** — Add LSP handler in `server/handlers/`
-3. **Add to VS Code** — Update `clients/VSCode/` if needed
-4. **Add to JetBrains** — Update `clients/JetBrains/` if needed
-5. **Add tests** — Write tests for new functionality
-6. **Update docs** — Document the new feature and any APIs
+2. **Implement in server** - Add LSP handler in `server/handlers/`
+3. **Add to VS Code** - Update `clients/VSCode/` if needed
+4. **Add to JetBrains** - Update `clients/JetBrains/` if needed
+5. **Add tests** - Write tests for new functionality
+6. **Update docs** - Document the new feature and any APIs
 
 Each component has its own development guide:
 
-- [server.md](docs/server.md) — How to add server features
-- [vscode-extension.md](docs/vscode/README.md) — How to add VS Code features
-- [jetbrains-plugin.md](docs/jetbrains/README.md) — How to add JetBrains features
+- [server.md](docs/server.md) - How to add server features
+- [vscode-extension.md](docs/vscode/README.md) - How to add VS Code features
+- [jetbrains-plugin.md](docs/jetbrains/README.md) - How to add JetBrains features
 
 ## Resources
 
