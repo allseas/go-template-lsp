@@ -1,7 +1,7 @@
-{{- /*gotype: cg/model.Address*/ -}}
+{{- /*gotype: cg/model.Model*/ -}}
 
 {{ define "control_logger.conf.tmpl.taglist" }}
-{{- /*gotype: cg/model.Order*/ -}}
+  {{- /*gotype: cg/model.Instance*/ -}}
   {{- $taglist := "" }}
   {{- with $tagMap := .IdentifyingSelection }}
     {{- range $key := .Order }}
@@ -17,11 +17,8 @@
 {{- end }}
 
 {{- define "control_logger.conf.tmpl.signal_entry" }}
-{{- /*gotype: cg/model.Order*/ -}}
   {{- $signalInstance := .signalInstance }}
-  
   {{- $instance := .instance }}
-  {{  }}
   {{- $offset := .offset -}}
   { measurement="{{ $instance.Block.Name | kebabCase }}", |{{ template "control_logger.conf.tmpl.taglist" $instance }} |name="{{ $signalInstance.Name | kebabCase }}", |type="{{ $signalInstance.Signal.Datatype.Golang }}", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
 {{- end }}
@@ -67,10 +64,17 @@
     omit_instance_tag = true
     entries = [
 {{- $layout := siemensLayout }}
-{{- block "code" .Info }}
-  {{ $vartest := "asdcdasd" }}
-  {{  }}
+{{- block "code" .IdentifyingSelection }}
+  {{ . }}
+  {{- range .Machine.Inputs }}
+    {{- $offset := $layout.Add . }}
+      {{ template "control_logger.conf.tmpl.signal_entry" (dict "signalInstance" . "instance" $.Machine "offset" $offset) }}
+  {{- else }}
+    {{- /* Compensation for dummy */}}
+    {{- $silent := $layout.AddBit }}
+  {{- end }}
   {{- $silent := $layout.Align }}
+  {{ $testing := "asdcasdc" }}
 
   {{- range $instance := .Instances }}
     {{- range .Inputs }}
@@ -153,23 +157,3 @@
       {{- $offset := $layout.Add . }}
       { measurement="{{ .Name | kebabCase }}", | |name="{{ .Name | kebabCase }}", |type="{{ .Datatype.Golang }}", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
   {{- end }}
-    ]
-
-[inputs.socket_listener.allseas_cudp.integrity_checks]
-    ## A uint32 indicating what ICD is expected to be received
-    # expected_icd_version =
-    ## Ignore non-matching ICD versions
-    ignore_icd_version_mismatch = true
-
-    ## A hash of the full ICD. This hash ensures the field names are as expected. uint32
-    # expected_icd_full_hash = 42
-    ## Ignore mismatching hashes
-    ignore_icd_full_hash_mismatch = true
-
-    ## A hash of the ICD layout. This hash ensures the data types are okay. uint32
-    # expected_icd_layout_hash = 42
-    # Ignore layout mismatches
-    ignore_icd_layout_hash_mismatch = true
-
-    ## Ignore CRC checks failures
-    ignore_crc_errors = {{ if .LoggerInfo.IgnoreCRCErrors }}true{{ else }}false{{ end }}
