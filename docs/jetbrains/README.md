@@ -1,10 +1,6 @@
 # JetBrains Plugin Architecture
 
-This document describes the architecture of the JetBrains plugin and provides guides for extending it with new features.
-
-## Overview
-
-The JetBrains plugin integrates text/template language support into JetBrains IDEs (IntelliJ IDEA, PyCharm, GoLand, etc.) via the Language Server Protocol. It communicates with the shared Go language server to provide IDE features across the entire JetBrains ecosystem.
+The JetBrains plugin connects IntelliJ-based IDEs (IntelliJ IDEA, GoLand, PyCharm, etc.) to the shared Go language server via LSP4IJ.
 
 ## Architecture
 
@@ -132,25 +128,6 @@ The actual LSP protocol communication is handled by LSP4IJ, which:
 - Manages stdio communication
 - Handles document synchronization
 - Displays diagnostics and completions from the server
-
-## Design Decisions
-
-### Kotlin over Java
-
-Kotlin is used for the plugin because:
-
-- **Modern language** - Better null safety and extension functions
-- **Concise syntax** - Less boilerplate than Java
-- **Standard in JetBrains** - All modern JetBrains plugins use Kotlin
-- **IDE support** - Excellent tooling and refactoring in IntelliJ
-
-### Gradle Build System
-
-Gradle is used because:
-
-- **Official** - The recommended build system for JetBrains plugins
-- **gradle-intellij-plugin** - Automates many setup tasks
-- **Plugin Verifier** - Built-in testing against multiple IDE versions
 
 ## Adding a New Feature
 

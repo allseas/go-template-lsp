@@ -74,6 +74,8 @@ Language server features:
 
 More can be read about the features in [docs/features.md](docs/features/README.md)
 
+For an end-user guide covering all features and configuration, see [docs/usage.md](docs/usage.md).
+
 ## Repository Structure
 
 This repository is organized as follows:
@@ -336,15 +338,9 @@ For more detailed information on plugin development, see [jetbrains-plugin.md](d
 
 ## Architecture Overview
 
-This project uses a **client-server architecture** with a shared language server that communicates using LSP via stdio.
+The Go binary runs as a subprocess of the IDE and communicates over stdio using LSP. The VS Code extension (TypeScript) and JetBrains plugin (Kotlin) are thin clients that start the server binary and delegate all feature logic to it.
 
-### Why This Architecture?
-
-- **Single Server, Multiple Clients** - The Language Server Protocol allows a single Go backend to serve VS Code, JetBrains, and potentially other IDEs without code duplication
-- **TypeScript for VS Code** - Uses standard VS Code extension APIs for seamless integration
-- **Kotlin for JetBrains** - Follows JetBrains' modern plugin development standards
-
-For detailed architecture information, see [server.md](docs/server.md).
+See [docs/server.md](docs/server.md) for more detail.
 
 ## Development Workflow
 

@@ -1,10 +1,6 @@
 # Language Server Architecture
 
-This document describes the architecture of the Go Template Language Server and provides guides for extending it with new features.
-
-## Overview
-
-The language server is implemented in Go using [glsp](https://github.com/tliron/glsp), a modern LSP framework. The server communicates with IDE clients via the Language Server Protocol using stdio for transport.
+The server is implemented in Go using [glsp](https://github.com/tliron/glsp). It communicates with IDE clients via stdio.
 
 ## Architecture
 

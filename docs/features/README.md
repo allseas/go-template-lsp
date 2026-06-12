@@ -2,10 +2,6 @@
 
 This document provides an overview of all features implemented and planned for the GoTemplate LSP project.
 
-## Overview
-
-The GoTemplate LSP provides IDE support for Go's `text/template` language across VS Code and JetBrains IDEs. Features are organized by category and priority level.
-
 ## Feature Status
 
 ### Legend
@@ -49,7 +45,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 
 ## Language Server Features
 
-The language server provides the backend intelligence for all editor features. These features support multiple IDEs through the LSP protocol.
+The language server provides the backend for all editor features via LSP.
 
 | Feature                         | Supported (tested) | Priority | Notes                                                                   |
 | ------------------------------- | ------------------ | -------- | ----------------------------------------------------------------------- |
@@ -80,15 +76,15 @@ The language server provides the backend intelligence for all editor features. T
 | Hugo syntax support     | ⏳         | Planned | Could    | Support for Hugo-specific syntax            |
 | Hugo built-in functions | ⏳         | Planned | Could    | Auto-complete and documentation             |
 
-## Design Decisions
+## Background
 
 ### Why LSP?
 
-The Language Server Protocol (LSP) was chosen to provide a single backend implementation that works across multiple IDEs (VS Code, JetBrains, Neovim, etc.). This reduces code duplication and allows all editors to benefit from improvements to the core server.
+Using LSP means a single Go backend serves VS Code, JetBrains, and any other LSP-compatible editor. Adding support for a new editor only requires a thin client wrapper.
 
 ### Server in Go
 
-The language server is implemented in Go to make use of the parser already present in the Go library and the type checker.
+The language server is written in Go so it can reuse the `text/template` parser and `go/types` type checker from the standard library directly, without reimplementing them.
 
 ## Feature Documentation
 
