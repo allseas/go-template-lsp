@@ -100,7 +100,16 @@ Hovering over any node in a template file shows a tooltip. Examples:
 
 ### Find References
 
-Right-click -> *Find All References* (or <kbd>Shift</kbd>+<kbd>F12</kbd>) lists every usage of a variable or function across all open template files.
+Right-click -> *Find All References* (or <kbd>Shift</kbd>+<kbd>F12</kbd>) lists every occurrence of a variable or identifier within the current file.
+
+Supported symbols:
+
+| Symbol                            | Behaviour                                    |
+| --------------------------------- | -------------------------------------------- |
+| `$x` (variable)                   | All uses of `$x` in the file                 |
+| `upper`, `len`, etc. (identifier) | All uses of that identifier name in the file |
+
+Field access nodes (`.FieldName`) are not supported by find references.
 
 ### Diagnostics
 

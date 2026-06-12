@@ -4,23 +4,23 @@ The hover provider gives contextual documentation when the user holds the cursor
 
 ## What the user sees
 
-| Cursor position                  | Tooltip                                                                                                                    |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `{{ if  .IsAdmin }}`             | `if .IsAdmin` - If the value of the pipeline is empty, no output is generated; Otherwise, inside is executed.              |
-| `{{  range  $i, $v := .Items }}` | `range $i, $v := .Items` - Branch executed for each item in a collection.                                                  |
-| `{{  with  .Value }}`            | `with .Value` - Branch executed with a new context.                                                                        |
-| `{{ range  $i , $v := .Items }}` | `var $i int` - Serves as the index variable in the `range` loop, representing the current iteration count.                 |
-| `{{ range $i,  $v  := .Items }}` | `var $v Type` (or `(unknown)` if not resolvable)                                                                           |
-| `{{- end -}}`                    | `end` - From `` `if` `` / `` `range` `` / `` `with` `` at line N                                                           |
-| `{{- else }}`                    | `else` - From `` `if` `` / `` `range` `` / `` `with` `` at line N                                                          |
-| `.`                              | Returns the current context.                                                                                               |
-| `.Name`                          | `field .Name` - Accesses the `Name` field of the `.` context.                                                              |
-| `len`                            | A built-in function that returns the length of its argument.                                                               |
-| `and`                            | A built-in function that returns the first argument if it is false, and the last argument otherwise.                       |
-| `or`                             | A built-in function that returns the first argument if it is true, and the last argument otherwise.                        |
-| `not`                            | A built-in function that returns the boolean negation of its argument.                                                     |
-| Other identifiers                | Represents an identifier in a command or action.                                                                           |
-| `nil`                            | `nil` is a predeclared identifier representing the zero value for a pointer, channel, func, interface, map, or slice type. |
+| Hovered token        | Tooltip                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `if`                 | `if .Cond` - If the value of the pipeline is empty, no output is generated; Otherwise, inside is executed.                 |
+| `range`              | `range $i, $v := .Items` - Branch executed for each item in a collection.                                                  |
+| `with`               | `with .Value` - Branch executed with a new context.                                                                        |
+| `$i` (range index)   | `var $i int` - Serves as the index variable in the `range` loop, representing the current iteration count.                 |
+| `$v` (or any `$var`) | `var $v Type` - variable type (or `(unknown)` if the type cannot be resolved)                                              |
+| `end`                | From `` `if` `` / `` `range` `` / `` `with` `` / `` `template` `` at line N                                                |
+| `else`               | From `` `if` `` / `` `range` `` / `` `with` `` at line N                                                                   |
+| `.`                  | Returns the current context.                                                                                               |
+| `.Name`              | `field .Name` - Accesses the `Name` field of the `.` context.                                                              |
+| `len`                | A built-in function that returns the length of its argument.                                                               |
+| `and`                | A built-in function that returns the first argument if it is false, and the last argument otherwise.                       |
+| `or`                 | A built-in function that returns the first argument if it is true, and the last argument otherwise.                        |
+| `not`                | A built-in function that returns the boolean negation of its argument.                                                     |
+| `nil`                | `nil` is a predeclared identifier representing the zero value for a pointer, channel, func, interface, map, or slice type. |
+| Other identifiers    | Represents an identifier in a command or action.                                                                           |
 
 All tooltips are rendered as Markdown.
 They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over node
