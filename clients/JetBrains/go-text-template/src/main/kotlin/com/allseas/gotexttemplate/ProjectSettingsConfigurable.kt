@@ -37,20 +37,37 @@ class ProjectSettingsConfigurable(
                         .bindItem(settings.state::enableDiagnosticsOverride)
                         .comment("Leave empty to use the application-level default")
                 }
-                row("Report syntax errors:") {
-                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
-                        .bindItem(settings.state::diagnosticsSyntaxErrorOverride)
-                        .comment("Leave empty to use the application-level default")
-                }
-                row("Report duplicate variable declarations:") {
-                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
-                        .bindItem(settings.state::diagnosticsVariableRedeclarationOverride)
-                        .comment("Leave empty to use the application-level default")
-                }
-                row("Report unknown or incorrectly used functions:") {
-                    comboBox(listOf(null, true, false), NullableBooleanRenderer())
-                        .bindItem(settings.state::diagnosticsIncorrectFunctionOverride)
-                        .comment("Leave empty to use the application-level default")
+                val diagnosticEntries =
+                    listOf(
+                        "syntaxError" to "Syntax errors",
+                        "invalidField" to "Invalid field access",
+                        "invalidFunction" to "Invalid function call",
+                        "invalidCommand" to "Invalid command",
+                        "invalidRange" to "Invalid range",
+                        "invalidIf" to "Invalid if condition",
+                        "invalidWith" to "Invalid with expression",
+                        "undeclaredVariable" to "Undeclared variable",
+                        "doubleDeclaredVariable" to "Duplicate variable declaration",
+                        "invalidTemplateArg" to "Invalid template argument",
+                        "unknownType" to "Unknown type",
+                    )
+                for ((key, label) in diagnosticEntries) {
+                    val k = key
+                    row("$label:") {
+                        comboBox(listOf(null) + AppSettings.DiagnosticSeverity.entries, NullableDiagnosticSeverityRenderer())
+                            .bindItem(
+                                { settings.state.diagnosticsOverride[k]?.let { AppSettings.DiagnosticSeverity.fromValue(it) } },
+                                { v ->
+                                    if (v !=
+                                        null
+                                    ) {
+                                        settings.state.diagnosticsOverride[k] = v.value
+                                    } else {
+                                        settings.state.diagnosticsOverride.remove(k)
+                                    }
+                                },
+                            ).comment("Leave empty to use the application-level default")
+                    }
                 }
             }
             group("Advanced") {
@@ -84,6 +101,18 @@ private class NullableTraceLevelRenderer : SimpleListCellRenderer<AppSettings.Tr
     override fun customize(
         list: JList<out AppSettings.TraceLevel?>,
         value: AppSettings.TraceLevel?,
+        index: Int,
+        selected: Boolean,
+        hasFocus: Boolean,
+    ) {
+        text = value?.value ?: "(use default)"
+    }
+}
+
+private class NullableDiagnosticSeverityRenderer : SimpleListCellRenderer<AppSettings.DiagnosticSeverity?>() {
+    override fun customize(
+        list: JList<out AppSettings.DiagnosticSeverity?>,
+        value: AppSettings.DiagnosticSeverity?,
         index: Int,
         selected: Boolean,
         hasFocus: Boolean,

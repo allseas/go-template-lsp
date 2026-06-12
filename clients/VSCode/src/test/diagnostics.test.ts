@@ -148,7 +148,7 @@ suite("Diagnostics Test Suite", () => {
             diags.length >= 1,
             `Expected at least 1 diagnostic, got ${diags.length}`,
         );
-        assertError(diags[0]);
+        assertWarning(diags[0]);
         assertContains(diags[0], "unknownFunc");
         assertContains(diags[0], "unsupported");
     });

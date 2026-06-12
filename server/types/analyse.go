@@ -50,8 +50,45 @@ const (
 	ErrorDoubleDeclaredVariable
 	// ErrorTypeInvalidTemplateArg Template called with an argument of the wrong type
 	ErrorTypeInvalidTemplateArg
+	// ErrorUnknownType Type information is missing or could not be resolved (most likely because of an `any` signature)
+	ErrorUnknownType
+	// ErrorSyntaxError Syntax error in the template, for diagnostics that come from the parser rather than type checking
+	ErrorSyntaxError
 	// Add more error types as needed
 )
+
+var errorTypeNames = map[ErrorType]string{
+	ErrorTypeInvalidField:       "invalidField",
+	ErrorTypeInvalidFunction:    "invalidFunction",
+	ErrorTypeInvalidCommand:     "invalidCommand",
+	ErrorTypeInvalidRange:       "invalidRange",
+	ErrorTypeInvalidIf:          "invalidIf",
+	ErrorTypeInvalidWith:        "invalidWith",
+	ErrorUndeclaredVariable:     "undeclaredVariable",
+	ErrorDoubleDeclaredVariable: "doubleDeclaredVariable",
+	ErrorTypeInvalidTemplateArg: "invalidTemplateArg",
+	ErrorUnknownType:            "unknownType",
+	ErrorSyntaxError:            "syntaxError",
+}
+
+// MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
+func (e ErrorType) MarshalText() ([]byte, error) {
+	if name, ok := errorTypeNames[e]; ok {
+		return []byte(name), nil
+	}
+	return nil, fmt.Errorf("unknown ErrorType: %d", int(e))
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler so ErrorType can be deserialized from a string.
+func (e *ErrorType) UnmarshalText(data []byte) error {
+	for k, v := range errorTypeNames {
+		if v == string(data) {
+			*e = k
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown ErrorType: %q", string(data))
+}
 
 // TError represents a type error found during analysis, with context about the node and error type for categorization.
 type TError struct {
@@ -299,13 +336,13 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	return w
 }
 
-func getRangeableType(typ types.Type) types.Type {
+func getRangeableType(typ types.Type, ctx *analysisCtx) types.Type {
 	if typ == nil {
 		return nil
 	}
 	switch t := typ.Underlying().(type) {
 	case *types.Pointer:
-		return getRangeableType(types.Unalias(t.Elem()))
+		return getRangeableType(types.Unalias(t.Elem()), ctx)
 	case *types.Array:
 		return t.Elem()
 	case *types.Slice:
@@ -317,6 +354,17 @@ func getRangeableType(typ types.Type) types.Type {
 	case *types.Basic:
 		if t.Info()&types.IsInteger != 0 {
 			return t
+		}
+		return nil
+	case *types.Interface:
+		// Special case: empty interface can range over any type
+		if t.NumMethods() == 0 {
+			ctx.errorf(
+				nil,
+				ErrorUnknownType,
+				"cannot determine range element type of empty interface; assuming any",
+			)
+			return types.NewInterfaceType(nil, nil).Complete()
 		}
 		return nil
 	default:
@@ -348,7 +396,7 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 	keepDot := ctx.dotType
 	keepVars := len(ctx.vars)
 	r.Pipe = analysePipe(n.Pipe, r, ctx)
-	typ := getRangeableType(r.Pipe.typ)
+	typ := getRangeableType(r.Pipe.typ, ctx)
 	if r.Pipe.typ == nil {
 		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over untyped value")
 	} else if typ == nil {
@@ -481,6 +529,18 @@ func walkFieldChain(
 	base types.Type,
 	path []string,
 ) (types.Type, bool) {
+	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
+	if base != nil {
+		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
+			ctx.errorf(
+				errNode,
+				ErrorUnknownType,
+				"cannot determine range element type of empty interface; assuming any",
+			)
+			return types.NewInterfaceType(nil, nil).Complete(), true
+		}
+	}
+
 	pkg := ctx.tree.Pkg
 	currentType := base
 	for _, name := range path {
@@ -544,6 +604,18 @@ func walkFieldChainWithMethodInfo(
 	base types.Type,
 	path []string,
 ) (types.Type, []bool, bool) {
+	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
+	if base != nil {
+		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
+			ctx.errorf(
+				errNode,
+				ErrorUnknownType,
+				"cannot determine fields of empty interface; assuming any",
+			)
+			return types.NewInterfaceType(nil, nil).Complete(), make([]bool, len(path)), true
+		}
+	}
+
 	pkg := ctx.tree.Pkg
 	currentType := base
 	isMethod := make([]bool, len(path))
@@ -754,6 +826,13 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 			switch resType.Underlying().(type) {
 			case *types.Signature:
 				typePipe.typ = resType.Underlying().(*types.Signature).Results().At(0).Type()
+			case *types.Interface:
+				// Special case: if the last command returns an empty interface, the pipe can have any type
+				if resType.Underlying().(*types.Interface).NumMethods() == 0 {
+					typePipe.typ = types.NewInterfaceType(nil, nil).Complete()
+				} else {
+					typePipe.typ = resType
+				}
 			default:
 				// not sure how to handle this, should be impossible, do we return nil or invalid?
 				typePipe.typ = types.Typ[types.Invalid]

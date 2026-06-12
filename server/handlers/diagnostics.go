@@ -13,11 +13,20 @@ import (
 func createDiagnostic(
 	msg string,
 	rang protocol.Range,
-	isError bool,
+	severity DiagnosticsSeverity,
 ) (diagnostic protocol.Diagnostic) {
 	sev := new(protocol.DiagnosticSeverityError)
-	if !isError {
+	switch severity {
+	case DiagnosticSeverityDisabled:
+		sev = nil
+	case DiagnosticSeverityError:
+		sev = new(protocol.DiagnosticSeverityError)
+	case DiagnosticSeverityWarning:
 		sev = new(protocol.DiagnosticSeverityWarning)
+	case DiagnosticSeverityInformation:
+		sev = new(protocol.DiagnosticSeverityInformation)
+	case DiagnosticSeverityHint:
+		sev = new(protocol.DiagnosticSeverityHint)
 	}
 
 	source := "text-template-support"
@@ -73,6 +82,12 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 // collectDiagnostics returns diagnostics from AST analysis using the improved parser.
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	var trees map[string]*parse.Tree
+	// Surface template argument type errors from the typed trees.
+	if doc, ok := store.Get(uri); ok {
+		for _, tt := range doc.typedTrees {
+			diagnostics = append(diagnostics, collectTemplateDiagnostics(tt, text)...)
+		}
+	}
 
 	if doc, ok := store.Get(uri); ok && len(doc.trees) > 0 {
 		trees = doc.trees
@@ -100,28 +115,20 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 		)
 	}
 
-	// Surface template argument type errors from the typed trees.
-	if doc, ok := store.Get(uri); ok {
-		for _, tt := range doc.typedTrees {
-			diagnostics = append(diagnostics, collectTemplateArgTypeDiagnostics(tt, text)...)
-		}
-	}
-
 	return diagnostics
 }
 
-// collectTemplateArgTypeDiagnostics converts ErrorTypeInvalidTemplateArg entries from
-// a typed tree into protocol diagnostics.
-func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
+// collectTemplateDiagnostics collects TypeErrors entries from
+// a typed tree, and converts them into protocol diagnostics.
+func collectTemplateDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
 	if typedTree == nil {
 		return nil
 	}
+	config := GetConfig()
+
 	var diagnostics []protocol.Diagnostic
 	for _, terr := range typedTree.TypeErrors {
-		if terr.ErrType() != types.ErrorTypeInvalidTemplateArg {
-			continue
-		}
-		if terr.Node == nil {
+		if terr.Node == nil || config.Diagnostics[terr.ErrType()] == DiagnosticSeverityDisabled {
 			continue
 		}
 		pos := int(terr.Node.Position())
@@ -129,7 +136,7 @@ func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []pro
 		diagnostics = append(diagnostics, createDiagnostic(
 			withPos(text, pos, terr.Err),
 			rng,
-			true,
+			config.Diagnostics[terr.ErrType()],
 		))
 	}
 	return diagnostics
@@ -146,7 +153,7 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 
 	switch n := node.(type) {
 	case *parse.UndefinedNode:
-		if !config.Diagnostics.SyntaxError {
+		if config.Diagnostics[types.ErrorSyntaxError] == DiagnosticSeverityDisabled {
 			break
 		}
 		if n.Err == nil && strings.TrimSpace(n.String()) == "" {
@@ -161,7 +168,11 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 		}
 		diagnostics = append(
 			diagnostics,
-			createDiagnostic(msg, expandToFullBracketsFromOffset(int(n.Position()), text), true),
+			createDiagnostic(
+				msg,
+				expandToFullBracketsFromOffset(int(n.Position()), text),
+				config.Diagnostics[types.ErrorSyntaxError],
+			),
 		)
 
 	case *parse.ActionNode:
@@ -185,32 +196,8 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 		}
 
 	case *parse.CommandNode:
-		if !config.Diagnostics.IncorrectFunction {
-			break
-		}
-		if len(n.Args) > 0 {
-			if identNode, ok := n.Args[0].(*parse.IdentifierNode); ok {
-				funcName := identNode.Ident
-				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
-				offset := int(identNode.Position())
-				if _, known := types.GlobalFuncs()[funcName]; !known {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
-					)
-				} else {
-					currentKind := pipeOutputKind(ctx, false)
-					if currentKind != outputAny && currentKind != outputUntyped {
-						if !funcAcceptsKind(funcName, currentKind) {
-							msg := msgTypeMismatch(text, offset, funcName)
-							diagnostics = append(
-								diagnostics,
-								createDiagnostic(msg, rng, true),
-							)
-						}
-					}
-				}
-			}
+		for _, arg := range n.Args {
+			analyzeNode(arg, text, ctx)
 		}
 	}
 
@@ -260,13 +247,13 @@ func collectDeclarations(
 				continue
 			}
 			if ctx.Vars[ident] != nil && !pipe.IsAssign {
-				if GetConfig().Diagnostics.VariableRedeclaration {
+				if GetConfig().Diagnostics[types.ErrorDoubleDeclaredVariable] != DiagnosticSeverityDisabled {
 					diagnostics = append(
 						diagnostics,
 						createDiagnostic(
 							msgDuplicateDeclaration(text, int(decl.Position()), ident),
 							nodeToRange(decl, text),
-							false,
+							GetConfig().Diagnostics[types.ErrorDoubleDeclaredVariable],
 						),
 					)
 				}
@@ -306,7 +293,7 @@ func checkPipeUsage(
 						createDiagnostic(
 							msgUndeclaredVariable(text, int(vnode.Position()), name),
 							nodeToRange(vnode, text),
-							true,
+							GetConfig().Diagnostics[types.ErrorUndeclaredVariable],
 						),
 					)
 				}

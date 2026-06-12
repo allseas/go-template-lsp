@@ -28,9 +28,11 @@ data class State(
     var enableHover: Boolean = true,
     var enableDefinition: Boolean = true,
     var enableDiagnostics: Boolean = true,
-    var diagnosticsSyntaxError: Boolean = true,
-    var diagnosticsVariableRedeclaration: Boolean = true,
-    var diagnosticsIncorrectFunction: Boolean = true,
+    var diagnostics: MutableMap<String, String> = mutableMapOf(
+        "syntaxError" to "error",
+        "invalidField" to "error",
+        // ... other entries ...
+    ),
     var enableAutocompletion: Boolean = true,
     var traceServer: TraceLevel = TraceLevel.MESSAGES,
     var myNewOption: String = "default",  // <-- add here
@@ -39,16 +41,14 @@ data class State(
 
 ### 2. Add a nullable override in `ProjectSettings.State`
 
-In `ProjectSettings.kt`, add a nullable version so projects can optionally override:
+In `ProjectSettings.kt`, add a nullable version so projects can optionally override. For simple scalar fields, add a nullable field; for the `diagnostics` map the project-level `diagnosticsOverride` map is merged on top of app defaults.
 
 ```kotlin
 data class State(
     var enableHoverOverride: Boolean? = null,
     var enableDefinitionOverride: Boolean? = null,
     var enableDiagnosticsOverride: Boolean? = null,
-    var diagnosticsSyntaxErrorOverride: Boolean? = null,
-    var diagnosticsVariableRedeclarationOverride: Boolean? = null,
-    var diagnosticsIncorrectFunctionOverride: Boolean? = null,
+    var diagnosticsOverride: MutableMap<String, String> = mutableMapOf(),
     var enableAutocompletionOverride: Boolean? = null,
     var traceServerOverride: AppSettings.TraceLevel? = null,
     var myNewOptionOverride: String? = null,  // <-- add here
@@ -64,9 +64,7 @@ fun getEffectiveState(): AppSettings.State {
         enableHover = state.enableHoverOverride ?: appState.enableHover,
         enableDefinition = state.enableDefinitionOverride ?: appState.enableDefinition,
         enableDiagnostics = state.enableDiagnosticsOverride ?: appState.enableDiagnostics,
-        diagnosticsSyntaxError = state.diagnosticsSyntaxErrorOverride ?: appState.diagnosticsSyntaxError,
-        diagnosticsVariableRedeclaration = state.diagnosticsVariableRedeclarationOverride ?: appState.diagnosticsVariableRedeclaration,
-        diagnosticsIncorrectFunction = state.diagnosticsIncorrectFunctionOverride ?: appState.diagnosticsIncorrectFunction,
+        diagnostics = (appState.diagnostics + state.diagnosticsOverride).toMutableMap(),
         enableAutocompletion = state.enableAutocompletionOverride ?: appState.enableAutocompletion,
         traceServer = state.traceServerOverride ?: appState.traceServer,
         myNewOption = state.myNewOptionOverride ?: appState.myNewOption,  // <-- add here
@@ -115,9 +113,9 @@ override fun createSettings(): Any {
         addProperty("enableDefinition", config.enableDefinition)
         addProperty("enableDiagnostics", config.enableDiagnostics)
         add("diagnostics", JsonObject().apply {
-            addProperty("syntaxError", config.diagnosticsSyntaxError)
-            addProperty("variableRedeclaration", config.diagnosticsVariableRedeclaration)
-            addProperty("incorrectFunction", config.diagnosticsIncorrectFunction)
+            config.diagnostics.forEach { (key, value) ->
+                addProperty(key, value)
+            }
         })
         addProperty("enableAutocompletion", config.enableAutocompletion)
         addProperty("myNewOption", config.myNewOption)  // <-- add here

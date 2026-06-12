@@ -30,17 +30,29 @@ class AppSettingsConfigurable : BoundConfigurable("Go Text Template Support") {
                     checkBox("Enable diagnostics")
                         .bindSelected(settings.state::enableDiagnostics)
                 }
-                row {
-                    checkBox("Report syntax errors")
-                        .bindSelected(settings.state::diagnosticsSyntaxError)
-                }
-                row {
-                    checkBox("Report duplicate variable declarations")
-                        .bindSelected(settings.state::diagnosticsVariableRedeclaration)
-                }
-                row {
-                    checkBox("Report unknown or incorrectly used functions")
-                        .bindSelected(settings.state::diagnosticsIncorrectFunction)
+                val diagnosticEntries =
+                    listOf(
+                        "syntaxError" to "Syntax errors",
+                        "invalidField" to "Invalid field access",
+                        "invalidFunction" to "Invalid function call",
+                        "invalidCommand" to "Invalid command",
+                        "invalidRange" to "Invalid range",
+                        "invalidIf" to "Invalid if condition",
+                        "invalidWith" to "Invalid with expression",
+                        "undeclaredVariable" to "Undeclared variable",
+                        "doubleDeclaredVariable" to "Duplicate variable declaration",
+                        "invalidTemplateArg" to "Invalid template argument",
+                        "unknownType" to "Unknown type",
+                    )
+                for ((key, label) in diagnosticEntries) {
+                    val k = key
+                    row("$label:") {
+                        comboBox(AppSettings.DiagnosticSeverity.entries)
+                            .bindItem(
+                                { AppSettings.DiagnosticSeverity.fromValue(settings.state.diagnostics[k] ?: "error") },
+                                { v -> settings.state.diagnostics[k] = v?.value ?: "error" },
+                            )
+                    }
                 }
             }
             group("Advanced") {
