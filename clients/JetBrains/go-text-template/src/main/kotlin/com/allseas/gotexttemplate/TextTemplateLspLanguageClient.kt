@@ -9,9 +9,20 @@ class TextTemplateLspLanguageClient(
 ) : LanguageClientImpl(project) {
     override fun createSettings(): Any {
         val config = ProjectSettings.getInstance(project).getEffectiveState()
-        val json =
+        val settings =
             JsonObject().apply {
-                addProperty("enableServer", config.enableServer)
+                addProperty("enableHover", config.enableHover)
+                addProperty("enableDefinition", config.enableDefinition)
+                addProperty("enableDiagnostics", config.enableDiagnostics)
+                add(
+                    "diagnostics",
+                    JsonObject().apply {
+                        addProperty("syntaxError", config.diagnosticsSyntaxError)
+                        addProperty("variableRedeclaration", config.diagnosticsVariableRedeclaration)
+                        addProperty("incorrectFunction", config.diagnosticsIncorrectFunction)
+                    },
+                )
+                addProperty("enableAutocompletion", config.enableAutocompletion)
                 add(
                     "trace",
                     JsonObject().apply {
@@ -19,6 +30,8 @@ class TextTemplateLspLanguageClient(
                     },
                 )
             }
-        return json
+        return JsonObject().apply {
+            add("goTmplSupport", settings)
+        }
     }
 }

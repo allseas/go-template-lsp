@@ -71,11 +71,29 @@ func (t *TableNode) writeTo(sb *strings.Builder) { sb.WriteString("{{block (tabl
 
 func analyseTable(n *parse.TableNode, parent Node, ctx *analysisCtx) Node {
 	table := &TableNode{NodeType: NodeTable, parent: parent, Format: n.Format, Pos: Pos(n.Pos)}
+	keepDot := ctx.dotType
 	keepVars := len(ctx.vars)
 	pipe := analysePipe(n.Pipe, table, ctx)
+	ctx.dotType = pipe.typ
 	list := analyseList(n.List, table, ctx)
+	ctx.dotType = keepDot
 	ctx.vars = ctx.vars[:keepVars]
 	table.Pipe = pipe
 	table.List = list
 	return table
+}
+
+// childrenTable returns the direct children of a TableNode for tree traversal.
+func childrenTable(t *TableNode) []Node {
+	if t == nil {
+		return nil
+	}
+	children := make([]Node, 0, 2)
+	if t.Pipe != nil {
+		children = append(children, t.Pipe)
+	}
+	if t.List != nil {
+		children = append(children, t.List)
+	}
+	return children
 }

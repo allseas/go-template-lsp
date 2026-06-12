@@ -11,13 +11,43 @@ class AppSettingsConfigurable : BoundConfigurable("Go Text Template Support") {
         panel {
             val settings = AppSettings.getInstance()
 
-            row {
-                checkBox("Enable language server")
-                    .bindSelected(settings.state::enableServer)
+            group("Features") {
+                row {
+                    checkBox("Enable hover information")
+                        .bindSelected(settings.state::enableHover)
+                }
+                row {
+                    checkBox("Enable go-to-definition")
+                        .bindSelected(settings.state::enableDefinition)
+                }
+                row {
+                    checkBox("Enable autocompletion")
+                        .bindSelected(settings.state::enableAutocompletion)
+                }
             }
-            row("Trace level:") {
-                comboBox(AppSettings.TraceLevel.entries)
-                    .bindItem(settings.state::traceServer.toNullableProperty())
+            group("Diagnostics") {
+                row {
+                    checkBox("Enable diagnostics")
+                        .bindSelected(settings.state::enableDiagnostics)
+                }
+                row {
+                    checkBox("Report syntax errors")
+                        .bindSelected(settings.state::diagnosticsSyntaxError)
+                }
+                row {
+                    checkBox("Report duplicate variable declarations")
+                        .bindSelected(settings.state::diagnosticsVariableRedeclaration)
+                }
+                row {
+                    checkBox("Report unknown or incorrectly used functions")
+                        .bindSelected(settings.state::diagnosticsIncorrectFunction)
+                }
+            }
+            group("Advanced") {
+                row("Trace level:") {
+                    comboBox(AppSettings.TraceLevel.entries)
+                        .bindItem(settings.state::traceServer.toNullableProperty())
+                }
             }
         }
 }

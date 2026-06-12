@@ -120,8 +120,8 @@ func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) 
 // completions that use the typed AST exclusively. All scope/context
 // information (variables, dot type, parent) is derived from traversing the typed tree
 func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
-	if !GetConfig().EnableServer {
-		log.Debug().Msg("completion requested but server is disabled by config")
+	if !GetConfig().EnableAutocompletion {
+		log.Debug().Msg("completion requested but autocompletion is disabled by config")
 		return nil
 	}
 	doc, ok := store.Get(params.TextDocument.URI)
@@ -678,9 +678,12 @@ func fieldCompletionItems(
 ) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(fields))
 	for _, f := range fields {
-		items = append(items, newDetailItem(
+		item := newDetailItem(
 			prefix+f.Name, f.TypeName, protocol.CompletionItemKindField, wordRange,
-		))
+		)
+		sortText := "0_" + f.Name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	return items
 }
@@ -715,9 +718,12 @@ func methodCompletionItems(
 		if !methodIsUsable(m) || !methodAcceptsInput(m, inputType, pipeKind) {
 			continue
 		}
-		items = append(items, newDetailItem(
+		item := newDetailItem(
 			prefix+m.Name, m.ReturnName, protocol.CompletionItemKindMethod, wordRange,
-		))
+		)
+		sortText := "1_" + m.Name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	return items
 }
@@ -936,6 +942,9 @@ func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 
 	case *parse.ChainNode:
 		return buildPath(n.Node, target, ctx)
+
+	case *parse.TableNode:
+		return buildPathTable(n, target, ctx)
 
 	default:
 		log.Error().Msg("The tree contains an incomplete Node")
