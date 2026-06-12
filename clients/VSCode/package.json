@@ -114,7 +114,13 @@
                     },
                     "additionalProperties": {
                         "type": "string",
-                        "enum": ["disabled", "error", "warning", "information", "hint"]
+                        "enum": [
+                            "disabled",
+                            "error",
+                            "warning",
+                            "information",
+                            "hint"
+                        ]
                     },
                     "description": "Per-diagnostic severity levels. Valid values: \"disabled\", \"error\", \"warning\", \"information\", \"hint\"."
                 },
