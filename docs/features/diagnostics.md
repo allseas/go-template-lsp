@@ -36,7 +36,7 @@ There are two distinct categories of `UndefinedNode`:
 
 Created when the lexer encounters a bad token (e.g. `bad character U+003F '?'`) or the parser encounters something it cannot handle. `n.str` contains the original source fragment and `n.Err` holds the corresponding error. These are reported directly as diagnostics.
 
-```
+```go
 {{ $?????
          ↑
          lexer.errorf("bad character U+003F '?'")
@@ -54,10 +54,10 @@ Created when the lexer encounters a bad token (e.g. `bad character U+003F '?'`) 
 
 The server handles these with the following logic (`analyzeNode`):
 
-```
-str != ""                               ->  report as "undefined variable: <str>"
-str == "" && err contains "missing value"  ->  report using err.Error() as message
-str == "" && everything else            ->  skip (structural artifact)
+```go
+str != ""                                  // ->  report as "undefined variable: <str>"
+str == "" && err contains "missing value"  // ->  report using err.Error() as message
+str == "" && everything else               // ->  skip (structural artifact)
 ```
 
 `lexer.errorf()` records the error item and returns nil to terminate the current state-machine step. It does not modify `l.pos`, `l.start`, or `l.input`, so subsequent `nextItem()` calls resume lexing from the position immediately after the bad token:
@@ -85,23 +85,15 @@ Both offsets are then converted to `(line, character)` positions with `offsetToP
 
 Type errors from template calls are collected separately from AST-based diagnostics. These errors are generated during type analysis by the `server/types` package:
 
-```flow
-collectDiagnostics(uri)
-    │
-    ├── walkAndAnalyze(...)  ← AST-based diagnostics
-    │
-    └── For each typed tree in document:
-            │
-            └── typedTree.TypeErrors
-                    │
-                    ├── Filter for ErrorTypeInvalidTemplateArg
-                    └── Convert to protocol.Diagnostic
-                            │
-                            ▼
-                    User sees squiggly underline on {{ template ... }}
+```mermaid
+flowchart TD
+    A["collectDiagnostics(uri)"] --> B["walkAndAnalyze - AST-based diagnostics"]
+    A --> C["For each typed tree - iterate TypeErrors"]
+    C --> D["filter ErrorTypeInvalidTemplateArg → protocol.Diagnostic"]
+    B & D --> E[publishDiagnostics]
 ```
 
-**When this occurs:** When a `{{template "name" arg}}` call is analyzed:
+**When this occurs:** When a `{{template "name" arg}}` call is analysed:
 
 1. The type system looks up the template name in the global `templateInputTypes` registry
 2. If a type is found, the argument's type is resolved
@@ -110,14 +102,11 @@ collectDiagnostics(uri)
 
 **Example:** Template `AuthorTpl` declares `/*gotype: models.Author*/` but is called with an `Order`:
 
-```flow
-Document:
-    {{template "AuthorTpl" .}}
-                           ↑
-                    (. is models.Order)
+```go
+Document:  {{template "AuthorTpl" .}}
+                                   ^ (. is models.Order)
 
-Diagnostic:
-    template "AuthorTpl" expects argument of type models.Author, but got models.Order
+Diagnostic: template "AuthorTpl" expects argument of type models.Author, but got models.Order
 ```
 
 See [template_checking.md](template_checking.md) for more details on how template type hints work.

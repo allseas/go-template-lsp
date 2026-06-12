@@ -4,15 +4,15 @@ Type hints let the language server resolve a real Go type against the template's
 
 ## What the user writes
 
-```
+```go
 {{- /*gotype: github.com/example/myapp/models.User*/ -}}
 ```
 
 Any of the following forms are recognised:
 
-| Hint form | Resolved as |
-|---|---|
-| `{{/*gotype: models.User*/}}` | type `User` in local package `models` |
+| Hint form                           | Resolved as                                                   |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `{{/*gotype: models.User*/}}`       | type `User` in local package `models`                         |
 | `{{- /* gotype: models.User */ -}}` | same - trimming dashes and surrounding whitespace are ignored |
 
 ## Resolution flow
@@ -38,14 +38,14 @@ A single template file may contain any number of named sub-templates introduced 
 
 ### Where to place the hint
 
-| Block | Where to put the hint |
-|---|---|
-| Root template | First line of the file |
-| Named define | Line immediately after the opening `{{define "name"}}` directive |
+| Block         | Where to put the hint                                            |
+| ------------- | ---------------------------------------------------------------- |
+| Root template | First line of the file                                           |
+| Named define  | Line immediately after the opening `{{define "name"}}` directive |
 
 Example:
 
-```
+```go
 {{- /*gotype: github.com/example/myapp/models.Address*/ -}}
 {{ .Street }}
 

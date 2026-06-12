@@ -146,7 +146,7 @@ Place a comment on the **first line** of the template file (or immediately after
 
 The format is `gotype: <import-path>.<TypeName>`. For a type in the same module you can use the package name directly:
 
-```
+```go
 {{/*gotype: models.User*/}}
 ```
 
@@ -163,7 +163,7 @@ With the hint in place:
 
 Each `{{define}}` block can carry its own independent hint:
 
-```
+```go
 {{- /*gotype: models.Address*/ -}}
 Street: {{ .Street }}, {{ .City }}
 

@@ -4,15 +4,15 @@ Completions based on AST offer context-aware suggestions when the user types in 
 
 ## What the user sees
 
-| Cursor position                              | Suggestions                                                                                                   |
-| -------------------------------------------- |---------------------------------------------------------------------------------------------------------------|
-| `{{ `**`$`**` }}`                            | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix and the current dot fields/methods       |
-| `{{ `**`.`**` }}`                            | `.` item, or all fields and methods of the current dot type if a type hint is resolved                        |
-| `{{ .Items\[0\].`**`▌`**` }}`                | Fields and methods available on the resolved field type (chained field accesses)                              |
-| `{{ .Items \| `**`len`**` \| `**`▌`**` }}`   | Functions that accept `int` output: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `not`, `print`, `printf`, `println`   |
-| `{{ .IsAdmin \| `**`not`**` \| `**`▌`**` }}` | Functions that accept `bool` output: `and`, `or`, `not`, `print`, `printf`, `println`                         |
-| `{{ .Name \| `**`html`**` \| `**`▌`**` }}`   | Functions that accept `string` output: `html`, `js`, `urlquery`, `len`, `print`, `printf`, `println`, `index` |
-| `CommandNode`, `PipeNode`, `IfNode`, etc.    | All scope-aware function, variables and dot objects                                                           |
+| Cursor position                           | Suggestions                                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `{{  $  }}`                               | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix and the current dot fields/methods       |
+| `{{  .  }}`                               | `.` item, or all fields and methods of the current dot type if a type hint is resolved                        |
+| `{{ .Address.  }}`                        | Fields and methods available on the resolved field type (chained field accesses)                              |
+| `{{ .Items \|  len  \|     }}`            | Functions that accept `int` output: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `not`, `print`, `printf`, `println`   |
+| `{{ .IsAdmin \|  not  \|     }}`          | Functions that accept `bool` output: `and`, `or`, `not`, `print`, `printf`, `println`                         |
+| `{{ .Name \|  html  \|     }}`            | Functions that accept `string` output: `html`, `js`, `urlquery`, `len`, `print`, `printf`, `println`, `index` |
+| `CommandNode`, `PipeNode`, `IfNode`, etc. | All scope-aware function, variables and dot objects                                                           |
 
 Completion is triggered automatically on `$` and `.`, or manually via the editor's invoke shortcut (`Ctrl + Space`).
 
@@ -34,7 +34,7 @@ flowchart TD
 
 `completionWithFallback` is the LSP handler registered for `textDocument/completion`. It first delegates to `completionAst`. If that returns `nil` (parse failure, cursor outside a template block, node not found), it falls back to the simpler regex-based `completion` function, ensuring the user always receives some suggestions.
 
-```
+```go
 completionWithFallback()
  ├── completionAst()        primary path - AST-aware
  └── completion()           fallback  - regex-based
@@ -56,8 +56,9 @@ flowchart TD
 
 The LSP server advertises `$` and `.` as trigger characters. `suggest` checks the character at the node's start position (`sChar`) before doing any parent-type dispatch:
 
-- **`$`** -> `varsToItems(ctx, true)` - all variables in scope, labels stripped of their `$` prefix.
-- **`.`** -> if a resolved `LoadedType` is available, `typeFieldItems` + `typeMethodItems`; otherwise a bare `.` item.
+- `$` -> `varsToItems(ctx, true)` - all variables in scope, labels stripped of their `$` prefix.
+- `.` -> if a resolved `LoadedType` is available, `typeFieldItems` + `typeMethodItems`; otherwise a bare `.` item.
+
 ### Per-parent dispatch - `suggest()`
 
 For all other positions, `suggest` switches on the type of the *parent* node in the ancestor path:
@@ -113,6 +114,7 @@ When a `LoadedType` is attached to the document (resolved from a `// tmpl: Type`
 
 - **`RangeNode`**: calls `resolvePipeDotType` with `unwrapSlice: true` - unwraps a `[]T` field to `T` so completions inside a range body reflect the element type.
 - **`WithNode`**: calls `resolvePipeDotType` with `unwrapSlice: false` - narrows to the field's struct type without unwrapping.
+
 ### Item builder functions
 
 | Function                       | Items produced                                                                   |
@@ -126,7 +128,7 @@ When a `LoadedType` is attached to the document (resolved from a `// tmpl: Type`
 
 ### Ordering of completion items
 
-When both fields and methods are present, **fields are listed before methods**. This is an intentional design decision to make it more clear and readable for the user. IDEs automatically sort everything alphabetically, but we override it for user convinince
+When both fields and methods are present, **fields are listed before methods**. This is an intentional design decision to make it more clear and readable for the user. IDEs automatically sort everything alphabetically, but we override it for user convenience.
 
 ## Tests
 
