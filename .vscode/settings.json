@@ -2,12 +2,22 @@
     "go.lintTool": "golangci-lint-v2",
     "cSpell.words": [
         "coverprofile",
+        "errorf",
+        "Funcs",
         "glsp",
         "golangci",
         "gotemplate",
+        "gotmpl",
+        "gotype",
         "gowatch",
         "gradlew",
         "ktlint",
-        "silenceper"
-    ]
+        "myapp",
+        "predeclared",
+        "println",
+        "silenceper",
+        "urlquery",
+        "vars"
+    ],
+    "cSpell.language": "en-GB"
 }
