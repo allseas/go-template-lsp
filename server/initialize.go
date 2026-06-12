@@ -120,6 +120,8 @@ func initialized(context *glsp.Context, _ *protocol.InitializedParams) error {
 		if err := handlers.RequestConfig(ctx); err != nil {
 			log.Error().Err(err).Msg("failed to request config")
 		}
+		// Re-publish diagnostics for any documents that were opened before config loaded
+		handlers.RefreshAllDocuments(ctx)
 		handlers.RegisterGoFileWatcher(ctx)
 	}(context)
 

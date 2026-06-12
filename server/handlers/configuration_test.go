@@ -36,6 +36,9 @@ func TestApplyTraceLevel(t *testing.T) {
 }
 
 func TestTraceFromConfig(t *testing.T) {
+	original := GetConfig()
+	t.Cleanup(func() { setConfig(original) })
+
 	t.Run("Returns trace value from config if set", func(t *testing.T) {
 		config := Config{
 			Trace: struct {
@@ -72,17 +75,17 @@ func TestLoadLocalConfig(t *testing.T) {
 		tempDir := t.TempDir()
 		WorkspaceRoot = tempDir
 
-		configData := `{"enableServer": false, "trace": {"server": "off"}}`
+		configData := `{"enableHover": false, "trace": {"server": "off"}}`
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
 		err := os.WriteFile(configPath, []byte(configData), 0o600)
 		assert.NoError(t, err)
 
-		c := Config{EnableServer: true}
+		c := Config{EnableHover: true}
 		c.Trace.Server = "messages"
 
 		loadLocalConfig(&c)
 
-		assert.Equal(t, false, c.EnableServer)
+		assert.Equal(t, false, c.EnableHover)
 		assert.Equal(t, protocol.TraceValueOff, c.Trace.Server)
 
 		// Unset WorkspaceRoot just in case
@@ -93,12 +96,12 @@ func TestLoadLocalConfig(t *testing.T) {
 		tempDir := t.TempDir()
 		WorkspaceRoot = tempDir
 
-		c := Config{EnableServer: true}
+		c := Config{EnableHover: true}
 		c.Trace.Server = "messages"
 
 		loadLocalConfig(&c)
 
-		assert.Equal(t, true, c.EnableServer)
+		assert.Equal(t, true, c.EnableHover)
 		assert.Equal(t, TraceValueMessages, c.Trace.Server)
 
 		// Unset WorkspaceRoot
@@ -108,12 +111,12 @@ func TestLoadLocalConfig(t *testing.T) {
 	t.Run("Does nothing when WorkspaceRoot is empty", func(t *testing.T) {
 		WorkspaceRoot = ""
 
-		c := Config{EnableServer: true}
+		c := Config{EnableHover: true}
 		c.Trace.Server = "messages"
 
 		loadLocalConfig(&c)
 
-		assert.Equal(t, true, c.EnableServer)
+		assert.Equal(t, true, c.EnableHover)
 		assert.Equal(t, TraceValueMessages, c.Trace.Server)
 	})
 
@@ -122,17 +125,17 @@ func TestLoadLocalConfig(t *testing.T) {
 		WorkspaceRoot = tempDir
 		defer func() { WorkspaceRoot = "" }()
 
-		// Local file only overrides enableServer; trace.server must stay.
-		configData := `{"enableServer": false}`
+		// Local file only overrides enableHover; trace.server must stay.
+		configData := `{"enableHover": false}`
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
 		assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0o600))
 
-		c := Config{EnableServer: true}
+		c := Config{EnableHover: true}
 		c.Trace.Server = protocol.TraceValueVerbose
 
 		loadLocalConfig(&c)
 
-		assert.Equal(t, false, c.EnableServer)
+		assert.Equal(t, false, c.EnableHover)
 		assert.Equal(t, protocol.TraceValueVerbose, c.Trace.Server)
 	})
 
@@ -144,23 +147,26 @@ func TestLoadLocalConfig(t *testing.T) {
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
 		assert.NoError(t, os.WriteFile(configPath, []byte(`{not valid json`), 0o600))
 
-		c := Config{EnableServer: true}
+		c := Config{EnableHover: true}
 		c.Trace.Server = TraceValueMessages
 
 		loadLocalConfig(&c)
 
-		assert.Equal(t, true, c.EnableServer)
+		assert.Equal(t, true, c.EnableHover)
 		assert.Equal(t, TraceValueMessages, c.Trace.Server)
 	})
 }
 
 func TestLocalConfigOverridesClientConfig(t *testing.T) {
+	original := GetConfig()
+	t.Cleanup(func() { setConfig(original) })
+
 	t.Run("RequestConfig: local gotmpl.config.json overrides client settings", func(t *testing.T) {
 		tempDir := t.TempDir()
 		WorkspaceRoot = tempDir
 		defer func() { WorkspaceRoot = "" }()
 
-		configData := `{"enableServer": false, "trace": {"server": "off"}}`
+		configData := `{"enableHover": false, "trace": {"server": "off"}}`
 		configPath := filepath.Join(tempDir, "gotmpl.config.json")
 		assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0o600))
 
@@ -168,14 +174,14 @@ func TestLocalConfigOverridesClientConfig(t *testing.T) {
 			Call: func(method string, _ any, result any) {
 				if method == "workspace/configuration" {
 					*(result.(*[]json.RawMessage)) = []json.RawMessage{
-						[]byte(`{"enableServer": true, "trace": {"server": "verbose"}}`),
+						[]byte(`{"enableHover": true, "trace": {"server": "verbose"}}`),
 					}
 				}
 			},
 		}
 
 		assert.NoError(t, RequestConfig(context))
-		assert.Equal(t, false, GetConfig().EnableServer)
+		assert.Equal(t, false, GetConfig().EnableHover)
 		assert.Equal(t, protocol.TraceValueOff, GetConfig().Trace.Server)
 	})
 
@@ -190,13 +196,19 @@ func TestLocalConfigOverridesClientConfig(t *testing.T) {
 			configPath := filepath.Join(tempDir, "gotmpl.config.json")
 			assert.NoError(t, os.WriteFile(configPath, []byte(configData), 0o600))
 
-			params := protocol.DidChangeConfigurationParams{
-				Settings: json.RawMessage(`{"enableServer": true, "trace": {"server": "verbose"}}`),
+			context := &glsp.Context{
+				Call: func(method string, _ any, result any) {
+					if method == "workspace/configuration" {
+						*(result.(*[]json.RawMessage)) = []json.RawMessage{
+							[]byte(`{"enableHover": true, "trace": {"server": "verbose"}}`),
+						}
+					}
+				},
 			}
 
-			assert.NoError(t, ConfigChanged(nil, &params))
-			// enableServer comes from client (not present in local file)
-			assert.Equal(t, true, GetConfig().EnableServer)
+			applyConfigChange(context)
+			// enableHover comes from client (not present in local file)
+			assert.Equal(t, true, GetConfig().EnableHover)
 			// trace.server comes from local file (overrides client)
 			assert.Equal(t, protocol.TraceValueOff, GetConfig().Trace.Server)
 		},
@@ -204,6 +216,9 @@ func TestLocalConfigOverridesClientConfig(t *testing.T) {
 }
 
 func TestApplyConfig(t *testing.T) {
+	original := GetConfig()
+	t.Cleanup(func() { setConfig(original) })
+
 	t.Run("Applies trace level from config", func(t *testing.T) {
 		config := Config{
 			Trace: struct {
@@ -245,7 +260,7 @@ func TestApplyConfig(t *testing.T) {
 			}{
 				Server: protocol.TraceValueOff,
 			},
-			EnableServer: false,
+			EnableHover: false,
 		}
 		setConfig(initialConfig)
 
@@ -259,7 +274,7 @@ func TestApplyConfig(t *testing.T) {
 		applyConfig(newConfig)
 
 		assert.Equal(t, protocol.TraceValueVerbose, GetConfig().Trace.Server)
-		assert.Equal(t, false, GetConfig().EnableServer)
+		assert.Equal(t, false, GetConfig().EnableHover)
 		assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 	})
 
@@ -270,7 +285,7 @@ func TestApplyConfig(t *testing.T) {
 			}{
 				Server: protocol.TraceValueOff,
 			},
-			EnableServer: false,
+			EnableHover: false,
 		}
 		setConfig(initialConfig)
 
@@ -280,12 +295,12 @@ func TestApplyConfig(t *testing.T) {
 			}{
 				Server: protocol.TraceValueVerbose,
 			},
-			EnableServer: true,
+			EnableHover: true,
 		}
 		applyConfig(newConfig)
 
 		assert.Equal(t, protocol.TraceValueVerbose, GetConfig().Trace.Server)
-		assert.Equal(t, true, GetConfig().EnableServer)
+		assert.Equal(t, true, GetConfig().EnableHover)
 		assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 	})
 
@@ -296,25 +311,28 @@ func TestApplyConfig(t *testing.T) {
 			}{
 				Server: protocol.TraceValueOff,
 			},
-			EnableServer: false,
+			EnableHover: false,
 		}
 		setConfig(initialConfig)
 
 		newConfig := Config{
-			EnableServer: true,
+			EnableHover: true,
 		}
 		applyConfig(newConfig)
 
 		assert.Equal(t, TraceValueMessages, GetConfig().Trace.Server)
-		assert.Equal(t, true, GetConfig().EnableServer)
+		assert.Equal(t, true, GetConfig().EnableHover)
 		assert.Equal(t, zerolog.DebugLevel, zerolog.GlobalLevel())
 	})
 }
 
 func TestRequestConfig(t *testing.T) {
+	original := GetConfig()
+	t.Cleanup(func() { setConfig(original) })
+
 	// ai
 	t.Run("RequestConfig keeps config when response is empty", func(t *testing.T) {
-		initialConfig := Config{EnableServer: false}
+		initialConfig := Config{EnableHover: false}
 		initialConfig.Trace.Server = TraceValueMessages
 		setConfig(initialConfig)
 
@@ -336,7 +354,7 @@ func TestRequestConfig(t *testing.T) {
 			Call: func(method string, _ any, result any) {
 				if method == "workspace/configuration" {
 					response := []json.RawMessage{
-						[]byte(`{"trace": {"server": "verbose"}, "enableServer": true}`),
+						[]byte(`{"trace": {"server": "verbose"}, "enableHover": true}`),
 					}
 					*(result.(*[]json.RawMessage)) = response
 				}
@@ -346,90 +364,93 @@ func TestRequestConfig(t *testing.T) {
 		err := RequestConfig(context)
 		assert.NoError(t, err)
 		assert.Equal(t, protocol.TraceValueVerbose, GetConfig().Trace.Server)
-		assert.Equal(t, true, GetConfig().EnableServer)
+		assert.Equal(t, true, GetConfig().EnableHover)
 	})
 }
 
 func TestConfigChanged(t *testing.T) {
-	// ai
-	t.Run("ConfigChanged applies new config", func(t *testing.T) {
-		initialConfig := Config{EnableServer: false}
-		setConfig(initialConfig)
+	original := GetConfig()
+	t.Cleanup(func() { setConfig(original) })
 
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(`{"trace": {"server": "verbose"}, "enableServer": true}`),
+	t.Run("ConfigChanged returns nil immediately", func(t *testing.T) {
+		err := ConfigChanged(nil, &protocol.DidChangeConfigurationParams{})
+		assert.NoError(t, err)
+	})
+}
+
+func TestApplyConfigChange(t *testing.T) {
+	original := GetConfig()
+	t.Cleanup(func() { setConfig(original) })
+
+	t.Run("fetches fresh config from client and applies it", func(t *testing.T) {
+		context := &glsp.Context{
+			Call: func(method string, _ any, result any) {
+				if method == "workspace/configuration" {
+					*(result.(*[]json.RawMessage)) = []json.RawMessage{
+						[]byte(`{"trace": {"server": "verbose"}, "enableHover": true}`),
+					}
+				}
+			},
 		}
 
-		err := ConfigChanged(nil, &params)
-		assert.NoError(t, err)
+		applyConfigChange(context)
 		assert.Equal(t, protocol.TraceValueVerbose, GetConfig().Trace.Server)
-		assert.Equal(t, true, GetConfig().EnableServer)
+		assert.Equal(t, true, GetConfig().EnableHover)
 	})
 
-	// ai
-	t.Run("ConfigChanged handles invalid config", func(t *testing.T) {
-		initialConfig := Config{EnableServer: false}
-		setConfig(initialConfig)
-
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(
-				`{"trace": {"server": "invalid_trace_value"}, "enableServer": true}`,
-			),
+	t.Run("applies default trace when trace is invalid", func(t *testing.T) {
+		context := &glsp.Context{
+			Call: func(method string, _ any, result any) {
+				if method == "workspace/configuration" {
+					*(result.(*[]json.RawMessage)) = []json.RawMessage{
+						[]byte(`{"trace": {"server": "invalid_trace_value"}, "enableHover": true}`),
+					}
+				}
+			},
 		}
 
-		err := ConfigChanged(nil, &params)
-		assert.NoError(t, err)
+		applyConfigChange(context)
 		assert.Equal(t, TraceValueMessages, GetConfig().Trace.Server)
-		assert.Equal(t, true, GetConfig().EnableServer)
+		assert.Equal(t, true, GetConfig().EnableHover)
 	})
 
-	// ai
-	t.Run("ConfigChanged handles empty config", func(t *testing.T) {
-		initialConfig := Config{EnableServer: false}
-		setConfig(initialConfig)
-
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(`{}`),
+	t.Run("with empty response leaves config at defaults", func(t *testing.T) {
+		context := &glsp.Context{
+			Call: func(method string, _ any, result any) {
+				if method == "workspace/configuration" {
+					*(result.(*[]json.RawMessage)) = []json.RawMessage{[]byte(`{}`)}
+				}
+			},
 		}
 
-		err := ConfigChanged(nil, &params)
-		assert.NoError(t, err)
+		applyConfigChange(context)
 		assert.Equal(t, TraceValueMessages, GetConfig().Trace.Server)
-		assert.Equal(t, false, GetConfig().EnableServer)
 	})
 
-	// ai
-	t.Run("ConfigChanged handles partial config", func(t *testing.T) {
-		initialConfig := Config{EnableServer: false}
-		setConfig(initialConfig)
+	t.Run("with partial response applies provided fields", func(t *testing.T) {
+		setConfig(Config{EnableHover: false})
 
-		params := protocol.DidChangeConfigurationParams{
-			Settings: json.RawMessage(`{"enableServer": true}`),
+		context := &glsp.Context{
+			Call: func(method string, _ any, result any) {
+				if method == "workspace/configuration" {
+					*(result.(*[]json.RawMessage)) = []json.RawMessage{
+						[]byte(`{"enableHover": true}`),
+					}
+				}
+			},
 		}
 
-		err := ConfigChanged(nil, &params)
-		assert.NoError(t, err)
-		assert.Equal(t, TraceValueMessages, GetConfig().Trace.Server)
-		assert.Equal(t, true, GetConfig().EnableServer)
-	})
-
-	// ai
-	t.Run("ConfigChanged handles invalid JSON config", func(t *testing.T) {
-		initialConfig := Config{EnableServer: false}
-		setConfig(initialConfig)
-		params := protocol.DidChangeConfigurationParams{
-			Settings: `{"enableServer: true}`,
-		}
-
-		err := ConfigChanged(nil, &params)
-		assert.Error(t, err)
-		assert.Equal(t, false, GetConfig().EnableServer)
+		applyConfigChange(context)
+		assert.Equal(t, true, GetConfig().EnableHover)
 	})
 }
 
 func TestSetTrace(t *testing.T) {
+	original := GetConfig()
+	t.Cleanup(func() { setConfig(original) })
+
 	t.Run("SetTrace", func(t *testing.T) {
-		initialConfig := Config{EnableServer: false}
+		initialConfig := Config{EnableHover: false}
 		setConfig(initialConfig)
 		assert.Equal(t, protocol.TraceValue(""), GetConfig().Trace.Server)
 
