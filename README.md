@@ -15,6 +15,7 @@ This project was started as a 10-week student project at Allseas by a group of 5
   - [VS Code Extension](#vs-code-extension)
   - [JetBrains Plugin](#jetbrains-plugin)
 - [Resources](#resources)
+- [Third-Party Notices](#third-party-notices)
 
 ## Features
 
@@ -145,3 +146,7 @@ See [docs/jetbrains/README.md](docs/jetbrains/README.md) for more detail.
 - [Go text/template Package](https://pkg.go.dev/text/template)
 - [VS Code Extension API](https://code.visualstudio.com/api)
 - [JetBrains Plugin Development](https://plugins.jetbrains.com/docs/intellij/)
+
+## Third-Party Notices
+
+See [docs/RESOURCES.md](docs/RESOURCES.md) for third-party attributions and licenses.
