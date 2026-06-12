@@ -31,6 +31,7 @@ This repository contains the source code of the *GoTemplate Support* extension. 
 - [Development Workflow](#development-workflow)
   - [Adding New Features](#adding-new-features)
 - [Resources](#resources)
+- [Third-Party Notices](#third-party-notices)
 
 ## Features
 
@@ -369,3 +370,7 @@ Each component has its own development guide:
 - [Go text/template Package](https://pkg.go.dev/text/template)
 - [VS Code Extension API](https://code.visualstudio.com/api)
 - [JetBrains Plugin Development](https://plugins.jetbrains.com/docs/intellij/)
+
+## Third-Party Notices
+
+See [docs/RESOURCES.md](docs/RESOURCES.md) for third-party attributions and licenses.
