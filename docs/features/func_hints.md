@@ -36,44 +36,22 @@ The next `FuncMap` composite literal encountered after the comment is the one ha
 
 ### Initial load (LSP initialize)
 
-```
-LSP Initialize
-        │
-        ▼
-types.LoadGlobalFuncs(workspaceRoot)
- ├── packages.Load("./...", NeedName|NeedFiles|NeedSyntax|NeedTypes|NeedTypesInfo|NeedImports)
- └── for each file:
-        ├── collectFuncMapLits(file)               → []*ast.CompositeLit
-        └── for each //tmpl:func "global" comment:
-              ├── nextFuncMap(lits, comment.End)   pick next literal in source order
-              └── extractFuncMapInto(lit, info)    "name": expr → resolve expr → *types.Func
-                       │
-                       ▼
-        types.SetGlobalFuncs(map[string]*types.Func)   (process-wide cache)
-                       │
-                       ▼
-documentStore.Set → buildTypedTree → types.NewTree(parse, types.GlobalFuncs(), …)
-                       │
-                       ▼
-        analyseIdentifier resolves global names to their *types.Func
-        completionAst / builtinItems() appends GlobalFuncs() keys to completion list
+```mermaid
+flowchart LR
+    A[LSP Initialize] --> B["LoadGlobalFuncs - packages.Load + extract FuncMap literals"]
+    B --> C["SetGlobalFuncs - update process-wide cache"]
+    C --> D["Rebuild all typed trees with new funcs"]
+    D --> E["completions & diagnostics consume GlobalFuncs()"]
 ```
 
 ### Hot reload (workspace/didChangeWatchedFiles)
 
-```
-client sends workspace/didChangeWatchedFiles (any *.go change)
-        │
-        ▼
-DidChangeWatchedFiles handler
- ├── anyGoChange(changes)  - filter non-Go events
- ├── types.LoadGlobalFuncs(workspaceRoot)  - re-scan
- ├── types.SetGlobalFuncs(funcs)          - update cache
- └── RefreshAllDocuments(ctx)
-          ├── store.snapshot()            - get (uri, text) pairs without holding lock
-          └── for each open document:
-               ├── store.Set(uri, text)   - rebuilds typed tree with new funcs
-               └── publishDiagnostics     - re-runs diagnostics with updated cache
+```mermaid
+flowchart LR
+    A["any .go file saved"] --> B["LoadGlobalFuncs - re-scan workspace"]
+    B --> C["SetGlobalFuncs - update cache"]
+    C --> D["RefreshAllDocuments - rebuild every open template"]
+    D --> E[publishDiagnostics for each document]
 ```
 
 ## Implementation details

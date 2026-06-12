@@ -4,44 +4,28 @@ Completions based on AST offer context-aware suggestions when the user types in 
 
 ## What the user sees
 
-| Cursor position                              | Suggestions                                                                                                   |
-| -------------------------------------------- |---------------------------------------------------------------------------------------------------------------|
-| `{{ `**`$`**` }}`                            | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix and the current dot fields/methods       |
-| `{{ `**`.`**` }}`                            | `.` item, or all fields and methods of the current dot type if a type hint is resolved                        |
-| `{{ .Items\[0\].`**`▌`**` }}`                | Fields and methods available on the resolved field type (chained field accesses)                              |
-| `{{ .Items \| `**`len`**` \| `**`▌`**` }}`   | Functions that accept `int` output: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `not`, `print`, `printf`, `println`   |
-| `{{ .IsAdmin \| `**`not`**` \| `**`▌`**` }}` | Functions that accept `bool` output: `and`, `or`, `not`, `print`, `printf`, `println`                         |
-| `{{ .Name \| `**`html`**` \| `**`▌`**` }}`   | Functions that accept `string` output: `html`, `js`, `urlquery`, `len`, `print`, `printf`, `println`, `index` |
-| `CommandNode`, `PipeNode`, `IfNode`, etc.    | All scope-aware function, variables and dot objects                                                           |
+| Cursor position                           | Suggestions                                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `{{  $  }}`                               | All variables in scope (`$`, `$i`, `$v`, …) - without the `$` prefix and the current dot fields/methods       |
+| `{{  .  }}`                               | `.` item, or all fields and methods of the current dot type if a type hint is resolved                        |
+| `{{ .Address.  }}`                        | Fields and methods available on the resolved field type (chained field accesses)                              |
+| `{{ .Items \|  len  \|     }}`            | Functions that accept `int` output: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `not`, `print`, `printf`, `println`   |
+| `{{ .IsAdmin \|  not  \|     }}`          | Functions that accept `bool` output: `and`, `or`, `not`, `print`, `printf`, `println`                         |
+| `{{ .Name \|  html  \|     }}`            | Functions that accept `string` output: `html`, `js`, `urlquery`, `len`, `print`, `printf`, `println`, `index` |
+| `CommandNode`, `PipeNode`, `IfNode`, etc. | All scope-aware function, variables and dot objects                                                           |
 
 Completion is triggered automatically on `$` and `.`, or manually via the editor's invoke shortcut (`Ctrl + Space`).
 
 ## Request flow
 
-```
-User types / invokes completion
-        │
-        ▼
-LSP client  ── textDocument/completion ──►  server/handlers/completion.go : completionWithFallback()
-                                                        │
-                                            1. attempt completionAst()
-                                            2. on nil result → fall back to regex completion()
-                                                        │
-                                            completionAst()
-                                            ├── store.Get(uri)              look up the parsed document
-                                            ├── positionToOffset(text, pos) convert LSP position → byte offset
-                                            ├── nodeFind(root, offset)      walk the AST to find the nearest preceding node
-                                            ├── buildPath(root, cur, ctx)   reconstruct ancestor chain + collect in-scope vars
-                                            ├── isInsideTemplate(text, off) guard: skip if cursor is outside {{ }}
-                                            └── suggest(cur, parent, ctx, sChar, isInvoked)
-                                                        │
-                                                        ▼
-                                            item builder functions
-                                            (dotItem / varsToItems / builtinItems /
-                                             typeFieldItems / typeMethodItems /
-                                             pipeFilteredItems)
-                                                        │
-                                            ◄─── protocol.CompletionList ───────────
+```mermaid
+flowchart TD
+    A[User triggers completion] --> B["completionWithFallback()"]
+    B --> C["completionAst() - resolve document, node, scope"]
+    C --> D{"inside template?"}
+    D -->|yes| E["suggest() - pick item builders by context"]
+    D -->|no| F["completion() - regex fallback"]
+    E & F --> G[CompletionList]
 ```
 
 ## Implementation details
@@ -50,7 +34,7 @@ LSP client  ── textDocument/completion ──►  server/handlers/completion
 
 `completionWithFallback` is the LSP handler registered for `textDocument/completion`. It first delegates to `completionAst`. If that returns `nil` (parse failure, cursor outside a template block, node not found), it falls back to the simpler regex-based `completion` function, ensuring the user always receives some suggestions.
 
-```
+```go
 completionWithFallback()
  ├── completionAst()        primary path - AST-aware
  └── completion()           fallback  - regex-based
@@ -60,22 +44,21 @@ completionWithFallback()
 
 `completionAst` (`completion.go`) builds the full context before producing any items:
 
-```
-completionAst()
- ├── store.Get(uri)                   look up the parsed document
- ├── positionToOffset(text, pos)      convert LSP position → byte offset
- ├── nodeFind(root, offset)           walk the AST to find the nearest preceding node
- ├── buildPath(root, curNode, ctx)    reconstruct ancestor chain; populates ctx.Path, ctx.Vars, ctx.Pipe, ctx.DotType
- ├── isInsideTemplate(text, offset)   bail out if the cursor is not inside {{ … }}
- └── suggest(cur, parent, ctx, …)    dispatch to item builders
+```mermaid
+flowchart TD
+    A["completionAst()"] --> B["nodeFind + buildPath - locate node and collect scope"]
+    B --> C{"isInsideTemplate?"}
+    C -->|no| D[return nil]
+    C -->|yes| E["suggest() - dispatch to item builders"]
 ```
 
 ### Trigger-character shortcuts
 
 The LSP server advertises `$` and `.` as trigger characters. `suggest` checks the character at the node's start position (`sChar`) before doing any parent-type dispatch:
 
-- **`$`** → `varsToItems(ctx, true)` - all variables in scope, labels stripped of their `$` prefix.
-- **`.`** → if a resolved `LoadedType` is available, `typeFieldItems` + `typeMethodItems`; otherwise a bare `.` item.
+- `$` -> `varsToItems(ctx, true)` - all variables in scope, labels stripped of their `$` prefix.
+- `.` -> if a resolved `LoadedType` is available, `typeFieldItems` + `typeMethodItems`; otherwise a bare `.` item.
+
 ### Per-parent dispatch - `suggest()`
 
 For all other positions, `suggest` switches on the type of the *parent* node in the ancestor path:
@@ -131,6 +114,7 @@ When a `LoadedType` is attached to the document (resolved from a `// tmpl: Type`
 
 - **`RangeNode`**: calls `resolvePipeDotType` with `unwrapSlice: true` - unwraps a `[]T` field to `T` so completions inside a range body reflect the element type.
 - **`WithNode`**: calls `resolvePipeDotType` with `unwrapSlice: false` - narrows to the field's struct type without unwrapping.
+
 ### Item builder functions
 
 | Function                       | Items produced                                                                   |
@@ -144,7 +128,7 @@ When a `LoadedType` is attached to the document (resolved from a `// tmpl: Type`
 
 ### Ordering of completion items
 
-When both fields and methods are present, **fields are listed before methods**. This is an intentional design decision to make it more clear and readable for the user. IDEs automatically sort everything alphabetically, but we override it for user convinince
+When both fields and methods are present, **fields are listed before methods**. This is an intentional design decision to make it more clear and readable for the user. IDEs automatically sort everything alphabetically, but we override it for user convenience.
 
 ## Tests
 

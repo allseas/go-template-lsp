@@ -26,41 +26,25 @@ Named templates are stored in a registry (`templateInputTypes`), mapping templat
 
 During type analysis of a template file:
 
-```flow
-Parse document
-    │
-    ├── Extract type hints → LoadedType
-    ├── Extract {{define}} blocks → template names
-    └── Build templateInputTypes registry
-            │
-            ▼
-    For each {{template "name" arg}}:
-            │
-            ├── Look up "name" in templateInputTypes
-            ├── Resolve arg's type (via pipe analysis)
-            └── Compare: argType vs. expectedType
-                    │
-                    ├─ Match → no error
-                    └─ Mismatch → ErrorTypeInvalidTemplateArg
+```mermaid
+flowchart TD
+    A[Parse document] --> B["Build templateInputTypes from gotype hints on defines"]
+    B --> C["For each template call - resolve argument type"]
+    C --> D{types match?}
+    D -->|yes| E[no error]
+    D -->|no| F[ErrorTypeInvalidTemplateArg]
 ```
 
 ### 3. Error Reporting
 
 Mismatches are stored as `TypeErrors` in the typed tree and surfaced to the user as diagnostics:
 
-```flow
-collectDiagnostics(uri)
-    │
-    ├── Collect AST errors (syntax, undefined variables, etc.)
-    │
-    └── For each typed tree in document:
-            │
-            ├── Iterate typedTree.TypeErrors
-            ├── Filter for ErrorTypeInvalidTemplateArg
-            └── Convert to protocol.Diagnostic
-                    │
-                    ▼
-            User sees squiggly underline on {{ template ... }}
+```mermaid
+flowchart TD
+    A["collectDiagnostics(uri)"] --> B[AST errors - syntax / variables]
+    A --> C["TypeErrors from each typed tree"]
+    C --> D[filter ErrorTypeInvalidTemplateArg -> protocol.Diagnostic]
+    B & D --> E[publishDiagnostics]
 ```
 
 ## Example Scenarios
@@ -178,15 +162,15 @@ Type matching uses **string equality** on the type's `String()` representation:
 
 ```go
 if argType.String() != expectedType.String() {
-    // → error
+    // -> error
 }
 ```
 
 This means:
 
-- `*models.User` and `*models.User` → match
-- `models.User` and `*models.User` → mismatch (different pointer levels)
-- `text-template-server/src/models.User` and `text-template-server/src/models.User` → match (full qualified path)
+- `*models.User` and `*models.User` -> match
+- `models.User` and `*models.User` -> mismatch (different pointer levels)
+- `text-template-server/src/models.User` and `text-template-server/src/models.User` -> match (full qualified path)
 
 ## Missing Type Hints
 
@@ -246,6 +230,6 @@ ctx.errorf(
 
 ## See Also
 
-- [Type Hints](type_hints.md) — How to declare template input types via `/*gotype:*/` comments
-- [Diagnostics](diagnostics.md) — How errors are reported to the user
-- [types.md](../types.md) — Architecture of the type system
+- [Type Hints](type_hints.md) - How to declare template input types via `/*gotype:*/` comments
+- [Diagnostics](diagnostics.md) - How errors are reported to the user
+- [types.md](../types.md) - Architecture of the type system

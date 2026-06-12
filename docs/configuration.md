@@ -4,8 +4,8 @@ The Go Text Template LSP supports consistent configuration across VS Code and Je
 
 ## Platform-Specific Guides
 
-- **[VS Code Configuration](vscode/vscode-configuration.md)** — Settings stored in `settings.json`, read via the Settings UI or config files
-- **[JetBrains Configuration](jetbrains/jetbrains-configuration.md)** — Application-level + project-level settings, stored in IDE/project configs
+- **[VS Code Configuration](vscode/vscode-configuration.md)** - Settings stored in `settings.json`, read via the Settings UI or config files
+- **[JetBrains Configuration](jetbrains/jetbrains-configuration.md)** - Application-level + project-level settings, stored in IDE/project configs
 
 ## Configuration Options
 
@@ -26,10 +26,10 @@ These options are supported on all platforms:
 
 Settings follow this precedence (highest to lowest):
 
-1. **Project File** — `gotmpl.config.json` in project root (applies to all IDEs)
-2. **IDE Project/Workspace** — `.vscode/settings.json` (VS Code) or `.idea/` config (JetBrains)
-3. **User** — Global IDE user settings
-4. **Defaults** — Plugin defaults (all servers enabled, trace at `messages` level)
+1. **Project File** - `gotmpl.config.json` in project root (applies to all IDEs)
+2. **IDE Project/Workspace** - `.vscode/settings.json` (VS Code) or `.idea/` config (JetBrains)
+3. **User** - Global IDE user settings
+4. **Defaults** - Plugin defaults (all servers enabled, trace at `messages` level)
 
 ## Project Configuration File
 
