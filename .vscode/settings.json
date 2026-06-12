@@ -1,6 +1,7 @@
 {
     "go.lintTool": "golangci-lint-v2",
     "cSpell.words": [
+        "Allseas",
         "coverprofile",
         "errorf",
         "Funcs",

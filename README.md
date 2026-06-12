@@ -2,6 +2,8 @@
 
 IDE support for Go's `text/template` language via a language server. Works with VS Code and JetBrains IDEs.
 
+This project was started as a 10-week student project at Allseas by a group of 5 second-year BSc Computer Science and Engineering students at TU Delft.
+
 ## Table of Contents <!-- omit in toc -->
 
 - [Features](#features)
@@ -16,31 +18,31 @@ IDE support for Go's `text/template` language via a language server. Works with 
 
 ## Features
 
-| Feature                                         | VS Code | JetBrains | Priority |
-| ----------------------------------------------- | ------- | --------- | -------- |
-| Static syntax highlighting                      | ✅       | ✅         | Must     |
-| Dynamic syntax highlighting                     | ✅       | ✅         | Must     |
-| Autocompletion on variables                     | ✅       | ✅         | Must     |
-| Autocompletion on field names                   | ✅       | ✅         | Must     |
-| Autocompletion on chained field accesses        | ✅       | ✅         | Must     |
-| Autocompletion on global functions              | ✅       | ✅         | Must     |
-| Autocompletion on local functions               | ✅       | ✅         | Must     |
-| Hover tooltips                                  | ✅       | ✅         | Must     |
-| Jump to definition                              | ✅       | ✅         | Must     |
-| Find references                                 | ✅       | ✅         | Must     |
-| Diagnostics (syntax, undeclared vars, unknown functions) | ✅ | ✅  | Must     |
-| Type hints (`/*gotype: pkg.Type*/`)             | ✅       | ✅         | Must     |
-| Custom function hints (`//tmpl:func`)           | ✅       | ✅         | Must     |
-| Template type checking                          | ✅       | ✅         | Must     |
-| Configuration (project + IDE)                   | ✅       | ✅         | Must     |
-| Snippets                                        | ✅       | ✅         | Could    |
-| Wrap selection in a comment                     | ✅       | ✅         | Should   |
-| Wrap selection in a block                       | ✅       | ✅         | Should   |
-| Type checking on function arguments             | ⏳       | ⏳         | Should   |
-| Highlight matching `{{end}}`                    | ⏳       | ⏳         | Should   |
-| Unused variable detection                       | ⏳       | ⏳         | Should   |
-| Missing whitespace trim detection               | ⏳       | ⏳         | Could    |
-| Syntax highlighting for embedded language       | ❓       | ❓         | Could    |
+| Feature                                                  | VS Code | JetBrains | Priority |
+| -------------------------------------------------------- | ------- | --------- | -------- |
+| Static syntax highlighting                               | ✅       | ✅         | Must     |
+| Dynamic syntax highlighting                              | ✅       | ✅         | Must     |
+| Autocompletion on variables                              | ✅       | ✅         | Must     |
+| Autocompletion on field names                            | ✅       | ✅         | Must     |
+| Autocompletion on chained field accesses                 | ✅       | ✅         | Must     |
+| Autocompletion on global functions                       | ✅       | ✅         | Must     |
+| Autocompletion on local functions                        | ✅       | ✅         | Must     |
+| Hover tooltips                                           | ✅       | ✅         | Must     |
+| Jump to definition                                       | ✅       | ✅         | Must     |
+| Find references                                          | ✅       | ✅         | Must     |
+| Diagnostics (syntax, undeclared vars, unknown functions) | ✅       | ✅         | Must     |
+| Type hints (`/*gotype: pkg.Type*/`)                      | ✅       | ✅         | Must     |
+| Custom function hints (`//tmpl:func`)                    | ✅       | ✅         | Must     |
+| Template type checking                                   | ✅       | ✅         | Must     |
+| Configuration (project + IDE)                            | ✅       | ✅         | Must     |
+| Snippets                                                 | ✅       | ✅         | Could    |
+| Wrap selection in a comment                              | ✅       | ✅         | Should   |
+| Wrap selection in a block                                | ✅       | ✅         | Should   |
+| Type checking on function arguments                      | ⏳       | ⏳         | Should   |
+| Highlight matching `{{end}}`                             | ⏳       | ⏳         | Should   |
+| Unused variable detection                                | ⏳       | ⏳         | Should   |
+| Missing whitespace trim detection                        | ⏳       | ⏳         | Could    |
+| Syntax highlighting for embedded language                | ❓       | ❓         | Could    |
 
 For the full feature roadmap, see [docs/features/README.md](docs/features/README.md).
 For an end-user guide, see [docs/usage.md](docs/usage.md).
