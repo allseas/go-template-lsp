@@ -48,13 +48,11 @@ func setDocMulti(t *testing.T, uri, src string, perTree map[string]*serverTypes.
 		if lt != nil {
 			loadedTypes[name] = lt
 		}
-		typedTrees[name] = buildTypedTree(tr, lt)
+		typedTrees[name] = buildTypedTree(tr, lt, nil)
 	}
 	var typed *serverTypes.Tree
-	var rootLT *serverTypes.Tree
 	if tree != nil {
 		typed = typedTrees[tree.Name]
-		rootLT = loadedTypes[tree.Name]
 	}
 
 	store.mu.Lock()
@@ -62,7 +60,6 @@ func setDocMulti(t *testing.T, uri, src string, perTree map[string]*serverTypes.
 		text:        src,
 		tree:        tree,
 		trees:       treeSet,
-		loadedType:  rootLT,
 		typedTree:   typed,
 		loadedTypes: loadedTypes,
 		typedTrees:  typedTrees,

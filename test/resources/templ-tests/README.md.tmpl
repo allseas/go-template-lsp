@@ -32,7 +32,7 @@ tmpl.Execute(w, map[string]interface{}{
 {{- if .Contributors }}
 ## Contributors ({{ len .Contributors }})
 {{- range .Contributors }}
-- {{ .Name }} — {{ .Role }}
+- {{ .Name }} - {{ .Role }}
 {{- end }}
 {{- else }}
 _No contributors listed._

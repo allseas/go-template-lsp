@@ -1,8 +1,8 @@
 {
     "name": "text-template-support",
     "displayName": "text/template Support",
-    "description": "",
-    "version": "0.1.0",
+    "description": "Language support for Go text/template files. See LICENSE and third-party notices in the repository.",
+    "version": "0.2.0",
     "engines": {
         "vscode": "^1.116.0"
     },

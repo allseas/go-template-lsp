@@ -636,7 +636,7 @@ var fieldNodeTests = []fieldNodeTest{
 		name:           "two fields",
 		input:          "{{ .Address.Country }}",
 		expectedIdents: []string{"Address", "Country"},
-		// `{{` (2) + ` ` (1) = byte offset 3 — the '.' of .Address
+		// `{{` (2) + ` ` (1) = byte offset 3 - the '.' of .Address
 		expectedPos: 3,
 	},
 	{

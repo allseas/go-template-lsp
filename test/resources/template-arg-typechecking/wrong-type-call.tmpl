@@ -1,0 +1,20 @@
+{{- /*
+  wrong-type-call.tmpl
+  Demonstrates a {{template}} call where the argument is the wrong type.
+
+  The "person-card" block declares gotype: text-template-server/src/model.Person
+  but the caller passes a value of type model.Address - a diagnostic should fire.
+*/ -}}
+
+{{- define "person-card" -}}
+{{- /*gotype: text-template-server/src/model.Person*/ -}}
+Name:  {{ .Name }}
+Age:   {{ .Age }}
+Email: {{ .Email }}
+{{- end -}}
+
+{{- define "address-page" -}}
+{{- /*gotype: text-template-server/src/model.Address*/ -}}
+{{/* BUG: passing an Address where a Person is expected */}}
+{{ template "person-card" . }}
+{{- end -}}

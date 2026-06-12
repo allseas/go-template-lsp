@@ -33,7 +33,7 @@ const (
 	outputInt                // len
 	outputBool               // not, and, or, eq, ne, lt, le, gt, ge
 	outputString             // html, js, urlquery, print, printf, println
-	outputUntyped            // call, index, slice — dynamic, don't restrict
+	outputUntyped            // call, index, slice - dynamic, don't restrict
 )
 
 // funcAcceptsKind reports whether funcName can receive a piped value of kind.
@@ -49,7 +49,7 @@ func funcAcceptsKind(funcName string, kind outputKind) bool {
 	}
 	fn := serverTypes.GlobalFuncs()[funcName]
 	if fn == nil {
-		return true // unknown signature — don't flag
+		return true // unknown signature - don't flag
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
@@ -74,7 +74,7 @@ func funcAcceptsKind(funcName string, kind outputKind) bool {
 	if hasConcreteParam {
 		return false // concrete params present but none matched
 	}
-	// All params are interface{} — use the curated semantic list.
+	// All params are interface{} - use the curated semantic list.
 	allowed := functionsAccepting[kind]
 	for _, name := range allowed {
 		if name == funcName {

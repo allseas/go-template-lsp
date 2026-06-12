@@ -28,7 +28,7 @@ When the cursor is on any `VariableNode`, the handler walks the entire AST and c
 
 ### Dot (`.`)
 
-When the cursor is on a `DotNode`, the handler uses `buildPath` to reconstruct the path from the tree root to the node, then walks the path backwards looking for the nearest `RangeNode` or `WithNode`. The pipe of that branch node is returned as the definition — since `range` and `with` are the constructs that redefine the dot context.
+When the cursor is on a `DotNode`, the handler uses `buildPath` to reconstruct the path from the tree root to the node, then walks the path backwards looking for the nearest `RangeNode` or `WithNode`. The pipe of that branch node is returned as the definition - since `range` and `with` are the constructs that redefine the dot context.
 
 ```gotmpl
 {{- range .Join }}
@@ -50,5 +50,5 @@ If no `gotype` hint is present, or the type cannot be loaded, the handler return
 {{/*gotype: cg/model.Order*/}}
 {{ .CustomerName }}   {{-/* ctrl+click jumps to CustomerName field in model.go */-}}
 {{ .DisplayName }}    {{-/* ctrl+click jumps to DisplayName method in model.go */-}}
-{{ .Address.City }}   {{-/* ctrl+click on Address → Address field; on City → City field */-}}
+{{ .Address.City }}   {{-/* ctrl+click on Address -> Address field; on City -> City field */-}}
 ```
