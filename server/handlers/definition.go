@@ -77,6 +77,11 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 					URI:   uri,
 					Range: nodeToRange(branch.Pipe, doc.text),
 				}, nil
+			case *parse.TableNode:
+				return protocol.Location{
+					URI:   uri,
+					Range: nodeToRange(branch.Pipe, doc.text),
+				}, nil
 			}
 		}
 		return nil, nil

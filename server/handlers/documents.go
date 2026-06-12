@@ -426,6 +426,8 @@ func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
 			}
 		case *parse.TemplateNode:
 			walk(node.Pipe)
+		case *parse.TableNode:
+			walkTable(node, walk)
 		case *parse.UndefinedNode:
 			log.Debug().Msg("found the undefined node")
 		}
@@ -499,6 +501,8 @@ func walkAndAnalyze(
 			diagnostics = append(diagnostics, walkAndAnalyze(elseList, text, ctx, visited, fn)...)
 		}
 		ctx.Vars = snapshot
+	case *parse.TableNode:
+		diagnostics = append(diagnostics, walkAndAnalyzeTable(n, text, ctx, visited, fn)...)
 	}
 
 	return diagnostics

@@ -943,6 +943,9 @@ func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
 	case *parse.ChainNode:
 		return buildPath(n.Node, target, ctx)
 
+	case *parse.TableNode:
+		return buildPathTable(n, target, ctx)
+
 	default:
 		log.Error().Msg("The tree contains an incomplete Node")
 	}
