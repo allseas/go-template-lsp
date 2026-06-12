@@ -35,7 +35,7 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 | **Inspections & Diagnostics**     |                  |                    |          |
 | Incorrect syntax                  | ✅ (✅)            | ✅ (✅)              | Must     | Warn about incorrect syntax                                               |
 | Duplicate variable detection      | ✅ (✅)            | ✅ (✅)              | Must     | Warn about redefined variables                                            |
-| Type checking                     | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Validate type compatibility in templates                                  |
+| Type checking                     | ✅ (⏳)            | ✅ (⏳)              | Should   | Validate type compatibility in templates and template calls               |
 | Unused variable detection         | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Flag declared but unused variables                                        |
 | Missing whitespace trim detection | ⏳ (⏳)            | ⏳ (⏳)              | Could    | Suggest whitespace trim operators when needed                             |
 | **Code Actions & Refactoring**    |                  |                    |          |
@@ -89,3 +89,17 @@ The Language Server Protocol (LSP) was chosen to provide a single backend implem
 ### Server in Go
 
 The language server is implemented in Go to make use of the parser already present in the Go library and the type checker.
+
+## Feature Documentation
+
+For detailed documentation on each feature, see:
+
+- [Syntax Highlighting](syntax.md) - Static syntax highlighting for Go templates
+- [Completions](completions.md) - Code completion for variables, fields, and functions
+- [Definition](definition.md) - Jump to definition for symbols
+- [References](references.md) - Find all usages of a symbol
+- [Hover](hover.md) - Hover information for symbols
+- [Diagnostics](diagnostics.md) - Error reporting and validation
+- [Type Hints](type_hints.md) - Declaring template input types via `/*gotype:*/` comments
+- [Function Hints](func_hints.md) - Registering custom template functions
+- [Type Checking](template_checking.md) - Validating template call arguments against declared types

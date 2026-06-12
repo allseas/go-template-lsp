@@ -4,13 +4,16 @@ Diagnostics report errors in template files as squiggly underlines. They are pub
 
 ## What the user sees
 
-| Template input               | Diagnostic message                                  | Range                                        |
-| ---------------------------- | --------------------------------------------------- | -------------------------------------------- |
-| `{{ $?????`                  | `undefined variable: bad character U+003F '?'`      | The `{{ … }}` block containing the bad token |
-| `{{ }}`                      | `template: …: missing value for command`            | The full `{{ }}`                             |
-| `{{ $x }}` (undeclared)      | `undefined variable: $x`                            | The `{{ … }}` block                          |
-| `{{ foo }}` Unknown function | `unsupported function or unregistered command: foo` | The `{{ … }}` block                          |
-| `{{ $x := 1 }} {{ $x := 2 }}`| `duplicate variable name: $x`                       | The `{{ … }}` block with the duplicate       |
+| Template input                | Diagnostic message                                                        | Range                                        |
+| ----------------------------- | ------------------------------------------------------------------------- | -------------------------------------------- |
+| `{{ $?????`                   | `undefined variable: bad character U+003F '?'`                            | The `{{ … }}` block containing the bad token |
+| `{{ }}`                       | `template: …: missing value for command`                                  | The full `{{ }}`                             |
+| `{{ $x }}` (undeclared)       | `undefined variable: $x`                                                  | The `{{ … }}` block                          |
+| `{{ foo }}` Unknown function  | `unsupported function or unregistered command: foo`                       | The `{{ … }}` block                          |
+| `{{ $x := 1 }} {{ $x := 2 }}` | `duplicate variable name: $x`                                             | The `{{ … }}` block with the duplicate       |
+| `{{template "T" .Order}}`*    | `template "T" expects argument of type models.User, but got models.Order` | The full `{{ … }}` block                     |
+
+*Template `T` has type hint `/*gotype: models.User*/`. See [template_checking.md](template_checking.md).
 
 ## Request flow
 
@@ -96,3 +99,44 @@ Diagnostics use `expandToFullBracketsFromOffset(pos, text)` to expand a byte off
 3. If no `}}` is found before a newline, the end is capped at the newline (handles unterminated actions).
 
 Both offsets are then converted to `(line, character)` positions with `offsetToPosition`.
+
+## Template Type Errors
+
+Type errors from template calls are collected separately from AST-based diagnostics. These errors are generated during type analysis by the `server/types` package:
+
+```flow
+collectDiagnostics(uri)
+    │
+    ├── walkAndAnalyze(...)  ← AST-based diagnostics
+    │
+    └── For each typed tree in document:
+            │
+            └── typedTree.TypeErrors
+                    │
+                    ├── Filter for ErrorTypeInvalidTemplateArg
+                    └── Convert to protocol.Diagnostic
+                            │
+                            ▼
+                    User sees squiggly underline on {{ template ... }}
+```
+
+**When this occurs:** When a `{{template "name" arg}}` call is analyzed:
+
+1. The type system looks up the template name in the global `templateInputTypes` registry
+2. If a type is found, the argument's type is resolved
+3. If argument type is not the expected type, an `ErrorTypeInvalidTemplateArg` is recorded
+4. The error is later converted to a diagnostic with range covering the full `{{ template … }}`
+
+**Example:** Template `AuthorTpl` declares `/*gotype: models.Author*/` but is called with an `Order`:
+
+```flow
+Document:
+    {{template "AuthorTpl" .}}
+                           ↑
+                    (. is models.Order)
+
+Diagnostic:
+    template "AuthorTpl" expects argument of type models.Author, but got models.Order
+```
+
+See [template_checking.md](template_checking.md) for more details on how template type hints work.
