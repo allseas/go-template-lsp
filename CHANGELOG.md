@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Removed
+
+### Fixed
+
+## [0.2.0] - 2026-06-12
+
+### Added
+
 Features:
 
 - Inspections: on incorrect syntax, duplicate variable names.
@@ -33,8 +43,6 @@ Repository:
 - Improved hover messages to be more informative and similar in style to Go.
 - Templates with multiple `{{ define }}` are supported.
 - Field/method suggestions are sorted by type.
-
-### Removed
 
 ### Fixed
 
