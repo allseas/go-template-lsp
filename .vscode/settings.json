@@ -12,6 +12,7 @@
         "gowatch",
         "gradlew",
         "ktlint",
+        "linters",
         "myapp",
         "predeclared",
         "println",
