@@ -472,7 +472,7 @@ var analyseTestCases = []analyseTestCase{
 					types.Typ[types.String],
 					nil,
 					tcoms(
-						tcom(types.Typ[types.Int64], tnum(42)),
+						tcom(types.Typ[types.Int], tnum(42)),
 						tcom(
 							funcs["FuncD"].Type(),
 							tident("FuncB", funcs["FuncB"].Type()),
@@ -521,7 +521,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncA")),
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
-			tcom(types.Typ[types.Int64], tnum(42)),
+			tcom(types.Typ[types.Int], tnum(42)),
 			tcom(funcs["FuncD"].Type(), tident("FuncD", funcs["FuncD"].Type())),
 			tcom(funcs["FuncA"].Type(), tident("FuncA", funcs["FuncA"].Type())),
 		)))),
@@ -696,7 +696,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncB"), num(1)),
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
-			tcom(types.Typ[types.Int64], tnum(2)),
+			tcom(types.Typ[types.Int], tnum(2)),
 			tcom(funcBCurried1, tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
 		)))),
 		funcs:          funcs,
@@ -713,7 +713,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncA")),
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
-			tcom(types.Typ[types.Int64], tnum(5)),
+			tcom(types.Typ[types.Int], tnum(5)),
 			tcom(funcBCurried1, tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
 			tcom(funcs["FuncA"].Type(), tident("FuncA", funcs["FuncA"].Type())),
 		)))),
@@ -900,16 +900,16 @@ var analyseTestCases = []analyseTestCase{
 		))),
 		resTree: ttree("test", tlist(nil, trangeN(
 			tpipe(
-				types.Typ[types.Int64],
+				types.Typ[types.Int],
 				nil,
-				tcoms(tcom(types.Typ[types.Int64], tnum(5))),
+				tcoms(tcom(types.Typ[types.Int], tnum(5))),
 			),
 			tlist(
-				types.Typ[types.Int64],
+				types.Typ[types.Int],
 				tactpipe(
-					types.Typ[types.Int64],
+					types.Typ[types.Int],
 					nil,
-					tcoms(tcom(types.Typ[types.Int64], &DotNode{typ: types.Typ[types.Int64]})),
+					tcoms(tcom(types.Typ[types.Int], &DotNode{typ: types.Typ[types.Int]})),
 				),
 			),
 		))),

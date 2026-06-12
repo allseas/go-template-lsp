@@ -13,8 +13,8 @@ The hover provider gives contextual documentation when the user holds the cursor
 | `$v` (or any `$var`) | `var $v Type` - variable type (or `(unknown)` if the type cannot be resolved)                                              |
 | `end`                | From `` `if` `` / `` `range` `` / `` `with` `` / `` `template` `` at line N                                                |
 | `else`               | From `` `if` `` / `` `range` `` / `` `with` `` at line N                                                                   |
-| `.`                  | Returns the current context.                                                                                               |
-| `.Name`              | `field .Name` - Accesses the `Name` field of the `.` context.                                                              |
+| `.`                  | Returns the current context, annotated with type when available.                                                           |
+| `.Name`              | `field .Name` - Accesses the `Name` field of the `.` context, annotated with type when available.                          |
 | `len`                | A built-in function that returns the length of its argument.                                                               |
 | `and`                | A built-in function that returns the first argument if it is false, and the last argument otherwise.                       |
 | `or`                 | A built-in function that returns the first argument if it is true, and the last argument otherwise.                        |
@@ -23,7 +23,9 @@ The hover provider gives contextual documentation when the user holds the cursor
 | Other identifiers    | Represents an identifier in a command or action.                                                                           |
 
 All tooltips are rendered as Markdown.
-They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over node
+They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over node.
+
+When a Go type-hint file is loaded for the document, hovers on `.`, `.Field` accesses, and `$variable` references are additionally annotated with the resolved Go type pulled from the typed tree. When no type information is available, it falls back to their typeless form so hovers still work in projects without a type hint.
 
 ## Request flow
 
