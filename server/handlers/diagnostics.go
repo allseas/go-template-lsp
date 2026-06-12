@@ -99,6 +99,39 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 			walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)...,
 		)
 	}
+
+	// Surface template argument type errors from the typed trees.
+	if doc, ok := store.Get(uri); ok {
+		for _, tt := range doc.typedTrees {
+			diagnostics = append(diagnostics, collectTemplateArgTypeDiagnostics(tt, text)...)
+		}
+	}
+
+	return diagnostics
+}
+
+// collectTemplateArgTypeDiagnostics converts ErrorTypeInvalidTemplateArg entries from
+// a typed tree into protocol diagnostics.
+func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
+	if typedTree == nil {
+		return nil
+	}
+	var diagnostics []protocol.Diagnostic
+	for _, terr := range typedTree.TypeErrors {
+		if terr.ErrType() != types.ErrorTypeInvalidTemplateArg {
+			continue
+		}
+		if terr.Node == nil {
+			continue
+		}
+		pos := int(terr.Node.Position())
+		rng := expandToFullBracketsFromOffset(pos, text)
+		diagnostics = append(diagnostics, createDiagnostic(
+			withPos(text, pos, terr.Err),
+			rng,
+			true,
+		))
+	}
 	return diagnostics
 }
 

@@ -19,14 +19,14 @@ expression at this position?" without re-walking the source.
 
 Defined in [analyse.go](../server/types/analyse.go):
 
-| Symbol                                         | Purpose                                                                                                                                                                                                                     |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Tree`                                         | Typed counterpart of `parse.Tree`. Holds `Root *ListNode`, the function map, the optional `DotType` / `Pkg`, and accumulated `TypeErrors`.                                                                                  |
-| `NewTree(parseTree, funcs, dotType, pkg) Tree` | Main constructor. Walks the parse tree and returns a fully analysed `Tree`. `funcs` carries the template's known global functions (typically `types.GlobalFuncs()` — see [features/func_hints.md](features/func_hints.md)). |
-| `NewTreeWithType(...)`                         | Thin wrapper around `NewTree` for callers that have a `*types.Named` dot type.                                                                                                                                              |
-| `TError`                                       | A type error attached to a specific typed `Node`, categorised by `ErrorType`.                                                                                                                                               |
-| `ErrorType` constants                          | `ErrorTypeInvalidField`, `ErrorTypeInvalidFunction`, `ErrorTypeInvalidCommand`, `ErrorTypeInvalidRange`, `ErrorTypeInvalidIf`, `ErrorTypeInvalidWith`, `ErrorUndeclaredVariable`, `ErrorDoubleDeclaredVariable`.            |
-| `Node` interface                               | Common interface for typed nodes; adds `ValueType() types.Type` and `IsElseList() bool` on top of the usual parse-node API.                                                                                                 |
+| Symbol                                         | Purpose                                                                                                                                                                                                                                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Tree`                                         | Typed counterpart of `parse.Tree`. Holds `Root *ListNode`, the function map, the optional `DotType` / `Pkg`, and accumulated `TypeErrors`.                                                                                                      |
+| `NewTree(parseTree, funcs, dotType, pkg) Tree` | Main constructor. Walks the parse tree and returns a fully analysed `Tree`. `funcs` carries the template's known global functions (typically `types.GlobalFuncs()` — see [features/func_hints.md](features/func_hints.md)).                     |
+| `NewTreeWithType(...)`                         | Thin wrapper around `NewTree` for callers that have a `*types.Named` dot type.                                                                                                                                                                  |
+| `TError`                                       | A type error attached to a specific typed `Node`, categorised by `ErrorType`.                                                                                                                                                                   |
+| `ErrorType` constants                          | `ErrorTypeInvalidField`, `ErrorTypeInvalidFunction`, `ErrorTypeInvalidCommand`, `ErrorTypeInvalidRange`, `ErrorTypeInvalidIf`, `ErrorTypeInvalidWith`, `ErrorUndeclaredVariable`, `ErrorDoubleDeclaredVariable`, `ErrorTypeInvalidTemplateArg`. |
+| `Node` interface                               | Common interface for typed nodes; adds `ValueType() types.Type` and `IsElseList() bool` on top of the usual parse-node API.                                                                                                                     |
 
 Concrete node types (in [node.go](../server/types/node.go)) mirror the parse
 package: `ListNode`, `ActionNode`, `PipeNode`, `CommandNode`, `IdentifierNode`,
@@ -109,8 +109,11 @@ consumers (e.g. semantic-token highlighting) to distinguish `.Address`
 - support for variadic functions
 - support for iter.Seq in a range
 - indexing using key on maps in a range
-- type checking between different templates
 - special case for `call`
+
+### Implemented Features
+
+- **Template argument type checking** - When a `{{template "name" arg}}` is called, the argument type is checked against the template's declared input type (via `/*gotype:*/` hints). See [features/template_checking.md](features/template_checking.md).
 
 ### Error reporting
 

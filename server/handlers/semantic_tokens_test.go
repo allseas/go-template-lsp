@@ -40,7 +40,7 @@ func setDocWithTypedTree(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	t.Helper()
 	tree, _, err := tryParse(src)
 	require.NoError(t, err)
-	typedTree := buildTypedTree(tree, lt)
+	typedTree := buildTypedTree(tree, lt, nil)
 	doc := &document{text: src, tree: tree, loadedType: lt, typedTree: typedTree}
 	if doc.typedTree != nil {
 		serverTypes.SetEndsForTree(*doc.typedTree, serverTypes.Pos(len(src)), &doc.text)

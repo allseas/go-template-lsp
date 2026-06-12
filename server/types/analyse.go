@@ -48,6 +48,8 @@ const (
 	ErrorUndeclaredVariable
 	// ErrorDoubleDeclaredVariable Variable declared more than once in the same scope
 	ErrorDoubleDeclaredVariable
+	// ErrorTypeInvalidTemplateArg Template called with an argument of the wrong type
+	ErrorTypeInvalidTemplateArg
 	// Add more error types as needed
 )
 
@@ -58,12 +60,18 @@ type TError struct {
 	typ  ErrorType // for categorization
 }
 
+// ErrType returns the category of this type error.
+func (e TError) ErrType() ErrorType { return e.typ }
+
 // NewTree creates a typed tree from a parse tree, optionally with type information.
+// templateInputTypes maps template names to their expected input types (from gotype hints
+// on {{define}} blocks). Pass nil if template argument type checking is not needed.
 func NewTree(
 	parseTree parse.Tree,
 	funcs map[string]*types.Func,
 	dotType types.Type,
 	pkg *types.Package,
+	templateInputTypes map[string]types.Type,
 ) Tree {
 	typeTree := Tree{
 		Name:      parseTree.Name,
@@ -76,9 +84,10 @@ func NewTree(
 
 	if parseTree.Root != nil {
 		typeTree.Root = analyseList(parseTree.Root, nil, &analysisCtx{
-			funcs:   funcs,
-			dotType: dotType,
-			tree:    &typeTree,
+			funcs:              funcs,
+			dotType:            dotType,
+			tree:               &typeTree,
+			templateInputTypes: templateInputTypes,
 			vars: []*VariableNode{
 				{
 					Pos:      0,
@@ -103,8 +112,9 @@ func NewTreeWithType(
 	funcs map[string]*types.Func,
 	dotType *types.Named,
 	pkg *types.Package,
+	templateInputTypes map[string]types.Type,
 ) Tree {
-	typeTree := NewTree(parseTree, funcs, dotType, pkg)
+	typeTree := NewTree(parseTree, funcs, dotType, pkg, templateInputTypes)
 	return typeTree
 }
 
@@ -248,6 +258,24 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 		parent:   parent,
 	}
 	t.Pipe = analysePipe(n.Pipe, t, ctx)
+
+	// Type-check the argument against the template's declared input type (if known).
+	if t.Pipe != nil && ctx.templateInputTypes != nil {
+		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
+			argType := t.Pipe.ValueType()
+			if argType != nil && argType.String() != expectedType.String() {
+				ctx.errorf(
+					t,
+					ErrorTypeInvalidTemplateArg,
+					"template %q expects argument of type %s, but got %s",
+					n.Name,
+					expectedType.String(),
+					argType.String(),
+				)
+			}
+		}
+	}
+
 	return t
 }
 
@@ -857,10 +885,9 @@ func getNodeType(node Node) types.Type {
 // analysisCtx carries type information through the analysis.
 // It can be extended to track variable bindings, method signatures, etc.
 type analysisCtx struct {
-	// Future: Add fields for tracking type information during analysis
-	// For example:
-	vars    []*VariableNode        // Type of each variable in scope
-	dotType types.Type             // Current dot context type
-	funcs   map[string]*types.Func // Available functions with their signatures
-	tree    *Tree                  // Reference to the tree being built, for error reporting
+	vars               []*VariableNode        // Type of each variable in scope
+	dotType            types.Type             // Current dot context type
+	funcs              map[string]*types.Func // Available functions with their signatures
+	tree               *Tree                  // Reference to the tree being built, for error reporting
+	templateInputTypes map[string]types.Type  // Expected input type per template name (from gotype hints on {{define}} blocks)
 }
