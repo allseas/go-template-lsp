@@ -219,7 +219,7 @@ func setDocWithType(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	require.NoError(t, err)
 	typedTrees := make(map[string]*serverTypes.Tree, len(treeSet))
 	for name, tr := range treeSet {
-		typedTrees[name] = buildTypedTree(tr, lt)
+		typedTrees[name] = buildTypedTree(tr, lt, nil)
 	}
 	var typed *serverTypes.Tree
 	if tree != nil {
