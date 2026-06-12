@@ -19,22 +19,15 @@ Invoke with Right-click -> *Find All References* (VS Code: <kbd>Shift</kbd>+<kbd
 
 ```mermaid
 flowchart TD
-    A[User invokes Find References] --> B[textDocument/references]
-    B --> C["references.go: References()"]
-    C --> D["store.Get(uri) - look up document"]
-    D --> E["positionToOffset(text, pos) - LSP position to byte offset"]
-    E --> F["treeAt(offset) - select the right parse tree"]
-    F --> G["nodeFind(root, offset) - find node under cursor"]
-    G --> H["nodeKey(target) - compute match key"]
-    H --> I{"Key found?"}
-    I -->|no| J[return nil]
-    I -->|yes| K["inspect(root, visitor) - depth-first walk"]
-    K --> L{"nodeKey(n) == targetKey?"}
-    L -->|no| M[skip]
-    L -->|yes| N{"includeDeclaration=false AND isVarDecl?"}
-    N -->|yes| M
-    N -->|no| O["append Location to results"]
-    O --> P[return results]
+    A[User invokes Find References] --> B["resolve document, tree, node → nodeKey"]
+    B --> C{"key found?"}
+    C -->|no| D[return nil]
+    C -->|yes| E["inspect() - depth-first walk over tree"]
+    E --> F{"key matches AND not excluded declaration?"}
+    F -->|yes| G[append Location]
+    F -->|no| E
+    G --> E
+    E --> H[return results]
 ```
 
 ## Implementation details

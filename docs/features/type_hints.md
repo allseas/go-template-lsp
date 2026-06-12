@@ -19,18 +19,11 @@ Any of the following forms are recognised:
 
 ```mermaid
 flowchart TD
-    A["didOpen / didChange"] --> B["store.Set(uri, text)"]
-    B --> C["ParseTypeHints(text) - scan for gotype: comments"]
-    B --> D["CachedLoadTypeFromHint(hint, root)"]
-    D --> E{"Cache hit?"}
-    E -->|yes| J
-    E -->|"no (cache miss)"| F["splitTypeHint() - pkg/path.TypeName to importPath + typeName"]
-    F --> G["packages.Load() - load package type info via go list"]
-    G --> H["pkg.Types.Scope().Lookup(typeName)"]
-    H --> I1["structFields(named) - exported struct fields"]
-    H --> I2["namedMethods(named) - eligible exported methods"]
-    I1 --> J["document.loadedType - consumed by completionAst and buildPathChildren"]
-    I2 --> J
+    A["didOpen / didChange"] --> B["ParseTypeHints - find gotype: comment"]
+    B --> C{"cache hit?"}
+    C -->|yes| E
+    C -->|no| D["packages.Load via go list → extract fields & methods"]
+    D --> E["document.loadedType - used by completions, hover, definition"]
 ```
 
 ### Caching

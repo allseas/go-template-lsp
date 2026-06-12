@@ -29,20 +29,12 @@ They are defined separately from the provided code as format strings, which are 
 
 ```mermaid
 flowchart TD
-    A[User hover] --> B[textDocument/hover]
-    B --> C["hover.go: hover()"]
-    C --> D["store.Get(uri) - look up document"]
-    D --> E["positionToOffset(text, pos) - LSP position to byte offset"]
-    E --> F["nodeFind(root, offset) - find node at position"]
-    F --> G{"end tag at cursor?"}
-    G -->|yes| H["endTagHover() - see below"]
-    G -->|no| I{"else tag at cursor?"}
-    I -->|yes| J["elseNodeHover() - see below"]
-    I -->|no| K["buildHoverContent(node) - type-switch dispatch"]
-    H --> L["hover_messages.go - format Markdown string"]
-    J --> L
-    K --> L
-    L --> M[protocol.Hover]
+    A[User hover] --> B["hover() - resolve document, offset, node"]
+    B --> C{"special tag?"}
+    C -->|end tag| D["endTagHover() - regex + path walk"]
+    C -->|else tag| E["elseNodeHover() - regex + path walk"]
+    C -->|other node| F["buildHoverContent() - type-switch dispatch"]
+    D & E & F --> G["hover_messages.go → protocol.Hover"]
 ```
 
 ## Implementation details
@@ -50,18 +42,6 @@ flowchart TD
 ### Entry point - `hover()`
 
 `hover.go:16` is the LSP handler registered for `textDocument/hover`. It receives a `HoverParams` value containing the document URI and the cursor position as `{line, character}`
-
-```mermaid
-flowchart TD
-    A["hover()"] --> B["store.Get(uri) - look up parsed document"]
-    B --> C["positionToOffset(text, pos) - LSP position to byte offset"]
-    C --> D["nodeFind(root, offset) - find nearest preceding node"]
-    D --> E{"end tag at cursor?"}
-    E -->|yes| F["endTagHover(…) - special handling, see below"]
-    E -->|no| G{"else tag at cursor?"}
-    G -->|yes| H["elseNodeHover(…) - special handling, see below"]
-    G -->|no| I["buildHoverContent(node, hover) - type-switch dispatch"]
-```
 
 ### Special case: `{{end}}` hover
 

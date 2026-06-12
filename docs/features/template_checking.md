@@ -28,15 +28,11 @@ During type analysis of a template file:
 
 ```mermaid
 flowchart TD
-    A[Parse document] --> B["Extract type hints - LoadedType"]
-    A --> C["Extract define blocks - template names"]
-    A --> D[Build templateInputTypes registry]
-    D --> E["For each template call in the document"]
-    E --> F["Look up template name in templateInputTypes"]
-    F --> G["Resolve argument type via pipe analysis"]
-    G --> H{Types match?}
-    H -->|yes| I[no error]
-    H -->|no| J[ErrorTypeInvalidTemplateArg]
+    A[Parse document] --> B["Build templateInputTypes from gotype hints on defines"]
+    B --> C["For each template call - resolve argument type"]
+    C --> D{types match?}
+    D -->|yes| E[no error]
+    D -->|no| F[ErrorTypeInvalidTemplateArg]
 ```
 
 ### 3. Error Reporting
@@ -45,12 +41,10 @@ Mismatches are stored as `TypeErrors` in the typed tree and surfaced to the user
 
 ```mermaid
 flowchart TD
-    A["collectDiagnostics(uri)"] --> B["Collect AST errors - syntax, undefined variables, etc."]
-    A --> C[For each typed tree in document]
-    C --> D["Iterate typedTree.TypeErrors"]
-    D --> E[Filter for ErrorTypeInvalidTemplateArg]
-    E --> F[Convert to protocol.Diagnostic]
-    F --> G["User sees squiggly underline on template call"]
+    A["collectDiagnostics(uri)"] --> B[AST errors - syntax / variables]
+    A --> C["TypeErrors from each typed tree"]
+    C --> D[filter ErrorTypeInvalidTemplateArg → protocol.Diagnostic]
+    B & D --> E[publishDiagnostics]
 ```
 
 ## Example Scenarios

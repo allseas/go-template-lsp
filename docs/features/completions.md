@@ -20,20 +20,12 @@ Completion is triggered automatically on `$` and `.`, or manually via the editor
 
 ```mermaid
 flowchart TD
-    A[User types or invokes completion] --> B[textDocument/completion]
-    B --> C["completionWithFallback()"]
-    C --> D["completionAst() - primary path"]
-    D --> E["store.Get(uri) - look up parsed document"]
-    E --> F["positionToOffset(text, pos) - LSP position to byte offset"]
-    F --> G["nodeFind(root, offset) - walk AST to nearest preceding node"]
-    G --> H["buildPath(root, cur, ctx) - ancestor chain + in-scope vars"]
-    H --> I{"isInsideTemplate()"}
-    I -->|inside| J["suggest(cur, parent, ctx, sChar, isInvoked)"]
-    I -->|outside template block| K[nil]
-    J --> L["item builders: dotItem / varsToItems / builtinItems / typeFieldItems / typeMethodItems / pipeFilteredItems"]
-    L --> M[CompletionList]
-    K --> N["completion() - regex fallback"]
-    N --> M
+    A[User triggers completion] --> B["completionWithFallback()"]
+    B --> C["completionAst() - resolve document, node, scope"]
+    C --> D{"inside template?"}
+    D -->|yes| E["suggest() - pick item builders by context"]
+    D -->|no| F["completion() - regex fallback"]
+    E & F --> G[CompletionList]
 ```
 
 ## Implementation details
@@ -54,13 +46,10 @@ completionWithFallback()
 
 ```mermaid
 flowchart TD
-    A["completionAst()"] --> B["store.Get(uri) - look up parsed document"]
-    B --> C["positionToOffset(text, pos) - LSP position to byte offset"]
-    C --> D["nodeFind(root, offset) - walk AST to nearest preceding node"]
-    D --> E["buildPath(root, curNode, ctx) - populate ctx.Path, ctx.Vars, ctx.Pipe, ctx.DotType"]
-    E --> F{"isInsideTemplate(text, offset)"}
-    F -->|outside template block| G[return nil]
-    F -->|inside| H["suggest(cur, parent, ctx, …) - dispatch to item builders"]
+    A["completionAst()"] --> B["nodeFind + buildPath - locate node and collect scope"]
+    B --> C{"isInsideTemplate?"}
+    C -->|no| D[return nil]
+    C -->|yes| E["suggest() - dispatch to item builders"]
 ```
 
 ### Trigger-character shortcuts

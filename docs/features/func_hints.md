@@ -37,30 +37,21 @@ The next `FuncMap` composite literal encountered after the comment is the one ha
 ### Initial load (LSP initialize)
 
 ```mermaid
-flowchart TD
-    A[LSP Initialize] --> B["types.LoadGlobalFuncs(workspaceRoot)"]
-    B --> C["packages.Load - NeedName, NeedFiles, NeedSyntax, NeedTypes, NeedTypesInfo, NeedImports"]
-    C --> D["collectFuncMapLits(file) - find FuncMap composite literals"]
-    D --> E["nextFuncMap(lits, comment.End) - pick next literal after //tmpl:func global comment"]
-    E --> F["extractFuncMapInto(lit, info) - resolve name: expr to *types.Func"]
-    F --> G["types.SetGlobalFuncs - update process-wide cache"]
-    G --> H["documentStore.Set → buildTypedTree → types.NewTree(parse, GlobalFuncs(), …)"]
-    H --> I["analyseIdentifier resolves global names to *types.Func"]
-    H --> J["builtinItems() appends GlobalFuncs() keys to completion list"]
+flowchart LR
+    A[LSP Initialize] --> B["LoadGlobalFuncs - packages.Load + extract FuncMap literals"]
+    B --> C["SetGlobalFuncs - update process-wide cache"]
+    C --> D["Rebuild all typed trees with new funcs"]
+    D --> E["completions & diagnostics consume GlobalFuncs()"]
 ```
 
 ### Hot reload (workspace/didChangeWatchedFiles)
 
 ```mermaid
-flowchart TD
-    A["workspace/didChangeWatchedFiles - any .go change"] --> B[DidChangeWatchedFiles handler]
-    B --> C["anyGoChange(changes) - filter non-Go events"]
-    C --> D["types.LoadGlobalFuncs(workspaceRoot) - re-scan"]
-    D --> E["types.SetGlobalFuncs(funcs) - update cache"]
-    E --> F["RefreshAllDocuments(ctx)"]
-    F --> G["store.snapshot() - get uri/text pairs without holding lock"]
-    G --> H["store.Set(uri, text) - rebuild typed tree with new funcs"]
-    H --> I["publishDiagnostics - re-run diagnostics with updated cache"]
+flowchart LR
+    A["any .go file saved"] --> B["LoadGlobalFuncs - re-scan workspace"]
+    B --> C["SetGlobalFuncs - update cache"]
+    C --> D["RefreshAllDocuments - rebuild every open template"]
+    D --> E[publishDiagnostics for each document]
 ```
 
 ## Implementation details

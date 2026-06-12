@@ -19,23 +19,13 @@ Diagnostics report errors in template files as squiggly underlines. They are pub
 
 ```mermaid
 flowchart TD
-    A[Document opened or changed] --> B["documents.go: onOpen() / onChange()"]
-    B --> C["diagnostics.go: publishDiagnostics()"]
-    C --> D["collectDiagnostics(text, uri)"]
-    D --> E{"Parsed tree in store?"}
-    E -->|yes| F["store.Get(uri) - reuse cached tree"]
-    E -->|no| G["tryParse(text) - ParsePartial mode"]
-    F --> H["walkAndAnalyze(root, text, ctx, analyzeNode)"]
-    G --> H
-    H --> I["analyzeNode() - called for every AST node"]
-    I --> J["declareNode() - record variable declarations"]
-    I --> K{Node type}
-    K -->|UndefinedNode| L[error from parser]
-    K -->|"ActionNode / RangeNode / IfNode / WithNode"| M["checkPipeUsage()"]
-    K -->|CommandNode| N[unknown function check]
-    L --> O["ctx.Notify: publishDiagnostics"]
-    M --> O
-    N --> O
+    A[Document opened or changed] --> B["collectDiagnostics - get or parse tree"]
+    B --> C["walkAndAnalyze - visit every AST node"]
+    C --> D{node type}
+    D -->|UndefinedNode| E[parser error]
+    D -->|"ActionNode / IfNode / RangeNode / WithNode"| F["checkPipeUsage - variable checks"]
+    D -->|CommandNode| G[unknown function check]
+    E & F & G --> H[publishDiagnostics]
 ```
 
 ## UndefinedNode
