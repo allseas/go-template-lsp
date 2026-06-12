@@ -15,6 +15,13 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+// Hover handles providing the hover message
+func Hover(_ *glsp.Context, params *protocol.HoverParams) (hover *protocol.Hover, err error) {
+	if !GetConfig().EnableHover {
+		log.Debug().Msg("hover requested but hover is disabled by config")
+		return
+	}
+	// Get document content
 // mdContent wraps a markdown string in a protocol.MarkupContent.
 func mdContent(s string) protocol.MarkupContent {
 	return protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: s}

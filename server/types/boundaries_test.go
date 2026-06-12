@@ -174,7 +174,7 @@ func TestSetEndsForTree(t *testing.T) {
 			_, err := tree.Parse(tc.input, "{{", "}}", map[string]*parse.Tree{})
 			require.NoError(t, err)
 
-			ttree := NewTree(*tree, map[string]*types.Func{}, nil, nil)
+			ttree := NewTree(*tree, map[string]*types.Func{}, nil, nil, nil)
 
 			SetEndsForTree(ttree, Pos(len(tc.input)), &tc.input)
 

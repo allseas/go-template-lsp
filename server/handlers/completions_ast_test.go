@@ -17,7 +17,7 @@ func suggestAt(t *testing.T, src string, offset int) []string {
 	t.Helper()
 	trees, err := parse.Parse("test", src, "", "", builtins())
 	require.NoError(t, err)
-	tt := serverTypes.NewTree(*trees["test"], nil, nil, nil)
+	tt := serverTypes.NewTree(*trees["test"], nil, nil, nil, nil)
 	cur := serverTypes.NodeFind(tt.Root, serverTypes.Pos(offset))
 	require.NotNil(t, cur)
 	items := suggest(cur, src[offset], false, protocol.Range{})
@@ -47,7 +47,7 @@ func suggestAtWithType(
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	tt := serverTypes.NewTree(*typ, nil, dotType, pkg)
+	tt := serverTypes.NewTree(*typ, nil, dotType, pkg, nil)
 	if lt != nil {
 		tt.DotType = lt.DotType
 		tt.Pkg = lt.Pkg
@@ -193,10 +193,10 @@ func TestCompletionAst(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.serverDisabled {
 				original := GetConfig()
-				setConfig(Config{EnableServer: false})
+				setConfig(Config{EnableAutocompletion: false})
 				t.Cleanup(func() { setConfig(original) })
 			} else {
-				enableServer(t)
+				enableAutocompletion(t)
 			}
 			if !tc.skipStore {
 				store.Set(tc.uri, tc.content)
@@ -226,7 +226,7 @@ func TestCompletionAst(t *testing.T) {
 func TestCompletionWithFallback(t *testing.T) {
 	for _, tc := range completionFallbackTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			enableServer(t)
+			enableAutocompletion(t)
 			store.Set(tc.uri, tc.content)
 			t.Cleanup(func() { store.Remove(tc.uri) })
 			resp, err := CompletionWithFallback(nil, &protocol.CompletionParams{
@@ -268,7 +268,7 @@ func typedNodeAt(t *testing.T, src string, offset int, lt *serverTypes.Tree) ser
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	tt := serverTypes.NewTree(*typ, nil, dotType, pkg)
+	tt := serverTypes.NewTree(*typ, nil, dotType, pkg, nil)
 	cur := serverTypes.NodeFind(tt.Root, serverTypes.Pos(offset))
 	require.NotNil(t, cur)
 	return cur
@@ -566,7 +566,7 @@ func TestResolvePipeDotType(t *testing.T) {
 }
 
 func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
-	enableServer(t)
+	enableAutocompletion(t)
 	uri := "file:///invoked-dollar.tmpl"
 	content := `{{$top := .}}{{$}}`
 	store.Set(uri, content)
@@ -591,8 +591,6 @@ func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
 // {{define}} blocks in one document, each carrying its own gotype hint, to
 // verify that dot-completion uses the per-tree loaded type.
 func TestCompletionAstMultiDefines(t *testing.T) {
-	enableServer(t)
-
 	loaded := loadModelTypes(t, "Order", "Address")
 	perTree := map[string]*serverTypes.Tree{
 		"t":          loaded["Address"],

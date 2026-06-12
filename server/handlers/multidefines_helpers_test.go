@@ -48,7 +48,7 @@ func setDocMulti(t *testing.T, uri, src string, perTree map[string]*serverTypes.
 		if lt != nil {
 			loadedTypes[name] = lt
 		}
-		typedTrees[name] = buildTypedTree(tr, lt)
+		typedTrees[name] = buildTypedTree(tr, lt, nil)
 	}
 	var typed *serverTypes.Tree
 	if tree != nil {

@@ -11,7 +11,7 @@ import (
 func TestAnalyze(t *testing.T) {
 	for _, tc := range analyseTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tree := NewTreeWithType(tc.parseTree, tc.funcs, tc.dotType, tc.pkg)
+			tree := NewTreeWithType(tc.parseTree, tc.funcs, tc.dotType, tc.pkg, nil)
 			if len(tree.TypeErrors) != len(tc.expectedErrors) {
 				t.Fatalf(
 					"Expected %d type errors, got %d: %v",

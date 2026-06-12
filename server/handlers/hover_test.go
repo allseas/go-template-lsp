@@ -14,7 +14,7 @@ func TestHover(t *testing.T) {
 	for _, tc := range hoverTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			for c := tc.positionCharacterStart; c <= tc.positionCharacterEnd; c++ {
-				enableServer(t)
+				enableHover(t)
 
 				uri := "file:///test/document.go"
 				content := tc.documentText
@@ -73,7 +73,7 @@ func TestHoverMultiDefines(t *testing.T) {
 
 	src := multiDefinesTemplate
 	uri := "file:///hover-multidefines.tmpl"
-	enableServer(t)
+	enableHover(t)
 	setDocMulti(t, uri, src, perTree)
 	t.Cleanup(func() { store.Remove(uri) })
 
