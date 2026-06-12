@@ -4,22 +4,25 @@ The hover provider gives contextual documentation when the user holds the cursor
 
 ## What the user sees
 
-| Cursor position                        | Tooltip                                                                      |
-|----------------------------------------|------------------------------------------------------------------------------|
-| `{{ `**`if`**` .IsAdmin }}`            | **If Branch** — conditional branch executed if `.IsAdmin` evaluates to true  |
-| `{{ `**`range`**` $i, $v := .Items }}` | **Range Branch** — branch executed for each item in a collection             |
-| `{{ range `**`$i`**`, $v := .Items }}` | **Index variable** — serves as the index variable in the range loop          |
-| `{{ range $i, `**`$v`**` := .Items }}` | **Variable** — `$v`                                                          |
-| `{{- end -}}`                          | **End Tag** — marks the end of `with`, which started at line 3               |
-| `{{- else }}`                          | **Else Branch** — marks the else branch of `if` statement starting at line 5 |
-| `.Name`                                | **Field Access** — accesses the `Name` field of the current context          |
-| `and` / `or` / `not` / `len`           | Dedicated descriptions for each built-in function                            |
-| `"hello"`                              | **String literal** — a literal string value                                  |
-| `42`                                   | **Number literal** — a literal numeric value                                 |
-| `nil`                                  | **Nil literal** — represents a nil value                                     |
+| Cursor position                        | Tooltip                                                                                      |
+|----------------------------------------|----------------------------------------------------------------------------------------------|
+| `{{ `**`if`**` .IsAdmin }}`            | **If Branch** — conditional branch executed if `.IsAdmin` evaluates to true                  |
+| `{{ `**`range`**` $i, $v := .Items }}` | **Range Branch** — branch executed for each item in a collection                             |
+| `{{ range `**`$i`**`, $v := .Items }}` | **Index variable** — serves as the index variable in the range loop                          |
+| `{{ range $i, `**`$v`**` := .Items }}` | **Variable** — `$v`, and the type of the variable                                            |
+| `{{- end -}}`                          | **End Tag** — marks the end of `with`, which started at line 3                               |
+| `{{- else }}`                          | **Else Branch** — marks the else branch of `if` statement starting at line 5                 |
+| `.Name`                                | **Field Access** — accesses the `Name` field of the current context, annotated with its type |
+| `.`                                    | **Dot** — the current context, annotated with its type when available                        |
+| `and` / `or` / `not` / `len`           | Dedicated descriptions for each built-in function                                            |
+| `"hello"`                              | **String literal** — a literal string value                                                  |
+| `42`                                   | **Number literal** — a literal numeric value                                                 |
+| `nil`                                  | **Nil literal** — represents a nil value                                                     |
 
 All tooltips are rendered as Markdown.
-They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over node
+They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over node.
+
+When a Go type-hint file is loaded for the document, hovers on `.`, `.Field` accesses, and `$variable` references are additionally annotated with the resolved Go type pulled from the typed tree. When no type information is available, it falls back to their typeless form so hovers still work in projects without a type hint.
 
 ## Request flow
 
