@@ -34,7 +34,7 @@ flowchart TD
     C -->|end tag| D["endTagHover() - regex + path walk"]
     C -->|else tag| E["elseNodeHover() - regex + path walk"]
     C -->|other node| F["buildHoverContent() - type-switch dispatch"]
-    D & E & F --> G["hover_messages.go → protocol.Hover"]
+    D & E & F --> G["hover_messages.go -> protocol.Hover"]
 ```
 
 ## Implementation details

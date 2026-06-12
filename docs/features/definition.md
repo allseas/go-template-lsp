@@ -50,5 +50,5 @@ If no `gotype` hint is present, or the type cannot be loaded, the handler return
 {{/*gotype: cg/model.Order*/}}
 {{ .CustomerName }}   {{-/* ctrl+click jumps to CustomerName field in model.go */-}}
 {{ .DisplayName }}    {{-/* ctrl+click jumps to DisplayName method in model.go */-}}
-{{ .Address.City }}   {{-/* ctrl+click on Address → Address field; on City → City field */-}}
+{{ .Address.City }}   {{-/* ctrl+click on Address -> Address field; on City -> City field */-}}
 ```

@@ -19,7 +19,7 @@ Invoke with Right-click -> *Find All References* (VS Code: <kbd>Shift</kbd>+<kbd
 
 ```mermaid
 flowchart TD
-    A[User invokes Find References] --> B["resolve document, tree, node → nodeKey"]
+    A[User invokes Find References] --> B["resolve document, tree, node -> nodeKey"]
     B --> C{"key found?"}
     C -->|no| D[return nil]
     C -->|yes| E["inspect() - depth-first walk over tree"]

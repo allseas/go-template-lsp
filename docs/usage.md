@@ -262,7 +262,7 @@ Open *Settings* (<kbd>Ctrl</kbd>+<kbd>,</kbd>) and search for `Go Template`, or 
 
 ### JetBrains Settings
 
-Go to *Settings → Tools → Go Text Template*. Application-level settings apply globally; project-level settings (stored in `.idea/`) override them for the current project.
+Go to *Settings -> Tools -> Go Text Template*. Application-level settings apply globally; project-level settings (stored in `.idea/`) override them for the current project.
 
 ### Configuration Options Reference
 

@@ -43,7 +43,7 @@ Mismatches are stored as `TypeErrors` in the typed tree and surfaced to the user
 flowchart TD
     A["collectDiagnostics(uri)"] --> B[AST errors - syntax / variables]
     A --> C["TypeErrors from each typed tree"]
-    C --> D[filter ErrorTypeInvalidTemplateArg → protocol.Diagnostic]
+    C --> D[filter ErrorTypeInvalidTemplateArg -> protocol.Diagnostic]
     B & D --> E[publishDiagnostics]
 ```
 
@@ -162,15 +162,15 @@ Type matching uses **string equality** on the type's `String()` representation:
 
 ```go
 if argType.String() != expectedType.String() {
-    // → error
+    // -> error
 }
 ```
 
 This means:
 
-- `*models.User` and `*models.User` → match
-- `models.User` and `*models.User` → mismatch (different pointer levels)
-- `text-template-server/src/models.User` and `text-template-server/src/models.User` → match (full qualified path)
+- `*models.User` and `*models.User` -> match
+- `models.User` and `*models.User` -> mismatch (different pointer levels)
+- `text-template-server/src/models.User` and `text-template-server/src/models.User` -> match (full qualified path)
 
 ## Missing Type Hints
 

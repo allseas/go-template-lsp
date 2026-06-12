@@ -15,7 +15,7 @@ syntax/
 |                   -- Separated to be easy to verify by hand whether it matches the go text/template documentation
 ├── TextMate.hs     -- TmPattern type, type aliases, JSON serialization
 |                   -- ensures correct syntax of output
-├── Generate.hs     -- Pattern generation (Grammar → TextMate), entry point
+├── Generate.hs     -- Pattern generation (Grammar -> TextMate), entry point
 |                   -- ensures correct syntax of output
 └── Regex.hs        -- regex constants for syntax elements of go template
 ```

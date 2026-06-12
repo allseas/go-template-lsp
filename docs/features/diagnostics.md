@@ -40,7 +40,7 @@ Created when the lexer encounters a bad token (e.g. `bad character U+003F '?'`) 
 {{ $?????
          ↑
          lexer.errorf("bad character U+003F '?'")
-         → UndefinedNode{Pos: <offset of $>, str: "bad character U+003F '?'", Err: …}
+         -> UndefinedNode{Pos: <offset of $>, str: "bad character U+003F '?'", Err: …}
 ```
 
 ### 2. Recovery markers (`str == ""`)
@@ -55,9 +55,9 @@ Created when the lexer encounters a bad token (e.g. `bad character U+003F '?'`) 
 The server handles these with the following logic (`analyzeNode`):
 
 ```
-str != ""                               →  report as "undefined variable: <str>"
-str == "" && err contains "missing value"  →  report using err.Error() as message
-str == "" && everything else            →  skip (structural artifact)
+str != ""                               ->  report as "undefined variable: <str>"
+str == "" && err contains "missing value"  ->  report using err.Error() as message
+str == "" && everything else            ->  skip (structural artifact)
 ```
 
 `lexer.errorf()` records the error item and returns nil to terminate the current state-machine step. It does not modify `l.pos`, `l.start`, or `l.input`, so subsequent `nextItem()` calls resume lexing from the position immediately after the bad token:

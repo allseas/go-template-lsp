@@ -56,8 +56,8 @@ flowchart TD
 
 The LSP server advertises `$` and `.` as trigger characters. `suggest` checks the character at the node's start position (`sChar`) before doing any parent-type dispatch:
 
-- **`$`** → `varsToItems(ctx, true)` - all variables in scope, labels stripped of their `$` prefix.
-- **`.`** → if a resolved `LoadedType` is available, `typeFieldItems` + `typeMethodItems`; otherwise a bare `.` item.
+- **`$`** -> `varsToItems(ctx, true)` - all variables in scope, labels stripped of their `$` prefix.
+- **`.`** -> if a resolved `LoadedType` is available, `typeFieldItems` + `typeMethodItems`; otherwise a bare `.` item.
 ### Per-parent dispatch - `suggest()`
 
 For all other positions, `suggest` switches on the type of the *parent* node in the ancestor path:

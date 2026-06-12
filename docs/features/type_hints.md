@@ -22,7 +22,7 @@ flowchart TD
     A["didOpen / didChange"] --> B["ParseTypeHints - find gotype: comment"]
     B --> C{"cache hit?"}
     C -->|yes| E
-    C -->|no| D["packages.Load via go list → extract fields & methods"]
+    C -->|no| D["packages.Load via go list -> extract fields & methods"]
     D --> E["document.loadedType - used by completions, hover, definition"]
 ```
 

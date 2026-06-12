@@ -37,8 +37,8 @@ type document struct {
 type documentStore struct {
 	mu                 sync.RWMutex
 	docs               map[string]*document
-	templateInputTypes map[string]gotypes.Type // template name → expected input type (from gotype hints on {{define}} blocks)
-	uriTemplateNames   map[string][]string     // URI → template names it contributes (for cleanup on close/update)
+	templateInputTypes map[string]gotypes.Type // template name -> expected input type (from gotype hints on {{define}} blocks)
+	uriTemplateNames   map[string][]string     // URI -> template names it contributes (for cleanup on close/update)
 }
 
 var store = &documentStore{
