@@ -26,41 +26,31 @@ Named templates are stored in a registry (`templateInputTypes`), mapping templat
 
 During type analysis of a template file:
 
-```flow
-Parse document
-    │
-    ├── Extract type hints → LoadedType
-    ├── Extract {{define}} blocks → template names
-    └── Build templateInputTypes registry
-            │
-            ▼
-    For each {{template "name" arg}}:
-            │
-            ├── Look up "name" in templateInputTypes
-            ├── Resolve arg's type (via pipe analysis)
-            └── Compare: argType vs. expectedType
-                    │
-                    ├─ Match → no error
-                    └─ Mismatch → ErrorTypeInvalidTemplateArg
+```mermaid
+flowchart TD
+    A[Parse document] --> B["Extract type hints - LoadedType"]
+    A --> C["Extract define blocks - template names"]
+    A --> D[Build templateInputTypes registry]
+    D --> E["For each template call in the document"]
+    E --> F["Look up template name in templateInputTypes"]
+    F --> G["Resolve argument type via pipe analysis"]
+    G --> H{Types match?}
+    H -->|yes| I[no error]
+    H -->|no| J[ErrorTypeInvalidTemplateArg]
 ```
 
 ### 3. Error Reporting
 
 Mismatches are stored as `TypeErrors` in the typed tree and surfaced to the user as diagnostics:
 
-```flow
-collectDiagnostics(uri)
-    │
-    ├── Collect AST errors (syntax, undefined variables, etc.)
-    │
-    └── For each typed tree in document:
-            │
-            ├── Iterate typedTree.TypeErrors
-            ├── Filter for ErrorTypeInvalidTemplateArg
-            └── Convert to protocol.Diagnostic
-                    │
-                    ▼
-            User sees squiggly underline on {{ template ... }}
+```mermaid
+flowchart TD
+    A["collectDiagnostics(uri)"] --> B["Collect AST errors - syntax, undefined variables, etc."]
+    A --> C[For each typed tree in document]
+    C --> D["Iterate typedTree.TypeErrors"]
+    D --> E[Filter for ErrorTypeInvalidTemplateArg]
+    E --> F[Convert to protocol.Diagnostic]
+    F --> G["User sees squiggly underline on template call"]
 ```
 
 ## Example Scenarios

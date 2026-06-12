@@ -18,30 +18,22 @@ Completion is triggered automatically on `$` and `.`, or manually via the editor
 
 ## Request flow
 
-```
-User types / invokes completion
-        │
-        ▼
-LSP client  ── textDocument/completion ──►  server/handlers/completion.go : completionWithFallback()
-                                                        │
-                                            1. attempt completionAst()
-                                            2. on nil result → fall back to regex completion()
-                                                        │
-                                            completionAst()
-                                            ├── store.Get(uri)              look up the parsed document
-                                            ├── positionToOffset(text, pos) convert LSP position → byte offset
-                                            ├── nodeFind(root, offset)      walk the AST to find the nearest preceding node
-                                            ├── buildPath(root, cur, ctx)   reconstruct ancestor chain + collect in-scope vars
-                                            ├── isInsideTemplate(text, off) guard: skip if cursor is outside {{ }}
-                                            └── suggest(cur, parent, ctx, sChar, isInvoked)
-                                                        │
-                                                        ▼
-                                            item builder functions
-                                            (dotItem / varsToItems / builtinItems /
-                                             typeFieldItems / typeMethodItems /
-                                             pipeFilteredItems)
-                                                        │
-                                            ◄─── protocol.CompletionList ───────────
+```mermaid
+flowchart TD
+    A[User types or invokes completion] --> B[textDocument/completion]
+    B --> C["completionWithFallback()"]
+    C --> D["completionAst() - primary path"]
+    D --> E["store.Get(uri) - look up parsed document"]
+    E --> F["positionToOffset(text, pos) - LSP position to byte offset"]
+    F --> G["nodeFind(root, offset) - walk AST to nearest preceding node"]
+    G --> H["buildPath(root, cur, ctx) - ancestor chain + in-scope vars"]
+    H --> I{"isInsideTemplate()"}
+    I -->|inside| J["suggest(cur, parent, ctx, sChar, isInvoked)"]
+    I -->|outside template block| K[nil]
+    J --> L["item builders: dotItem / varsToItems / builtinItems / typeFieldItems / typeMethodItems / pipeFilteredItems"]
+    L --> M[CompletionList]
+    K --> N["completion() - regex fallback"]
+    N --> M
 ```
 
 ## Implementation details
@@ -60,14 +52,15 @@ completionWithFallback()
 
 `completionAst` (`completion.go`) builds the full context before producing any items:
 
-```
-completionAst()
- ├── store.Get(uri)                   look up the parsed document
- ├── positionToOffset(text, pos)      convert LSP position → byte offset
- ├── nodeFind(root, offset)           walk the AST to find the nearest preceding node
- ├── buildPath(root, curNode, ctx)    reconstruct ancestor chain; populates ctx.Path, ctx.Vars, ctx.Pipe, ctx.DotType
- ├── isInsideTemplate(text, offset)   bail out if the cursor is not inside {{ … }}
- └── suggest(cur, parent, ctx, …)    dispatch to item builders
+```mermaid
+flowchart TD
+    A["completionAst()"] --> B["store.Get(uri) - look up parsed document"]
+    B --> C["positionToOffset(text, pos) - LSP position to byte offset"]
+    C --> D["nodeFind(root, offset) - walk AST to nearest preceding node"]
+    D --> E["buildPath(root, curNode, ctx) - populate ctx.Path, ctx.Vars, ctx.Pipe, ctx.DotType"]
+    E --> F{"isInsideTemplate(text, offset)"}
+    F -->|outside template block| G[return nil]
+    F -->|inside| H["suggest(cur, parent, ctx, …) - dispatch to item builders"]
 ```
 
 ### Trigger-character shortcuts

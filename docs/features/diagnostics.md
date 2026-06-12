@@ -17,34 +17,25 @@ Diagnostics report errors in template files as squiggly underlines. They are pub
 
 ## Request flow
 
-```
-Document opened / changed
-        │
-        ▼
-handlers/documents.go : onOpen() / onChange()
-        │
-        ▼
-handlers/diagnostics.go : publishDiagnostics()
-        │
-        ├── collectDiagnostics(text, uri)
-        │       │
-        │       ├── store.Get(uri)          re-use already-parsed tree if available
-        │       ├── tryParse(text)          otherwise parse with ParsePartial mode
-        │       └── walkAndAnalyze(root, text, ctx, visited, analyzeNode)
-        │               │
-        │               └── analyzeNode(node, text, ctx)   called for every AST node
-        │                       │
-        │                       ├── declareNode()           record variable declarations
-        │                       └── switch node type
-        │                               ├── UndefinedNode   → error from parser (see below)
-        │                               ├── ActionNode      → checkPipeUsage()
-        │                               ├── RangeNode       → checkPipeUsage()
-        │                               ├── IfNode          → checkPipeUsage()
-        │                               ├── WithNode        → checkPipeUsage()
-        │                               └── CommandNode     → unknown function check
-        │
-        ▼
-ctx.Notify(publishDiagnostics, diagnostics)
+```mermaid
+flowchart TD
+    A[Document opened or changed] --> B["documents.go: onOpen() / onChange()"]
+    B --> C["diagnostics.go: publishDiagnostics()"]
+    C --> D["collectDiagnostics(text, uri)"]
+    D --> E{"Parsed tree in store?"}
+    E -->|yes| F["store.Get(uri) - reuse cached tree"]
+    E -->|no| G["tryParse(text) - ParsePartial mode"]
+    F --> H["walkAndAnalyze(root, text, ctx, analyzeNode)"]
+    G --> H
+    H --> I["analyzeNode() - called for every AST node"]
+    I --> J["declareNode() - record variable declarations"]
+    I --> K{Node type}
+    K -->|UndefinedNode| L[error from parser]
+    K -->|"ActionNode / RangeNode / IfNode / WithNode"| M["checkPipeUsage()"]
+    K -->|CommandNode| N[unknown function check]
+    L --> O["ctx.Notify: publishDiagnostics"]
+    M --> O
+    N --> O
 ```
 
 ## UndefinedNode

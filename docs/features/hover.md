@@ -4,41 +4,45 @@ The hover provider gives contextual documentation when the user holds the cursor
 
 ## What the user sees
 
-| Cursor position                        | Tooltip                                                                      |
-|----------------------------------------|------------------------------------------------------------------------------|
-| `{{ `**`if`**` .IsAdmin }}`            | **If Branch** - conditional branch executed if `.IsAdmin` evaluates to true  |
-| `{{ `**`range`**` $i, $v := .Items }}` | **Range Branch** - branch executed for each item in a collection             |
-| `{{ range `**`$i`**`, $v := .Items }}` | **Index variable** - serves as the index variable in the range loop          |
-| `{{ range $i, `**`$v`**` := .Items }}` | **Variable** - `$v`                                                          |
-| `{{- end -}}`                          | **End Tag** - marks the end of `with`, which started at line 3               |
-| `{{- else }}`                          | **Else Branch** - marks the else branch of `if` statement starting at line 5 |
-| `.Name`                                | **Field Access** - accesses the `Name` field of the current context          |
-| `and` / `or` / `not` / `len`           | Dedicated descriptions for each built-in function                            |
-| `"hello"`                              | **String literal** - a literal string value                                  |
-| `42`                                   | **Number literal** - a literal numeric value                                 |
-| `nil`                                  | **Nil literal** - represents a nil value                                     |
+| Cursor position                  | Tooltip                                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `{{ if  .IsAdmin }}`             | `if .IsAdmin` - If the value of the pipeline is empty, no output is generated; Otherwise, inside is executed.              |
+| `{{  range  $i, $v := .Items }}` | `range $i, $v := .Items` - Branch executed for each item in a collection.                                                  |
+| `{{  with  .Value }}`            | `with .Value` - Branch executed with a new context.                                                                        |
+| `{{ range  $i , $v := .Items }}` | `var $i int` - Serves as the index variable in the `range` loop, representing the current iteration count.                 |
+| `{{ range $i,  $v  := .Items }}` | `var $v Type` (or `(unknown)` if not resolvable)                                                                           |
+| `{{- end -}}`                    | `end` - From `` `if` `` / `` `range` `` / `` `with` `` at line N                                                           |
+| `{{- else }}`                    | `else` - From `` `if` `` / `` `range` `` / `` `with` `` at line N                                                          |
+| `.`                              | Returns the current context.                                                                                               |
+| `.Name`                          | `field .Name` - Accesses the `Name` field of the `.` context.                                                              |
+| `len`                            | A built-in function that returns the length of its argument.                                                               |
+| `and`                            | A built-in function that returns the first argument if it is false, and the last argument otherwise.                       |
+| `or`                             | A built-in function that returns the first argument if it is true, and the last argument otherwise.                        |
+| `not`                            | A built-in function that returns the boolean negation of its argument.                                                     |
+| Other identifiers                | Represents an identifier in a command or action.                                                                           |
+| `nil`                            | `nil` is a predeclared identifier representing the zero value for a pointer, channel, func, interface, map, or slice type. |
 
 All tooltips are rendered as Markdown.
 They are defined separately from the provided code as format strings, which are later injected with the information specific to the hovered over node
 
 ## Request flow
 
-```
-User hover
-        │
-        ▼
-LSP client  ──── textDocument/hover ────►  server/handlers/hover.go : hover()
-                                                      │
-                                          1. look up document in store
-                                          3. walk AST to find node at position
-                                          4. check for {{end}} / {{else}} special case
-                                          5. dispatch to buildHoverContent()
-                                                      │
-                                                      ▼
-                                          server/handlers/hover_messages.go
-                                          (format Markdown string)
-                                                      │
-                                          ◄───── protocol.Hover ──────────────
+```mermaid
+flowchart TD
+    A[User hover] --> B[textDocument/hover]
+    B --> C["hover.go: hover()"]
+    C --> D["store.Get(uri) - look up document"]
+    D --> E["positionToOffset(text, pos) - LSP position to byte offset"]
+    E --> F["nodeFind(root, offset) - find node at position"]
+    F --> G{"end tag at cursor?"}
+    G -->|yes| H["endTagHover() - see below"]
+    G -->|no| I{"else tag at cursor?"}
+    I -->|yes| J["elseNodeHover() - see below"]
+    I -->|no| K["buildHoverContent(node) - type-switch dispatch"]
+    H --> L["hover_messages.go - format Markdown string"]
+    J --> L
+    K --> L
+    L --> M[protocol.Hover]
 ```
 
 ## Implementation details
@@ -47,14 +51,16 @@ LSP client  ──── textDocument/hover ────►  server/handlers/hov
 
 `hover.go:16` is the LSP handler registered for `textDocument/hover`. It receives a `HoverParams` value containing the document URI and the cursor position as `{line, character}`
 
-```
-hover()
- ├── store.Get(uri)                   look up the parsed document
- ├── positionToOffset(text, pos)      convert LSP position → byte offset
- ├── nodeFind(root, offset)           walk the AST to find the nearest preceeding node
- ├── endTagHover(...)                 special handling - see below
- ├── elseNodeHover(...)               special handling - see below
- └── buildHoverContent(node, hover)   type-switch dispatch
+```mermaid
+flowchart TD
+    A["hover()"] --> B["store.Get(uri) - look up parsed document"]
+    B --> C["positionToOffset(text, pos) - LSP position to byte offset"]
+    C --> D["nodeFind(root, offset) - find nearest preceding node"]
+    D --> E{"end tag at cursor?"}
+    E -->|yes| F["endTagHover(…) - special handling, see below"]
+    E -->|no| G{"else tag at cursor?"}
+    G -->|yes| H["elseNodeHover(…) - special handling, see below"]
+    G -->|no| I["buildHoverContent(node, hover) - type-switch dispatch"]
 ```
 
 ### Special case: `{{end}}` hover

@@ -17,24 +17,20 @@ Any of the following forms are recognised:
 
 ## Resolution flow
 
-```
-didOpen / didChange
-        │
-        ▼
-store.Set(uri, text)
- ├── ParseTypeHints(text)               scan for gotype: comments → []TypeHint
- └── CachedLoadTypeFromHint(hint, root) return cached result or load fresh
-          │                             (cache is keyed by hint + workspaceRoot)
-          │ cache miss only:
-          ├── splitTypeHint()            split "pkg/path.TypeName" → (importPath, typeName)
-          ├── packages.Load()            load the package's type information
-          ├── pkg.Types.Scope().Lookup(typeName)   find the named type in scope
-          ├── structFields(named)        collect exported struct fields → []TypeField
-          └── namedMethods(named)        collect eligible exported methods → []MethodType
-                    │
-                    ▼
-          document.loadedType (*LoadedType)
-          (consumed by completionAst and buildPathChildren)
+```mermaid
+flowchart TD
+    A["didOpen / didChange"] --> B["store.Set(uri, text)"]
+    B --> C["ParseTypeHints(text) - scan for gotype: comments"]
+    B --> D["CachedLoadTypeFromHint(hint, root)"]
+    D --> E{"Cache hit?"}
+    E -->|yes| J
+    E -->|"no (cache miss)"| F["splitTypeHint() - pkg/path.TypeName to importPath + typeName"]
+    F --> G["packages.Load() - load package type info via go list"]
+    G --> H["pkg.Types.Scope().Lookup(typeName)"]
+    H --> I1["structFields(named) - exported struct fields"]
+    H --> I2["namedMethods(named) - eligible exported methods"]
+    I1 --> J["document.loadedType - consumed by completionAst and buildPathChildren"]
+    I2 --> J
 ```
 
 ### Caching

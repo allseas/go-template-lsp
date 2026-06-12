@@ -36,44 +36,31 @@ The next `FuncMap` composite literal encountered after the comment is the one ha
 
 ### Initial load (LSP initialize)
 
-```
-LSP Initialize
-        │
-        ▼
-types.LoadGlobalFuncs(workspaceRoot)
- ├── packages.Load("./...", NeedName|NeedFiles|NeedSyntax|NeedTypes|NeedTypesInfo|NeedImports)
- └── for each file:
-        ├── collectFuncMapLits(file)               → []*ast.CompositeLit
-        └── for each //tmpl:func "global" comment:
-              ├── nextFuncMap(lits, comment.End)   pick next literal in source order
-              └── extractFuncMapInto(lit, info)    "name": expr → resolve expr → *types.Func
-                       │
-                       ▼
-        types.SetGlobalFuncs(map[string]*types.Func)   (process-wide cache)
-                       │
-                       ▼
-documentStore.Set → buildTypedTree → types.NewTree(parse, types.GlobalFuncs(), …)
-                       │
-                       ▼
-        analyseIdentifier resolves global names to their *types.Func
-        completionAst / builtinItems() appends GlobalFuncs() keys to completion list
+```mermaid
+flowchart TD
+    A[LSP Initialize] --> B["types.LoadGlobalFuncs(workspaceRoot)"]
+    B --> C["packages.Load - NeedName, NeedFiles, NeedSyntax, NeedTypes, NeedTypesInfo, NeedImports"]
+    C --> D["collectFuncMapLits(file) - find FuncMap composite literals"]
+    D --> E["nextFuncMap(lits, comment.End) - pick next literal after //tmpl:func global comment"]
+    E --> F["extractFuncMapInto(lit, info) - resolve name: expr to *types.Func"]
+    F --> G["types.SetGlobalFuncs - update process-wide cache"]
+    G --> H["documentStore.Set → buildTypedTree → types.NewTree(parse, GlobalFuncs(), …)"]
+    H --> I["analyseIdentifier resolves global names to *types.Func"]
+    H --> J["builtinItems() appends GlobalFuncs() keys to completion list"]
 ```
 
 ### Hot reload (workspace/didChangeWatchedFiles)
 
-```
-client sends workspace/didChangeWatchedFiles (any *.go change)
-        │
-        ▼
-DidChangeWatchedFiles handler
- ├── anyGoChange(changes)  - filter non-Go events
- ├── types.LoadGlobalFuncs(workspaceRoot)  - re-scan
- ├── types.SetGlobalFuncs(funcs)          - update cache
- └── RefreshAllDocuments(ctx)
-          ├── store.snapshot()            - get (uri, text) pairs without holding lock
-          └── for each open document:
-               ├── store.Set(uri, text)   - rebuilds typed tree with new funcs
-               └── publishDiagnostics     - re-runs diagnostics with updated cache
+```mermaid
+flowchart TD
+    A["workspace/didChangeWatchedFiles - any .go change"] --> B[DidChangeWatchedFiles handler]
+    B --> C["anyGoChange(changes) - filter non-Go events"]
+    C --> D["types.LoadGlobalFuncs(workspaceRoot) - re-scan"]
+    D --> E["types.SetGlobalFuncs(funcs) - update cache"]
+    E --> F["RefreshAllDocuments(ctx)"]
+    F --> G["store.snapshot() - get uri/text pairs without holding lock"]
+    G --> H["store.Set(uri, text) - rebuild typed tree with new funcs"]
+    H --> I["publishDiagnostics - re-run diagnostics with updated cache"]
 ```
 
 ## Implementation details
