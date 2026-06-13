@@ -31,9 +31,22 @@ interface DiagnosticsTestCase {
 async function getDiagnosticsFor(
     filename: string,
     content: string,
+    expectedMinCount = 1,
+    timeoutMs = 5000,
+    intervalMs = 100,
 ): Promise<vscode.Diagnostic[]> {
     const { tmplUri } = await createDocument(filename, content);
     try {
+        if (expectedMinCount === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            return vscode.languages.getDiagnostics(tmplUri);
+        }
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            const diags = vscode.languages.getDiagnostics(tmplUri);
+            if (diags.length >= expectedMinCount) return diags;
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        }
         return vscode.languages.getDiagnostics(tmplUri);
     } finally {
         cleanupDocument(tmplUri);
@@ -52,7 +65,13 @@ suite("Diagnostics Test Suite", () => {
     for (const tc of testCases) {
         test(tc.name, async () => {
             const fileName = `diagnostics-${tc.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.tmpl`;
-            const diags = await getDiagnosticsFor(fileName, tc.content);
+            const expectedMinCount =
+                tc.expected.count ?? tc.expected.minCount ?? 1;
+            const diags = await getDiagnosticsFor(
+                fileName,
+                tc.content,
+                expectedMinCount,
+            );
 
             if (tc.expected.count !== undefined) {
                 assert.strictEqual(
