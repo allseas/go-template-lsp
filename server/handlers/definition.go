@@ -2,8 +2,8 @@ package handlers
 
 import (
 	gotypes "go/types"
-	"path/filepath"
 	"text-template-server/types"
+	"text-template-server/utils"
 
 	parse "text-template-parser"
 
@@ -159,13 +159,8 @@ func definitionField(loadedType *types.Tree, target *parse.FieldNode, offset int
 			} else {
 				log.Debug().Any("fpos", fpos).Msg("Definition: fpos is not > 0")
 			}
-			filePath := filepath.ToSlash(fpos.Filename)
-			if len(filePath) > 0 && filePath[0] != '/' {
-				filePath = "/" + filePath
-			}
-
 			return protocol.Location{
-				URI: "file://" + filePath,
+				URI: utils.FilePathToURI(fpos.Filename),
 				Range: protocol.Range{
 					Start: protocol.Position{Line: line, Character: char},
 					End:   protocol.Position{Line: line, Character: char},
@@ -218,13 +213,8 @@ func definitionIdentifier(target *parse.IdentifierNode) (any, error) {
 		log.Debug().Any("fpos", fpos).Msg("Definition: fpos is not > 0")
 	}
 
-	filePath := filepath.ToSlash(fpos.Filename)
-	if len(filePath) > 0 && filePath[0] != '/' {
-		filePath = "/" + filePath
-	}
-
 	return protocol.Location{
-		URI: "file://" + filePath,
+		URI: utils.FilePathToURI(fpos.Filename),
 		Range: protocol.Range{
 			Start: protocol.Position{Line: line, Character: char},
 			End:   protocol.Position{Line: line, Character: char},
