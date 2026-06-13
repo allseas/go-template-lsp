@@ -97,5 +97,15 @@
         { "index": 1, "severity": "error", "messageContains": "badTwo", "rangeStartLine": 1 }
       ]
     }
+  },
+  {
+    "name": "Diagnostics on incorrect if",
+    "content": "{{ if .Condition }}\nContent without closing tag\n",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "error", "messageContains": "if" }
+      ]
+    }
   }
 ]
