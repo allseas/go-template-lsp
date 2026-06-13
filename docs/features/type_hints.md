@@ -4,37 +4,26 @@ Type hints let the language server resolve a real Go type against the template's
 
 ## What the user writes
 
-```
+```go
 {{- /*gotype: github.com/example/myapp/models.User*/ -}}
 ```
 
 Any of the following forms are recognised:
 
-| Hint form | Resolved as |
-|---|---|
-| `{{/*gotype: models.User*/}}` | type `User` in local package `models` |
-| `{{- /* gotype: models.User */ -}}` | same — trimming dashes and surrounding whitespace are ignored |
+| Hint form                           | Resolved as                                                   |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `{{/*gotype: models.User*/}}`       | type `User` in local package `models`                         |
+| `{{- /* gotype: models.User */ -}}` | same - trimming dashes and surrounding whitespace are ignored |
 
 ## Resolution flow
 
-```
-didOpen / didChange
-        │
-        ▼
-store.Set(uri, text)
- ├── ParseTypeHints(text)               scan for gotype: comments → []TypeHint
- └── CachedLoadTypeFromHint(hint, root) return cached result or load fresh
-          │                             (cache is keyed by hint + workspaceRoot)
-          │ cache miss only:
-          ├── splitTypeHint()            split "pkg/path.TypeName" → (importPath, typeName)
-          ├── packages.Load()            load the package's type information
-          ├── pkg.Types.Scope().Lookup(typeName)   find the named type in scope
-          ├── structFields(named)        collect exported struct fields → []TypeField
-          └── namedMethods(named)        collect eligible exported methods → []MethodType
-                    │
-                    ▼
-          document.loadedType (*LoadedType)
-          (consumed by completionAst and buildPathChildren)
+```mermaid
+flowchart TD
+    A["didOpen / didChange"] --> B["ParseTypeHints - find gotype: comment"]
+    B --> C{"cache hit?"}
+    C -->|yes| E
+    C -->|no| D["packages.Load via go list -> extract fields & methods"]
+    D --> E["document.loadedType - used by completions, hover, definition"]
 ```
 
 ### Caching
@@ -49,14 +38,14 @@ A single template file may contain any number of named sub-templates introduced 
 
 ### Where to place the hint
 
-| Block | Where to put the hint |
-|---|---|
-| Root template | First line of the file |
-| Named define | Line immediately after the opening `{{define "name"}}` directive |
+| Block         | Where to put the hint                                            |
+| ------------- | ---------------------------------------------------------------- |
+| Root template | First line of the file                                           |
+| Named define  | Line immediately after the opening `{{define "name"}}` directive |
 
 Example:
 
-```
+```go
 {{- /*gotype: github.com/example/myapp/models.Address*/ -}}
 {{ .Street }}
 
@@ -79,7 +68,7 @@ The parser produces one `*parse.Tree` per `{{define}}` block plus one for the ro
 
 1. Iterates every tree and looks up the hint for that tree (`hintTypeForTree`).
 2. Calls `CachedLoadTypeFromHint` for each tree that has a hint, returning a cached `*Tree` if the same hint was already resolved, or invoking `packages.Load` on a cache miss. Results are stored in a per-tree map (`loadedTypes`/`typedTrees`).
-3. At query time (`hover`, `completion`, `definition`, …), `treeAt(offset)` identifies which tree owns the cursor position, and the correct per-tree type is used — independently of every other block in the same file.
+3. At query time (`hover`, `completion`, `definition`, …), `treeAt(offset)` identifies which tree owns the cursor position, and the correct per-tree type is used - independently of every other block in the same file.
 
 Because multiple `{{define}}` blocks in the same file (or across different files) often reference the same model type, caching is especially beneficial here: a file with three defines pointing to the same package only triggers one `go list` invocation instead of three.
 

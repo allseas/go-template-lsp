@@ -2,6 +2,7 @@ package handlers
 
 import (
 	gotypes "go/types"
+	"path/filepath"
 
 	parse "text-template-parser"
 
@@ -125,8 +126,13 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 				} else {
 					log.Debug().Any("fpos", fpos).Msg("Definition: fpos is not > 0")
 				}
+				filePath := filepath.ToSlash(fpos.Filename)
+				if len(filePath) > 0 && filePath[0] != '/' {
+					filePath = "/" + filePath
+				}
+
 				return protocol.Location{
-					URI: "file://" + fpos.Filename,
+					URI: "file://" + filePath,
 					Range: protocol.Range{
 						Start: protocol.Position{Line: line, Character: char},
 						End:   protocol.Position{Line: line, Character: char},

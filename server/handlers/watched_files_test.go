@@ -111,7 +111,7 @@ func TestDidChangeWatchedFiles_PercentEncodedGoFile(t *testing.T) {
 		Notify: func(_ string, _ any) {},
 	}
 
-	// Use a percent-encoded URI—anyGoChange should still detect it as .go
+	// Use a percent-encoded URI-anyGoChange should still detect it as .go
 	params := &protocol.DidChangeWatchedFilesParams{
 		Changes: []protocol.FileEvent{
 			{URI: "file:///test%20dir/main.go", Type: protocol.FileChangeTypeChanged},

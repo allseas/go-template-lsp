@@ -1,6 +1,6 @@
 {{- /*
   no-arg-call.tmpl
-  Demonstrates {{template "name"}} with no argument — no type-check diagnostic
+  Demonstrates {{template "name"}} with no argument - no type-check diagnostic
   should be emitted even when the target block has a gotype hint.
 */ -}}
 
@@ -10,6 +10,6 @@ Name:  {{ .Name }}
 {{- end -}}
 
 {{- define "wrapper" -}}
-{{/* No argument — passing nil dot, so no type check applies */}}
+{{/* No argument - passing nil dot, so no type check applies */}}
 {{ template "person-card" }}
 {{- end -}}

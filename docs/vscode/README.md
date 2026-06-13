@@ -1,10 +1,6 @@
 # VS Code Extension Architecture
 
-This document describes the architecture of the VS Code extension and provides guides for extending it with new features.
-
-## Overview
-
-The VS Code extension connects the editor to the language server via the Language Server Protocol (LSP). It handles:
+The VS Code extension connects the editor to the language server via LSP. It handles:
 
 - Launching the appropriate server binary for the platform
 - Watching template files for changes
@@ -79,12 +75,6 @@ The extension activates when:
 2. The first template file is edited
 
 This is controlled by `activationEvents` in `package.json`.
-
-## Design Decisions
-
-### Binary Transport
-
-The extension runs the language server as a subprocess and communicates via stdio (standard input/output). This is the recommended approach for LSP in VS Code.
 
 ## Adding a New Feature
 

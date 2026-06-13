@@ -74,7 +74,7 @@ fun getEffectiveState(): AppSettings.State {
 
 ### 3. Add UI controls
 
-**Application-level** — in `AppSettingsConfigurable.kt`:
+**Application-level** - in `AppSettingsConfigurable.kt`:
 
 ```kotlin
 override fun createPanel() = panel {
@@ -87,7 +87,7 @@ override fun createPanel() = panel {
 }
 ```
 
-**Project-level** — in `ProjectSettingsConfigurable.kt`:
+**Project-level** - in `ProjectSettingsConfigurable.kt`:
 
 ```kotlin
 override fun createPanel() = panel {

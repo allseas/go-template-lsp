@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
+	lspuri "go.lsp.dev/uri"
 )
 
 // WorkspaceRoot is the path to the workspace root
@@ -37,8 +39,8 @@ type document struct {
 type documentStore struct {
 	mu                 sync.RWMutex
 	docs               map[string]*document
-	templateInputTypes map[string]gotypes.Type // template name → expected input type (from gotype hints on {{define}} blocks)
-	uriTemplateNames   map[string][]string     // URI → template names it contributes (for cleanup on close/update)
+	templateInputTypes map[string]gotypes.Type // template name -> expected input type (from gotype hints on {{define}} blocks)
+	uriTemplateNames   map[string][]string     // URI -> template names it contributes (for cleanup on close/update)
 }
 
 var store = &documentStore{
@@ -50,26 +52,31 @@ var store = &documentStore{
 func (s *documentStore) Set(uri, text string) {
 	tree, treeSet, err := parseTemplate(uri, text)
 
+	// Try the LSP workspace root first (legacy behaviour), then fall back to
+	// the directory containing the .tmpl file itself. This means a user can
+	// open a parent folder as the workspace and still get type resolution as
+	// long as the file lives inside a Go module.
+	loadDirs := []string{WorkspaceRoot, uriDir(uri)}
+
 	loadedTypes := make(map[string]*types.Tree)
-	if WorkspaceRoot != "" {
-		for name, tr := range treeSet {
-			isRoot := tree != nil && tr == tree
-			hint := hintTypeForTree(text, tr, isRoot)
-			if hint == "" {
+	for name, tr := range treeSet {
+		isRoot := tree != nil && tr == tree
+		hint := hintTypeForTree(text, tr, isRoot)
+		if hint == "" {
+			continue
+		}
+		for _, dir := range loadDirs {
+			if dir == "" {
 				continue
 			}
-			loaded, lerr := types.CachedLoadTypeFromHint(hint, WorkspaceRoot)
+			loaded, lerr := types.CachedLoadTypeFromHint(hint, dir)
 			if lerr != nil {
-				log.Warn().Str("hint", hint).Err(lerr).Msg("type hint load failed")
+				log.Debug().Str("hint", hint).Str("dir", dir).Err(lerr).Msg("type hint load failed")
 				continue
 			}
 			loadedTypes[name] = loaded
+			break
 		}
-	}
-
-	var lt *types.Tree
-	if tree != nil {
-		lt = loadedTypes[tree.Name]
 	}
 
 	// Load gotype hints from {{define}} blocks before taking the lock (type loading can be slow).
@@ -101,9 +108,6 @@ func (s *documentStore) Set(uri, text string) {
 			treeSet = existing.trees
 			if existing.loadedTypes != nil {
 				loadedTypes = existing.loadedTypes
-			}
-			if lt == nil {
-				lt = existing.loadedType
 			}
 		}
 	}
@@ -145,7 +149,6 @@ func (s *documentStore) Set(uri, text string) {
 		text:        text,
 		tree:        tree,
 		trees:       treeSet,
-		loadedType:  lt,
 		typedTree:   typed,
 		loadedTypes: loadedTypes,
 		typedTrees:  typedTrees,
@@ -174,6 +177,7 @@ func buildTypedTree(
 	if lt != nil {
 		t.DotType = lt.DotType
 		t.Pkg = lt.Pkg
+		t.Fset = lt.Fset
 	}
 	return &t
 }
@@ -208,6 +212,9 @@ func (d *document) treeAt(offset parse.Pos) *parse.Tree {
 
 // loadedTypeAt returns the loaded type for the tree that covers offset.
 // Falls back to d.loadedType for legacy callers that did not populate loadedTypes.
+//
+// Deprecated: prefer typedTreeAt — the typed tree carries DotType / Pkg / Fset
+// just like the raw loaded type, and is the new path for type-aware features.
 func (d *document) loadedTypeAt(offset parse.Pos) *types.Tree {
 	if d == nil {
 		return nil
@@ -646,17 +653,54 @@ func WasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
 	return false
 }
 
-// ResolveVarInfo resolves a variable node to its value and Go type
+// ResolveVarInfo resolves a variable node to its value and Go type.
+//
+// The Go type is looked up by finding the corresponding node in the analysed
+// (typed) tree. The analysis stage attaches a `typ` to every VariableNode it
+// produces (see server/types/analyse.go: analyseVariable / analysePipe), so we
+// just need to locate the typed node that lives at the same source position
+// as `target`
+//
+// Literal values are not currently tracked by the analyser, so the returned
+// `value` is always nil. The signature is kept so the caller can render
+// either piece of information once value tracking is added.
 func ResolveVarInfo(
 	_ parse.Node,
 	target *parse.VariableNode,
-	_ *types.Tree,
+	typedTree *types.Tree,
 ) (value any, goType gotypes.Type) {
 	if target == nil || len(target.Ident) == 0 {
 		return nil, nil
 	}
+	if typedTree == nil || typedTree.Root == nil {
+		return nil, nil
+	}
 
-	// TODO: add actual functionality, using the type tree
+	found := types.NodeFind(typedTree.Root, types.Pos(target.Position()))
+	v, ok := found.(*types.VariableNode)
+	if !ok || v == nil {
+		return nil, nil
+	}
+	// Guard against accidental position collisions with a different variable.
+	if len(v.Ident) == 0 || len(target.Ident) == 0 || v.Ident[0] != target.Ident[0] {
+		return nil, nil
+	}
+	return nil, v.ValueType()
+}
 
-	return nil, nil
+// uriDir returns the local filesystem directory that contains the file
+// referenced by uri, or "" if the uri is not a parseable local file URI.
+// Used as a fallback root when resolving gotype hints, so type resolution
+// works even when the LSP workspace root is an ancestor of the file's
+// Go module instead of the module root itself.
+func uriDir(uri string) string {
+	u, err := lspuri.Parse(uri)
+	if err != nil {
+		return ""
+	}
+	path := u.Filename()
+	if path == "" {
+		return ""
+	}
+	return filepath.Dir(path)
 }
