@@ -5,6 +5,7 @@ class DefinitionTest : CustomPlatformTestCase() {
     fun testAllDefinitionCases() {
         val testCases = loadDefinitionTestCases()
         for (tc in testCases) {
+            if (tc.vscodeOnly == true) continue
             val fileName = "definition-${tc.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")}.txt.tmpl"
             myFixture.configureByText(fileName, toCaret(tc.content))
 

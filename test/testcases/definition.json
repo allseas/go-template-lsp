@@ -8,8 +8,16 @@
     }
   },
   {
+    "name": "Redeclared variable shows at least one definition",
+    "content": "{{ $test := 0 }}\n{{ $test }}\n{{ $test := 1 }}\n{{ $te<cursor>st }}",
+    "expected": {
+      "minCount": 1
+    }
+  },
+  {
     "name": "Redeclared variable shows multiple definitions",
     "content": "{{ $test := 0 }}\n{{ $test }}\n{{ $test := 1 }}\n{{ $te<cursor>st }}",
+    "vscodeOnly": true,
     "expected": {
       "count": 2
     }

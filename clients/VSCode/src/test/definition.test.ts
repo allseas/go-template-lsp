@@ -15,6 +15,7 @@ const testCasesDir = path.join(__dirname, "../../../../test/testcases");
 interface DefinitionTestCase {
     name: string;
     content: string;
+    vscodeOnly?: boolean;
     expected: {
         targetLine?: number;
         count?: number;

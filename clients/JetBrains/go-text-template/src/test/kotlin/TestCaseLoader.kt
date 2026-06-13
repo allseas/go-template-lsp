@@ -13,6 +13,7 @@ data class DefinitionTestCase(
     val name: String,
     val content: String,
     val expected: DefinitionExpected,
+    val vscodeOnly: Boolean? = null,
 )
 
 data class DefinitionExpected(
@@ -21,6 +22,7 @@ data class DefinitionExpected(
     val minCount: Int? = null,
     val noResult: Boolean? = null,
 )
+
 
 private val gson = Gson()
 
