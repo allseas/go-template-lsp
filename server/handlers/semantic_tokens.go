@@ -66,12 +66,16 @@ func SemanticTokensFull(
 	params *protocol.SemanticTokensParams,
 ) (*protocol.SemanticTokens, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || doc.typedTree == nil || doc.typedTree.Root == nil {
+	if !ok {
 		return nil, nil
 	}
 
 	var tokens []rawToken
-	walkSemanticNode(doc.typedTree.Root, doc.text, &tokens)
+	for _, tt := range doc.typedTrees {
+		if tt != nil && tt.Root != nil {
+			walkSemanticNode(tt.Root, doc.text, &tokens)
+		}
+	}
 
 	sort.Slice(tokens, func(i, j int) bool {
 		return tokens[i].startByte < tokens[j].startByte
