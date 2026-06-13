@@ -1,0 +1,25 @@
+[
+  {
+    "name": "Variable definition jumps to declaration",
+    "content": "{{ $test := 0 }}\n{{ $te<cursor>st }}",
+    "expected": {
+      "targetLine": 0,
+      "minCount": 1
+    }
+  },
+  {
+    "name": "Redeclared variable shows multiple definitions",
+    "content": "{{ $test := 0 }}\n{{ $test }}\n{{ $test := 1 }}\n{{ $te<cursor>st }}",
+    "expected": {
+      "count": 2
+    }
+  },
+  {
+    "name": "Dot in range jumps to range pipe",
+    "content": "{{- range .Join }}\n{{ <cursor>. }}\n{{- end }}",
+    "expected": {
+      "targetLine": 0,
+      "minCount": 1
+    }
+  }
+]

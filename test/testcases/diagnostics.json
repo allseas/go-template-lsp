@@ -1,0 +1,101 @@
+[
+  {
+    "name": "Diagnostics on incorrect syntax",
+    "content": "{{ {}}}}}{{{}}}}\nabc\n",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "error" }
+      ]
+    }
+  },
+  {
+    "name": "No diagnostics on correct file",
+    "content": "{{/*gotype: cg/model.Order*/}}\n\n{{ $test := 0 }}\n\n{{ .Address.Country }}\n\n{{ $test }}\n{{ $test }}{{$variable := \"abc\"}}{{ $variable }}",
+    "expected": {
+      "count": 0
+    }
+  },
+  {
+    "name": "Diagnostics on missing closing tag",
+    "content": "{{ if .Condition }}\nContent without closing tag\n",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "error" }
+      ]
+    }
+  },
+  {
+    "name": "Diagnostics on variable redeclaration",
+    "content": "{{ $variable := 0 }}\n{{ $variable := 1 }}\n",
+    "expected": {
+      "count": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "warning", "message": "2:4: duplicate variable declaration: $variable" }
+      ]
+    }
+  },
+  {
+    "name": "Diagnostics on undefined variable usage",
+    "content": "{{ $UndefinedVariable }}\n",
+    "expected": {
+      "count": 1,
+      "diagnostics": [
+        {
+          "index": 0,
+          "severity": "error",
+          "message": "template: t:1:4: undefined variable \"$UndefinedVariable\"",
+          "source": "text-template-support"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Diagnostics on empty action",
+    "content": "{{ }}",
+    "expected": {
+      "count": 1,
+      "diagnostics": [
+        {
+          "index": 0,
+          "severity": "error",
+          "messageContains": "missing value",
+          "rangeStart": { "line": 0, "character": 0 },
+          "rangeEnd": { "line": 0, "character": 5 }
+        }
+      ]
+    }
+  },
+  {
+    "name": "Diagnostics on unknown function",
+    "content": "{{ unknownFunc }}",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "error", "messageContains": "unknownFunc" }
+      ]
+    }
+  },
+  {
+    "name": "Diagnostics on undeclared variable",
+    "content": "{{ $x }}\n",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "error", "messageContains": "$x" }
+      ]
+    }
+  },
+  {
+    "name": "Multiple diagnostics in one file",
+    "content": "{{ badOne }}\n{{ badTwo }}\n",
+    "expected": {
+      "minCount": 2,
+      "diagnostics": [
+        { "index": 0, "severity": "error", "messageContains": "badOne", "rangeStartLine": 0 },
+        { "index": 1, "severity": "error", "messageContains": "badTwo", "rangeStartLine": 1 }
+      ]
+    }
+  }
+]

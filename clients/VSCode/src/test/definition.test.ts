@@ -10,6 +10,37 @@ const definitionTestsSourceDir = path.join(
     __dirname,
     "../../../../test/resources/definition-tests-client",
 );
+const testCasesDir = path.join(__dirname, "../../../../test/testcases");
+
+interface DefinitionTestCase {
+    name: string;
+    content: string;
+    expected: {
+        targetLine?: number;
+        count?: number;
+        minCount?: number;
+        noResult?: boolean;
+    };
+}
+
+function extractCursor(content: string): {
+    content: string;
+    line: number;
+    character: number;
+} {
+    const marker = "<cursor>";
+    const idx = content.indexOf(marker);
+    if (idx === -1) throw new Error("No <cursor> marker found in content");
+    const before = content.slice(0, idx);
+    const lines = before.split("\n");
+    const line = lines.length - 1;
+    const character = lines[lines.length - 1].length;
+    return {
+        content: content.slice(0, idx) + content.slice(idx + marker.length),
+        line,
+        character,
+    };
+}
 
 suite("Definition Test Suite", () => {
     before(() => {
@@ -28,83 +59,56 @@ suite("Definition Test Suite", () => {
         vscode.window.showInformationMessage("All definition tests done!");
     });
 
-    test("Go to definition on variable usage jumps to declaration", async () => {
-        const { tmplUri } = await createDocument(
-            "definition-test.tmpl",
-            "{{ $test := 0 }}\n{{ $test }}",
-        );
+    const testCases: DefinitionTestCase[] = JSON.parse(
+        fs.readFileSync(path.join(testCasesDir, "definition.json"), "utf-8"),
+    );
 
-        try {
-            const definitions = await getDefinitions(
-                tmplUri,
-                new vscode.Position(1, 4),
-            );
+    for (const tc of testCases) {
+        test(tc.name, async () => {
+            const { content, line, character } = extractCursor(tc.content);
+            const fileName = `definition-${tc.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.tmpl`;
+            const { tmplUri } = await createDocument(fileName, content);
+            try {
+                const definitions = await getDefinitions(
+                    tmplUri,
+                    new vscode.Position(line, character),
+                );
 
-            assert.ok(definitions, "Definitions should be returned");
-            assert.ok(
-                definitions.length >= 1,
-                `Expected at least 1 definition, got ${definitions.length}`,
-            );
-            assert.strictEqual(
-                definitions[0].range.start.line,
-                0,
-                "Definition should be on line 0",
-            );
-        } finally {
-            cleanupDocument(tmplUri);
-        }
-    });
+                if (tc.expected.noResult) {
+                    assert.ok(
+                        !definitions || definitions.length === 0,
+                        `Expected no definitions, got ${definitions?.length}`,
+                    );
+                    return;
+                }
 
-    test("Go to definition on variable with redeclarations shows multiple", async () => {
-        const { tmplUri } = await createDocument(
-            "definition-redecl-test.tmpl",
-            "{{ $test := 0 }}\n{{ $test }}\n{{ $test := 1 }}\n{{ $test }}",
-        );
+                assert.ok(definitions, "Definitions should be returned");
 
-        try {
-            // Execute definition provider on last $test usage (line 3, char 4)
-            const definitions = await getDefinitions(
-                tmplUri,
-                new vscode.Position(3, 4),
-            );
-
-            assert.ok(definitions, "Definitions should be returned");
-            assert.strictEqual(
-                definitions.length,
-                2,
-                `Expected 2 definitions for redeclared variable, got ${definitions.length}`,
-            );
-        } finally {
-            cleanupDocument(tmplUri);
-        }
-    });
-
-    test("Go to definition on dot inside range points to range pipe", async () => {
-        const { tmplUri } = await createDocument(
-            "definition-dot-test.tmpl",
-            "{{- range .Join }}\n{{ . }}\n{{- end }}",
-        );
-
-        try {
-            const definitions = await getDefinitions(
-                tmplUri,
-                new vscode.Position(1, 3),
-            );
-
-            assert.ok(definitions, "Definitions should be returned");
-            assert.ok(
-                definitions.length >= 1,
-                `Expected at least 1 definition, got ${definitions.length}`,
-            );
-            assert.strictEqual(
-                definitions[0].range.start.line,
-                0,
-                "Definition should point to range on line 0",
-            );
-        } finally {
-            cleanupDocument(tmplUri);
-        }
-    });
+                if (tc.expected.count !== undefined) {
+                    assert.strictEqual(
+                        definitions.length,
+                        tc.expected.count,
+                        `Expected ${tc.expected.count} definitions, got ${definitions.length}`,
+                    );
+                }
+                if (tc.expected.minCount !== undefined) {
+                    assert.ok(
+                        definitions.length >= tc.expected.minCount,
+                        `Expected at least ${tc.expected.minCount} definitions, got ${definitions.length}`,
+                    );
+                }
+                if (tc.expected.targetLine !== undefined) {
+                    assert.strictEqual(
+                        definitions[0].range.start.line,
+                        tc.expected.targetLine,
+                        `Expected definition on line ${tc.expected.targetLine}`,
+                    );
+                }
+            } finally {
+                cleanupDocument(tmplUri);
+            }
+        });
+    }
 
     test("Go to definition on field jumps to struct field declaration", async () => {
         const { tmplUri } = await createDocument(

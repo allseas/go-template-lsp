@@ -2,78 +2,53 @@ import com.intellij.codeInsight.navigation.actions.GotoDeclarationAction
 import com.intellij.psi.PsiElement
 
 class DefinitionTest : CustomPlatformTestCase() {
-    fun testVariableDefinitionJumpsToDeclaration() {
-        myFixture.configureByText(
-            "test.txt.tmpl",
-            $$"{{ $test := 0 }}\n{{ $te<caret>st }}",
-        )
+    private val testCasesDir = "../../../../test/testcases"
 
-        val targets: Array<PsiElement> =
-            GotoDeclarationAction.findAllTargetElements(
-                project,
-                myFixture.editor,
-                myFixture.caretOffset,
-            )
+    fun testAllDefinitionCases() {
+        val testCases = loadDefinitionTestCases(testCasesDir)
+        for (tc in testCases) {
+            val fileName = "definition-${tc.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")}.txt.tmpl"
+            myFixture.configureByText(fileName, toCaret(tc.content))
 
-        assertNotNull("Definition targets should not be null", targets)
-        assertTrue(
-            "Expected at least 1 definition target, got ${targets.size}",
-            targets.isNotEmpty(),
-        )
+            val targets: Array<PsiElement> =
+                GotoDeclarationAction.findAllTargetElements(
+                    project,
+                    myFixture.editor,
+                    myFixture.caretOffset,
+                )
 
-        val targetOffset = targets[0].textOffset
-        val targetLine = myFixture.editor.document.getLineNumber(targetOffset)
-        assertEquals("Definition should point to line 0 (declaration)", 0, targetLine)
-    }
+            if (tc.expected.noResult == true) {
+                assertTrue(
+                    "[${tc.name}] Expected no definition targets, got ${targets.size}",
+                    targets.isEmpty(),
+                )
+                continue
+            }
 
-    fun testRedeclaredVariableShowsDefinitions() {
-        myFixture.configureByText(
-            "test-redecl.txt.tmpl",
-            $$"{{ $test := 0 }}\n{{ $test }}\n{{ $test := 1 }}\n{{ $te<caret>st }}",
-        )
+            assertNotNull("[${tc.name}] Definition targets should not be null", targets)
 
-        val targets: Array<PsiElement> =
-            GotoDeclarationAction.findAllTargetElements(
-                project,
-                myFixture.editor,
-                myFixture.caretOffset,
-            )
-
-        assertNotNull("Definition targets should not be null", targets)
-        assertTrue(
-            "Expected at least 1 definition for redeclared variable, got ${targets.size}",
-            targets.isNotEmpty(),
-        )
-
-        val targetOffset = targets[0].textOffset
-        val targetLine = myFixture.editor.document.getLineNumber(targetOffset)
-        assertTrue(
-            "Definition should point to a declaration line (0 or 2), got $targetLine",
-            targetLine == 0 || targetLine == 2,
-        )
-    }
-
-    fun testDotInRangeJumpsToRangePipe() {
-        myFixture.configureByText(
-            "test-dot.txt.tmpl",
-            "{{- range .Join }}\n{{ <caret>. }}\n{{- end }}",
-        )
-
-        val targets: Array<PsiElement> =
-            GotoDeclarationAction.findAllTargetElements(
-                project,
-                myFixture.editor,
-                myFixture.caretOffset,
-            )
-
-        assertNotNull("Definition targets should not be null", targets)
-        assertTrue(
-            "Expected at least 1 definition for dot in range, got ${targets.size}",
-            targets.isNotEmpty(),
-        )
-
-        val targetOffset = targets[0].textOffset
-        val targetLine = myFixture.editor.document.getLineNumber(targetOffset)
-        assertEquals("Definition should point to range pipe on line 0", 0, targetLine)
+            tc.expected.count?.let { count ->
+                assertEquals(
+                    "[${tc.name}] Expected $count definition targets, got ${targets.size}",
+                    count,
+                    targets.size,
+                )
+            }
+            tc.expected.minCount?.let { minCount ->
+                assertTrue(
+                    "[${tc.name}] Expected at least $minCount definition targets, got ${targets.size}",
+                    targets.size >= minCount,
+                )
+            }
+            tc.expected.targetLine?.let { expectedLine ->
+                val targetOffset = targets[0].textOffset
+                val targetLine = myFixture.editor.document.getLineNumber(targetOffset)
+                assertEquals(
+                    "[${tc.name}] Expected definition on line $expectedLine, got $targetLine",
+                    expectedLine,
+                    targetLine,
+                )
+            }
+        }
     }
 }
