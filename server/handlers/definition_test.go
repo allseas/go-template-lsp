@@ -540,3 +540,62 @@ func TestDefinitionMultiDefines(t *testing.T) {
 		})
 	}
 }
+
+func TestDefinitionFuncMapNamedFunction(t *testing.T) {
+	_, err := serverTypes.LoadGlobalFuncs("../../test/resources/funcmap-tests")
+	require.NoError(t, err)
+	defer serverTypes.SetGlobalFuncs(nil)
+
+	src := "{{ upper .Name }}"
+	uri := "file:///def-func-named.tmpl"
+	store.Set(uri, src)
+	defer store.Delete(uri)
+
+	// Position cursor on "upper" (offset 3 inside "{{ upper")
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(0, 3),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location, got %T", result)
+
+	assert.True(t, strings.HasSuffix(loc.URI, "funcs.go"),
+		"expected URI to point to funcs.go, got %s", loc.URI)
+}
+
+func TestDefinitionFuncMapInlineLiteral(t *testing.T) {
+	// "shout" is an inline literal (nil *types.Func). Definition should navigate
+	// to the string key in the FuncMap literal.
+	_, err := serverTypes.LoadGlobalFuncs("../../test/resources/funcmap-tests")
+	require.NoError(t, err)
+	defer serverTypes.SetGlobalFuncs(nil)
+
+	src := "{{ shout .Name }}"
+	uri := "file:///def-func-inline.tmpl"
+	store.Set(uri, src)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(0, 3),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location, got %T", result)
+
+	assert.True(t, strings.HasSuffix(loc.URI, "funcs.go"),
+		"expected URI to point to funcs.go, got %s", loc.URI)
+}
