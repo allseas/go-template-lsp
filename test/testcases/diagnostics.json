@@ -104,7 +104,7 @@
     "expected": {
       "minCount": 1,
       "diagnostics": [
-        { "index": 0, "severity": "error", "messageContains": "if" }
+        { "index": 0, "severity": "error", "messageContains": "unexpected EOF" }
       ]
     }
   }
