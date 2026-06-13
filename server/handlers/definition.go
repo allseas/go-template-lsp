@@ -110,20 +110,7 @@ func definitionField(
 
 	// Resolve the dot type at the cursor position from the typed tree.
 	// This accounts for dot-context changes inside range/with blocks.
-	var currentType gotypes.Type
-	if typedTree := doc.typedTreeAt(
-		parse.Pos(offset),
-	); typedTree != nil &&
-		typedTree.Root != nil {
-		if typedNode := serverTypes.NodeFind(
-			typedTree.Root,
-			serverTypes.Pos(offset),
-		); typedNode != nil {
-			if enclosingList := serverTypes.EnclosingList(typedNode); enclosingList != nil {
-				currentType = enclosingList.ValueType()
-			}
-		}
-	}
+	currentType := lookupDotContextType(doc, target)
 	if currentType == nil {
 		currentType = loadedType.DotType
 	}
