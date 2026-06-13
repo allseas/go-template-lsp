@@ -23,11 +23,11 @@ data class DefinitionExpected(
     val noResult: Boolean? = null,
 )
 
-
 private val gson = Gson()
 
 private fun loadResource(resourcePath: String): String =
-    TestCaseLoader::class.java.getResourceAsStream(resourcePath)
+    TestCaseLoader::class.java
+        .getResourceAsStream(resourcePath)
         ?.bufferedReader()
         ?.readText()
         ?: error("Resource not found: $resourcePath")

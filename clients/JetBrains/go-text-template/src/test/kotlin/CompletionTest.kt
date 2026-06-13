@@ -1,6 +1,6 @@
 import com.intellij.codeInsight.completion.CompletionType
 
-class VariableCompletionTest : CustomPlatformTestCase() {
+class CompletionTest : CustomPlatformTestCase() {
     fun testAllCompletionCases() {
         val testCases = loadCompletionTestCases()
         for (tc in testCases) {
