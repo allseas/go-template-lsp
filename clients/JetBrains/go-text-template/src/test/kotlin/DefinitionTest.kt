@@ -2,10 +2,8 @@ import com.intellij.codeInsight.navigation.actions.GotoDeclarationAction
 import com.intellij.psi.PsiElement
 
 class DefinitionTest : CustomPlatformTestCase() {
-    private val testCasesDir = "../../../../test/testcases"
-
     fun testAllDefinitionCases() {
-        val testCases = loadDefinitionTestCases(testCasesDir)
+        val testCases = loadDefinitionTestCases()
         for (tc in testCases) {
             val fileName = "definition-${tc.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")}.txt.tmpl"
             myFixture.configureByText(fileName, toCaret(tc.content))

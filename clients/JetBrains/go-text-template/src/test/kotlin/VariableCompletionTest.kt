@@ -1,10 +1,8 @@
 import com.intellij.codeInsight.completion.CompletionType
 
 class VariableCompletionTest : CustomPlatformTestCase() {
-    private val testCasesDir = "../../../../test/testcases"
-
     fun testAllCompletionCases() {
-        val testCases = loadCompletionTestCases(testCasesDir)
+        val testCases = loadCompletionTestCases()
         for (tc in testCases) {
             val fileName = "completion-${tc.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")}.txt.tmpl"
             myFixture.configureByText(fileName, toCaret(tc.content))

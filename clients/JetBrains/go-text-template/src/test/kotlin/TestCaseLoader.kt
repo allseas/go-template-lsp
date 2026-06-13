@@ -1,6 +1,5 @@
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import java.io.File
 
 data class CompletionTestCase(
     val name: String,
@@ -25,14 +24,22 @@ data class DefinitionExpected(
 
 private val gson = Gson()
 
-fun loadCompletionTestCases(testCasesDir: String): List<CompletionTestCase> {
-    val json = File("$testCasesDir/completion.json").readText()
+private fun loadResource(resourcePath: String): String =
+    TestCaseLoader::class.java.getResourceAsStream(resourcePath)
+        ?.bufferedReader()
+        ?.readText()
+        ?: error("Resource not found: $resourcePath")
+
+object TestCaseLoader
+
+fun loadCompletionTestCases(): List<CompletionTestCase> {
+    val json = loadResource("/testcases/completion.json")
     val type = object : TypeToken<List<CompletionTestCase>>() {}.type
     return gson.fromJson(json, type)
 }
 
-fun loadDefinitionTestCases(testCasesDir: String): List<DefinitionTestCase> {
-    val json = File("$testCasesDir/definition.json").readText()
+fun loadDefinitionTestCases(): List<DefinitionTestCase> {
+    val json = loadResource("/testcases/definition.json")
     val type = object : TypeToken<List<DefinitionTestCase>>() {}.type
     return gson.fromJson(json, type)
 }
