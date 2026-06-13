@@ -195,9 +195,24 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
 		}
 
+	case *parse.IdentifierNode:
+		if config.Diagnostics[types.ErrorTypeInvalidFunction] != DiagnosticSeverityDisabled {
+			if _, known := types.GlobalFuncs()[n.Ident]; !known {
+				offset := int(n.Position())
+				diagnostics = append(
+					diagnostics,
+					createDiagnostic(
+						msgUnknownFunction(text, offset, n.Ident),
+						expandToFullBracketsFromOffset(offset, text),
+						config.Diagnostics[types.ErrorTypeInvalidFunction],
+					),
+				)
+			}
+		}
+
 	case *parse.CommandNode:
 		for _, arg := range n.Args {
-			analyzeNode(arg, text, ctx)
+			diagnostics = append(diagnostics, analyzeNode(arg, text, ctx)...)
 		}
 	}
 

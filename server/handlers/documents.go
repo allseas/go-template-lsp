@@ -551,10 +551,6 @@ func walkAndAnalyze(
 			diagnostics = append(diagnostics, walkAndAnalyze(cmd, text, ctx, visited, fn)...)
 		}
 		ctx.Pipe = prevPipe
-	case *parse.CommandNode:
-		for _, arg := range n.Args {
-			diagnostics = append(diagnostics, walkAndAnalyze(arg, text, ctx, visited, fn)...)
-		}
 	case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
 		pipe, list, elseList := extractBranchNodes(n)
 		if ctx.Vars == nil {

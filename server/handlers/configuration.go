@@ -93,6 +93,7 @@ var (
 			types.ErrorDoubleDeclaredVariable: DiagnosticSeverityWarning,
 			types.ErrorTypeInvalidTemplateArg: DiagnosticSeverityError,
 			types.ErrorUnknownType:            DiagnosticSeverityInformation,
+			types.ErrorSyntaxError:            DiagnosticSeverityError,
 		},
 		EnableAutocompletion: true,
 	}
