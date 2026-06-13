@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import { after, before } from "mocha";
+import { after } from "mocha";
 import * as path from "path";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
@@ -35,10 +35,6 @@ function extractCursor(content: string): {
 }
 
 suite("Completion Test Suite", () => {
-    before(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-    });
-
     after(() => {
         vscode.window.showInformationMessage("All completion tests done!");
     });
@@ -70,7 +66,6 @@ suite("Completion Test Suite", () => {
             const fileName = `completion-${tc.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.tmpl`;
             const { tmplUri } = await createDocument(fileName, content);
             try {
-                await new Promise((resolve) => setTimeout(resolve, 200));
                 const list = await getCompletions(
                     tmplUri,
                     new vscode.Position(line, character),

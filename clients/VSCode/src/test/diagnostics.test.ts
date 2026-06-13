@@ -1,12 +1,11 @@
 import * as assert from "assert";
 import * as fs from "fs";
-import { after, before } from "mocha";
+import { after } from "mocha";
 import * as path from "path";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
 const testCasesDir = path.join(__dirname, "../../../../test/testcases");
-const waitTime = 400;
 
 interface DiagExpected {
     index: number;
@@ -35,7 +34,6 @@ async function getDiagnosticsFor(
 ): Promise<vscode.Diagnostic[]> {
     const { tmplUri } = await createDocument(filename, content);
     try {
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
         return vscode.languages.getDiagnostics(tmplUri);
     } finally {
         cleanupDocument(tmplUri);
@@ -43,10 +41,6 @@ async function getDiagnosticsFor(
 }
 
 suite("Diagnostics Test Suite", () => {
-    before(async () => {
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
-    });
-
     after(() => {
         vscode.window.showInformationMessage("All diagnostics tests done!");
     });

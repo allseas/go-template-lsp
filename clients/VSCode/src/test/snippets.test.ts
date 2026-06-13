@@ -1,16 +1,12 @@
 //https://github.com/microsoft/vscode-extension-samples/blob/main/helloworld-test-sample/src/test/suite/extension.test.ts
 import * as assert from "assert";
-import { after, before } from "mocha";
+import { after } from "mocha";
 
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 // import * as myExtension from '../extension';
 
 suite("Snippets Test Suite", () => {
-    before(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-    });
-
     after(() => {
         vscode.window.showInformationMessage("All snippet tests done!");
     });
