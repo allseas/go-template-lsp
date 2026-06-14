@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !allseas
+//go:build allseas
 
 // Package parse builds parse trees for templates as defined by text/template
 // and html/template. Clients should use those packages to construct templates
@@ -206,6 +206,10 @@ func (t *Tree) recordError(pos Pos, format string, args ...any) error {
 	t.Errors = append(t.Errors, err)
 	return err
 }
+
+// errMark returns the current length of t.Errors, for use as a baseline by
+// callers that need to detect new errors recorded by a sub-parse step.
+func (t *Tree) errMark() int { return len(t.Errors) }
 
 // expect consumes the next token and guarantees it has the required type.
 func (t *Tree) expect(expected itemType, context string) item {
@@ -495,6 +499,8 @@ func (t *Tree) action() (n Node) {
 		return t.templateControl()
 	case itemWith:
 		return t.withControl()
+	case itemTable: // ALLSEAS ADDITION
+		return t.tableControl() // ALLSEAS ADDITION
 	case itemError:
 		if t.Mode&ParsePartial != 0 {
 			recErr := t.recordError(token.pos, "unexpected token in command: %s", token)
