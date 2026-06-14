@@ -1,4 +1,4 @@
-//go:build !allseas
+//go:build allseas
 
 package types
 

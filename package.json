@@ -10,12 +10,19 @@
   "scripts": {
     "generate:syntax": "ts-node --esm scripts/generate-syntax.ts",
     "build:server": "ts-node --esm scripts/build-server-binaries.ts",
+    "build:server:allseas": "ts-node --esm scripts/build-server-binaries-allseas.ts",
     "build:vscode": "npm run build:server && npm run compile -w clients/VSCode && shx mkdir -p clients/VSCode/out/server/bin && shx cp dist/server/* clients/VSCode/out/server/bin/",
+    "build:vscode:allseas": "npm run build:server:allseas && npm run compile -w clients/VSCode && shx mkdir -p clients/VSCode/out/server/bin && shx cp dist/server/* clients/VSCode/out/server/bin/",
     "package:vscode": "npm run build:server && npm run package:no-verify -w clients/VSCode",
+    "package:vscode:allseas": "npm run build:server:allseas && npm run package:no-verify -w clients/VSCode",
     "watch:vscode": "(ts-node --esm scripts/watch-server-binaries.ts) | (npm run watch -w clients/VSCode)",
+    "watch:vscode:allseas": "(ts-node --esm scripts/watch-server-binaries.ts) | (npm run watch -w clients/VSCode)",
     "launch:vscode": "npm run package:vscode && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test",
+    "launch:vscode:allseas": "npm run package:vscode:allseas && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test",
     "package:jetbrains": "npm run build:server && cd clients/JetBrains/go-text-template && ./gradlew clean buildPlugin --no-build-cache --no-configuration-cache && find ./build/distributions | grep '.zip' | xargs -i mv {} ../../../go-template-jetbrains.zip",
-    "package:both": "npm run package:vscode & npm run package:jetbrains"
+    "package:jetbrains:allseas": "npm run build:server:allseas && cd clients/JetBrains/go-text-template && ./gradlew clean buildPlugin --no-build-cache --no-configuration-cache && find ./build/distributions | grep '.zip' | xargs -i mv {} ../../../go-template-jetbrains.zip",
+    "package:both": "npm run package:vscode & npm run package:jetbrains",
+    "package:both:allseas": "npm run package:vscode:allseas & npm run package:jetbrains:allseas"
   },
   "keywords": [],
   "author": "",
