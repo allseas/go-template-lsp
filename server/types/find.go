@@ -71,6 +71,8 @@ func nodeChildren(n Node) []Node {
 			return nil
 		}
 		return []Node{node.Pipe}
+	case *TableNode:
+		return childrenTable(node)
 	}
 	return nil
 }

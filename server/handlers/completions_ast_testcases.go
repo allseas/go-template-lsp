@@ -182,6 +182,29 @@ var chainEditTestCases = []completionTestCase{
 			"ID", "CustomerName", "DisplayName",
 		},
 	},
+	{
+		name:       "$. inside block — root fields, not the rebound dot's fields",
+		src:        `{{ block "csv" .Address }}{{ $. }}{{ end }}`,
+		subStr:     ".",
+		occurrence: 1, // the dot in $. inside block body
+		withType:   true,
+		contains: []string{
+			"ID", "CustomerName", "Address", "Items",
+			"DisplayName", "ItemCount",
+		},
+		notContains: []string{"Street", "City", "Line", "ZipCode"},
+	},
+	{
+		name:       "$.Address. inside block — Address fields via root $, not block's dot",
+		src:        `{{ block "csv" .Items }}{{ $.Address. }}{{ end }}`,
+		subStr:     ".",
+		occurrence: 2, // the trailing dot after $.Address
+		withType:   true,
+		contains:   []string{"Street", "City", "Country", "Zip", "Line", "IsLocal", "ZipCode"},
+		notContains: []string{
+			"ID", "CustomerName", "DisplayName",
+		},
+	},
 }
 
 var completionTestCases = []completionTestCase{
@@ -635,6 +658,57 @@ var completionTestCases = []completionTestCase{
 		contains:    []string{"not", "and"},
 		notContains: []string{"html", "len"},
 	},
+	// scope switch — block (table)
+	{
+		name:        "inside block — dot trigger returns Address fields not Order fields",
+		src:         `{{block "csv" .Address}}{{.}}{{end}}`,
+		subStr:      ".",
+		occurrence:  1,
+		withType:    true,
+		contains:    []string{"Street", "City", "Country", "Zip"},
+		notContains: []string{"ID", "CustomerName", "Items"},
+	},
+	{
+		name:        "inside block — dot-prefixed Address methods, Order methods absent",
+		src:         `{{block "csv" .Address}}{{len .Street}}{{end}}`,
+		subStr:      "l",
+		occurrence:  1,
+		withType:    true,
+		contains:    []string{".Line", ".IsLocal", ".ZipCode"},
+		notContains: []string{".DisplayName", ".IsLargeOrder", ".wrongSecond"},
+	},
+	{
+		name:        "inside block pipe — Address methods excluded, none accept string",
+		src:         `{{block "csv" .Address}}{{Line | }}{{end}}`,
+		subStr:      "}}",
+		occurrence:  1,
+		offsetAdj:   -1,
+		isInvoked:   true,
+		withType:    true,
+		notContains: []string{".Line", ".IsLocal", ".ZipCode", ".DisplayName", ".IsLargeOrder"},
+	},
+	{
+		name:        "inside block — string Address method piped, string builtins",
+		src:         `{{block "csv" .Address}}{{Line | }}{{end}}`,
+		subStr:      "}}",
+		occurrence:  1,
+		offsetAdj:   -1,
+		isInvoked:   true,
+		withType:    true,
+		contains:    []string{"html", "len"},
+		notContains: []string{"not", "eq"},
+	},
+	{
+		name:        "inside block — bool Address method piped, bool builtins",
+		src:         `{{block "csv" .Address}}{{IsLocal | }}{{end}}`,
+		subStr:      "}}",
+		occurrence:  1,
+		offsetAdj:   -1,
+		isInvoked:   true,
+		withType:    true,
+		contains:    []string{"not", "and"},
+		notContains: []string{"html", "len"},
+	},
 	// dot suggestions (no type)
 	{
 		name:        "dot in if condition - no builtins",
@@ -854,6 +928,20 @@ var buildPathScopeTestCases = []buildPathScopeTestCase{
 	{
 		name:        "outer var always in scope",
 		src:         `{{$outer := .}}{{if .}}{{end}}{{.}}`,
+		dotOccur:    2,
+		varName:     "$outer",
+		wantPresent: true,
+	},
+	{
+		name:        "vars reset after block body",
+		src:         `{{block "csv" .}}{{$inner := .}}{{end}}{{.}}`,
+		dotOccur:    2,
+		varName:     "$inner",
+		wantPresent: false,
+	},
+	{
+		name:        "outer var visible inside block",
+		src:         `{{$outer := .}}{{block "csv" .}}{{end}}{{.}}`,
 		dotOccur:    2,
 		varName:     "$outer",
 		wantPresent: true,
