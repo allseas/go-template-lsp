@@ -1,9 +1,6 @@
-//go:build !allseas
-
 package types
 
 import (
-	"fmt"
 	parse "text-template-parser"
 )
 
@@ -79,6 +76,6 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 	case *parse.UndefinedNode:
 		return analyseUndefined(n, parent)
 	default:
-		panic(fmt.Sprintf("unknown node type: %T", node))
+		return extAnalyseNode(node, parent, ctx)
 	}
 }

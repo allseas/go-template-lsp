@@ -74,11 +74,10 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 					URI:   uri,
 					Range: nodeRange(branch.Pipe, doc.text),
 				}, nil
-			case *types.TableNode:
-				return protocol.Location{
-					URI:   uri,
-					Range: nodeRange(branch.Pipe, doc.text),
-				}, nil
+			default:
+				if loc, ok := extDefinitionDotScope(cur, uri, doc.text); ok {
+					return loc, nil
+				}
 			}
 		}
 		return nil, nil

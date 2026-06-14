@@ -71,10 +71,9 @@ func nodeChildren(n Node) []Node {
 			return nil
 		}
 		return []Node{node.Pipe}
-	case *TableNode:
-		return childrenTable(node)
+	default:
+		return extNodeChildren(node)
 	}
-	return nil
 }
 
 // Inspect performs a depth-first walk over the typed tree rooted at n,
@@ -146,4 +145,44 @@ func EnclosingCommand(n Node) *CommandNode {
 		}
 	}
 	return nil
+}
+
+// VisibleVarsAt returns the variable decls that are in scope at cur.
+// It combines the enclosing list's inherited Vars() (outer scope, including
+// any branch pipe decls when cur is inside a range/with/if body) with the
+// decls of any sibling ActionNodes that appear before the list child that
+// contains cur. The containing child itself is excluded — variables it
+// declares are not visible at cur (and decls further down the list are not
+// yet in scope at all).
+//
+// Decls from cur itself (e.g. when cur is a PipeNode of an action) are NOT
+// included; callers that want self-visible decls must merge them in.
+func VisibleVarsAt(cur Node) []*VariableNode {
+	list := EnclosingList(cur)
+	if list == nil {
+		return nil
+	}
+	vars := append([]*VariableNode{}, list.Vars()...)
+	// Find the direct child of list that contains cur, so we can stop the
+	// sibling walk before it (its decls are not yet visible at cur).
+	stop := cur
+	for stop != nil && stop.Parent() != list {
+		stop = stop.Parent()
+	}
+	for _, child := range list.Nodes {
+		if child == nil {
+			continue
+		}
+		if child == stop {
+			break
+		}
+		a, ok := child.(*ActionNode)
+		if !ok {
+			continue
+		}
+		if a.Pipe != nil && !a.Pipe.IsAssign {
+			vars = append(vars, a.Pipe.Decl...)
+		}
+	}
+	return vars
 }

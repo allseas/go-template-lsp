@@ -393,40 +393,12 @@ func chainPrefix(base types.Type, path []string) types.Type {
 // "$top") visible at cur, by walking the same scope used for variable
 // completions.
 func varBaseType(cur serverTypes.Node, name string) types.Type {
-	for _, v := range visibleVarsAt(cur) {
+	for _, v := range serverTypes.VisibleVarsAt(cur) {
 		if v != nil && len(v.Ident) > 0 && v.Ident[0] == name {
 			return v.ValueType()
 		}
 	}
 	return nil
-}
-
-// visibleVarsAt returns variables in scope at cur. It starts from the snapshot
-// stored on the enclosing ListNode and adds top-level decls from
-// preceding actions in the same list whose start precedes cur.
-func visibleVarsAt(cur serverTypes.Node) []*serverTypes.VariableNode {
-	list := serverTypes.EnclosingList(cur)
-	if list == nil {
-		return nil
-	}
-	vars := append([]*serverTypes.VariableNode{}, list.Vars()...)
-	curPos := cur.Position()
-	for _, child := range list.Nodes {
-		if child == nil {
-			continue
-		}
-		if child.Position() >= curPos {
-			break
-		}
-		a, ok := child.(*serverTypes.ActionNode)
-		if !ok {
-			continue
-		}
-		if a.Pipe != nil && !a.Pipe.IsAssign {
-			vars = append(vars, a.Pipe.Decl...)
-		}
-	}
-	return vars
 }
 
 // suggest builds the completion list for cur, deriving all scope information
@@ -442,7 +414,7 @@ func suggest(
 	}
 
 	if sChar == '$' {
-		return varsItemsT(visibleVarsAt(cur), true, wordRange)
+		return varsItemsT(serverTypes.VisibleVarsAt(cur), true, wordRange)
 	}
 
 	if sChar == '.' {
@@ -459,7 +431,7 @@ func suggest(
 	switch cur.Parent().(type) {
 	case *serverTypes.ChainNode, *serverTypes.TemplateNode:
 		items := dotItemsT(cur, false, nil, outputAny, wordRange)
-		return append(items, varsItemsT(visibleVarsAt(cur), false, wordRange)...)
+		return append(items, varsItemsT(serverTypes.VisibleVarsAt(cur), false, wordRange)...)
 	}
 
 	pipeIn, kind := pipeOutputInfo(cur, isInvoked)
@@ -479,7 +451,7 @@ func pipeFilteredItemsT(
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	items := dotItemsT(cur, false, pipeInputType, kind, wordRange)
-	items = append(items, varsItemsT(visibleVarsAt(cur), false, wordRange)...)
+	items = append(items, varsItemsT(serverTypes.VisibleVarsAt(cur), false, wordRange)...)
 
 	effectiveKind := kind
 	if effectiveKind == outputAny && inputType != nil {

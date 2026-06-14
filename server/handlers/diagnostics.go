@@ -9,13 +9,6 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// diagCtx tracks the per-walk scope state for diagnostics traversal.
-// It is the typed counterpart of Context, scoped to diagnostics only.
-type diagCtx struct {
-	Vars map[string]types.Node
-	Pipe *types.PipeNode
-}
-
 func createDiagnostic(
 	msg string,
 	rang protocol.Range,
@@ -102,11 +95,10 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 		if tree == nil || tree.Root == nil {
 			continue
 		}
-		ctx := &diagCtx{Vars: map[string]types.Node{"$": nil}}
-		diagnostics = append(
-			diagnostics,
-			walkAndAnalyzeTyped(tree.Root, text, ctx, map[types.Node]bool{}, analyzeNode)...,
-		)
+		types.Inspect(tree.Root, func(n types.Node) bool {
+			diagnostics = append(diagnostics, analyzeNode(n, text)...)
+			return true
+		})
 	}
 
 	// Surface template argument type errors from the typed trees.
@@ -144,13 +136,13 @@ func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []pro
 	return diagnostics
 }
 
-// analyzeNode is the visitor passed to walkAndAnalyzeTyped; it declares variables then validates the node.
-func analyzeNode(node types.Node, text string, ctx *diagCtx) (diagnostics []protocol.Diagnostic) {
-	if ctx == nil || node == nil {
+// analyzeNode validates a single typed node and returns any diagnostics
+// raised against it. Scope (visible variables, enclosing pipe) is derived
+// from the node's parent chain rather than threaded through a context.
+func analyzeNode(node types.Node, text string) (diagnostics []protocol.Diagnostic) {
+	if node == nil {
 		return nil
 	}
-	diagnostics = append(diagnostics, declareNode(node, text, ctx)...)
-
 	config := GetConfig()
 
 	switch n := node.(type) {
@@ -175,22 +167,25 @@ func analyzeNode(node types.Node, text string, ctx *diagCtx) (diagnostics []prot
 
 	case *types.ActionNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
 	case *types.RangeNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
 	case *types.IfNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
 	case *types.WithNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
 	case *types.CommandNode:
@@ -208,7 +203,7 @@ func analyzeNode(node types.Node, text string, ctx *diagCtx) (diagnostics []prot
 						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
 					)
 				} else {
-					currentKind := pipeOutputKind(ctx.Pipe, false)
+					currentKind := pipeOutputKind(types.EnclosingPipe(n), false)
 					if currentKind != outputAny && currentKind != outputUntyped {
 						if !funcAcceptsKind(funcName, currentKind) {
 							msg := msgTypeMismatch(text, offset, funcName)
@@ -226,40 +221,19 @@ func analyzeNode(node types.Node, text string, ctx *diagCtx) (diagnostics []prot
 	return diagnostics
 }
 
-// declareNode registers variable declarations into ctx.Vars before validation runs.
-func declareNode(node types.Node, text string, ctx *diagCtx) (diagnostics []protocol.Diagnostic) {
-	if ctx == nil || node == nil {
-		return nil
-	}
-	switch n := node.(type) {
-	case *types.ActionNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	case *types.RangeNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	case *types.IfNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	}
-	return diagnostics
-}
-
-// collectDeclarations registers variables into ctx.Vars and flags duplicate := declarations.
+// collectDeclarations flags duplicate := declarations in pipe by comparing its
+// decls against the variables already visible at the pipe's position. Names
+// that pipe itself introduces are not registered separately: each call works
+// with on-demand scope derived from the typed tree's parent chain.
 func collectDeclarations(
 	pipe *types.PipeNode,
 	text string,
-	ctx *diagCtx,
 ) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil || ctx == nil {
+	if pipe == nil || pipe.IsAssign {
 		return nil
 	}
-	if ctx.Vars == nil {
-		ctx.Vars = make(map[string]types.Node)
-	}
+	visible := visibleVarNames(pipe)
+	seen := map[string]bool{}
 	for _, decl := range pipe.Decl {
 		if decl == nil {
 			continue
@@ -268,40 +242,47 @@ func collectDeclarations(
 			if name := strings.TrimPrefix(ident, "$"); name == "" {
 				continue
 			}
-			if ctx.Vars[ident] != nil && !pipe.IsAssign {
-				if GetConfig().Diagnostics.VariableRedeclaration {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(
-							msgDuplicateDeclaration(text, int(decl.Position()), ident),
-							nodeRange(decl, text),
-							false,
-						),
-					)
-				}
+			isDup := visible[ident] || seen[ident]
+			seen[ident] = true
+			if !isDup {
 				continue
 			}
-			if pipe.IsAssign {
-				ctx.Vars[ident] = pipe
-			} else {
-				ctx.Vars[ident] = decl
+			if GetConfig().Diagnostics.VariableRedeclaration {
+				diagnostics = append(
+					diagnostics,
+					createDiagnostic(
+						msgDuplicateDeclaration(text, int(decl.Position()), ident),
+						nodeRange(decl, text),
+						false,
+					),
+				)
 			}
 		}
 	}
 	return diagnostics
 }
 
-// checkPipeUsage flags any variable references in the pipe that were not previously declared.
+// checkPipeUsage flags any variable references in the pipe that are not
+// declared in any visible scope. The pipe's own decls count as visible (to
+// preserve historical behaviour where {{$x := $x}} did not flag the RHS).
 func checkPipeUsage(
 	pipe *types.PipeNode,
 	text string,
-	ctx *diagCtx,
 ) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil || ctx == nil {
+	if pipe == nil {
 		return nil
 	}
-	if ctx.Vars == nil {
-		ctx.Vars = make(map[string]types.Node)
+	visible := visibleVarNames(pipe)
+	// $ is always implicitly available.
+	visible["$"] = true
+	// Merge the pipe's own decls so the RHS can reference them.
+	for _, decl := range pipe.Decl {
+		if decl == nil {
+			continue
+		}
+		for _, ident := range decl.Ident {
+			visible[ident] = true
+		}
 	}
 	for _, cmd := range pipe.Cmds {
 		if cmd == nil {
@@ -309,20 +290,38 @@ func checkPipeUsage(
 		}
 		for _, arg := range cmd.Args {
 			if vnode, ok := arg.(*types.VariableNode); ok && len(vnode.Ident) > 0 {
-				if name := vnode.Ident[0]; name != "" && name != "$" && ctx.Vars[name] == nil {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(
-							msgUndeclaredVariable(text, int(vnode.Position()), name),
-							nodeRange(vnode, text),
-							true,
-						),
-					)
+				name := vnode.Ident[0]
+				if name == "" || visible[name] {
+					continue
 				}
+				diagnostics = append(
+					diagnostics,
+					createDiagnostic(
+						msgUndeclaredVariable(text, int(vnode.Position()), name),
+						nodeRange(vnode, text),
+						true,
+					),
+				)
 			}
 		}
 	}
 	return diagnostics
+}
+
+// visibleVarNames returns the set of variable identifiers (with leading "$")
+// in scope at n, derived from types.VisibleVarsAt.
+func visibleVarNames(n types.Node) map[string]bool {
+	vars := types.VisibleVarsAt(n)
+	out := make(map[string]bool, len(vars))
+	for _, v := range vars {
+		if v == nil {
+			continue
+		}
+		for _, ident := range v.Ident {
+			out[ident] = true
+		}
+	}
+	return out
 }
 
 // expandToFullBracketsFromOffset returns a Range that includes the surrounding {{ and }}.
@@ -347,131 +346,4 @@ func expandToFullBracketsFromOffset(pos int, text string) protocol.Range {
 		Start: offsetToPosition(text, startOffset),
 		End:   offsetToPosition(text, endOffset),
 	}
-}
-
-// extractBranchNodes returns the pipe, list, and else-list for if/range/with nodes.
-func extractBranchNodes(node types.Node) (*types.PipeNode, *types.ListNode, *types.ListNode) {
-	switch n := node.(type) {
-	case *types.IfNode:
-		return n.Pipe, n.List, n.ElseList
-	case *types.RangeNode:
-		return n.Pipe, n.List, n.ElseList
-	case *types.WithNode:
-		return n.Pipe, n.List, n.ElseList
-	default:
-		return nil, nil, nil
-	}
-}
-
-// walkAndAnalyzeTyped recursively walks the typed node tree, maintaining scope
-// context, and calls fn on every node. It is the typed counterpart of
-// walkAndAnalyze used during the diagnostics pass.
-func walkAndAnalyzeTyped(
-	node types.Node,
-	text string,
-	ctx *diagCtx,
-	visited map[types.Node]bool,
-	fn func(types.Node, string, *diagCtx) []protocol.Diagnostic,
-) (diagnostics []protocol.Diagnostic) {
-	if node == nil || visited[node] {
-		return nil
-	}
-	if ctx == nil {
-		ctx = &diagCtx{Vars: make(map[string]types.Node)}
-	}
-	visited[node] = true
-	defer delete(visited, node)
-
-	diagnostics = append(diagnostics, fn(node, text, ctx)...)
-
-	switch n := node.(type) {
-	case *types.ListNode:
-		for _, child := range n.Nodes {
-			diagnostics = append(diagnostics, walkAndAnalyzeTyped(child, text, ctx, visited, fn)...)
-		}
-	case *types.ActionNode:
-		if n.Pipe != nil {
-			diagnostics = append(
-				diagnostics,
-				walkAndAnalyzeTyped(n.Pipe, text, ctx, visited, fn)...)
-		}
-	case *types.PipeNode:
-		if ctx.Vars == nil {
-			ctx.Vars = make(map[string]types.Node)
-		}
-		for _, v := range n.Decl {
-			if v != nil && len(v.Ident) > 0 {
-				ctx.Vars[v.Ident[0]] = n
-			}
-		}
-		prevPipe := ctx.Pipe
-		ctx.Pipe = n
-		for _, cmd := range n.Cmds {
-			diagnostics = append(diagnostics, walkAndAnalyzeTyped(cmd, text, ctx, visited, fn)...)
-		}
-		ctx.Pipe = prevPipe
-	case *types.CommandNode:
-		for _, arg := range n.Args {
-			diagnostics = append(diagnostics, walkAndAnalyzeTyped(arg, text, ctx, visited, fn)...)
-		}
-	case *types.RangeNode, *types.IfNode, *types.WithNode:
-		pipe, list, elseList := extractBranchNodes(n)
-		if ctx.Vars == nil {
-			ctx.Vars = make(map[string]types.Node)
-		}
-		snapshot := snapshotDiagVars(ctx.Vars)
-		if pipe != nil {
-			diagnostics = append(diagnostics, walkAndAnalyzeTyped(pipe, text, ctx, visited, fn)...)
-		}
-		if list != nil {
-			diagnostics = append(diagnostics, walkAndAnalyzeTyped(list, text, ctx, visited, fn)...)
-		}
-		ctx.Vars = snapshot
-		if elseList != nil {
-			diagnostics = append(
-				diagnostics,
-				walkAndAnalyzeTyped(elseList, text, ctx, visited, fn)...)
-		}
-		ctx.Vars = snapshot
-	case *types.TableNode:
-		diagnostics = append(diagnostics, walkAndAnalyzeTypedTable(n, text, ctx, visited, fn)...)
-	}
-
-	return diagnostics
-}
-
-// walkAndAnalyzeTypedTable recursively walks and analyzes a typed TableNode,
-// maintaining variable scope around the table body. When TableNode is the
-// !allseas stub (no real table syntax in templates), this branch is reachable
-// only via crafted ASTs and is a no-op for ordinary inputs.
-func walkAndAnalyzeTypedTable(
-	n *types.TableNode,
-	text string,
-	ctx *diagCtx,
-	visited map[types.Node]bool,
-	fn func(types.Node, string, *diagCtx) []protocol.Diagnostic,
-) []protocol.Diagnostic {
-	var diagnostics []protocol.Diagnostic
-	if ctx.Vars == nil {
-		ctx.Vars = make(map[string]types.Node)
-	}
-	snapshot := snapshotDiagVars(ctx.Vars)
-	if n.Pipe != nil {
-		diagnostics = append(diagnostics, walkAndAnalyzeTyped(n.Pipe, text, ctx, visited, fn)...)
-	}
-	if n.List != nil {
-		diagnostics = append(diagnostics, walkAndAnalyzeTyped(n.List, text, ctx, visited, fn)...)
-	}
-	ctx.Vars = snapshot
-	return diagnostics
-}
-
-// snapshotDiagVars copies the scope-variables map so it can be restored after
-// descending into a branch.
-func snapshotDiagVars(vars map[string]types.Node) map[string]types.Node {
-	snap := make(map[string]types.Node, len(vars))
-	for k, v := range vars {
-		snap[k] = v
-	}
-	return snap
 }

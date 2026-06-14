@@ -1,10 +1,12 @@
-//go:build !allseas
+//go:build allseas
 
 package types
 
 import (
+	"fmt"
 	"go/types"
 	"strings"
+	parse "text-template-parser"
 )
 
 // NodeType for table nodes
@@ -70,6 +72,20 @@ func (t *TableNode) Copy() Node {
 func (t *TableNode) String() string              { return "{{block (table extension)}}" }
 func (t *TableNode) writeTo(sb *strings.Builder) { sb.WriteString("{{block (table extension)}}") }
 
+func analyseTable(n *parse.TableNode, parent Node, ctx *analysisCtx) Node {
+	table := &TableNode{NodeType: NodeTable, parent: parent, Format: n.Format, Pos: Pos(n.Pos)}
+	keepDot := ctx.dotType
+	keepVars := len(ctx.vars)
+	pipe := analysePipe(n.Pipe, table, ctx)
+	ctx.dotType = pipe.typ
+	list := analyseList(n.List, table, ctx)
+	ctx.dotType = keepDot
+	ctx.vars = ctx.vars[:keepVars]
+	table.Pipe = pipe
+	table.List = list
+	return table
+}
+
 // childrenTable returns the direct children of a TableNode for tree traversal.
 func childrenTable(t *TableNode) []Node {
 	if t == nil {
@@ -83,4 +99,31 @@ func childrenTable(t *TableNode) []Node {
 		children = append(children, t.List)
 	}
 	return children
+}
+
+// extAnalyseNode dispatches conversion for parse nodes that the standard
+// text/template grammar does not produce. The !allseas counterpart panics;
+// here we handle TableNode and panic for anything else unknown.
+func extAnalyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
+	if n, ok := node.(*parse.TableNode); ok {
+		return analyseTable(n, parent, ctx)
+	}
+	panic(fmt.Sprintf("unknown node type: %T", node))
+}
+
+// extNodeChildren returns the direct children of an extension typed node.
+// Returns nil for nodes that are not extension nodes.
+func extNodeChildren(n Node) []Node {
+	if t, ok := n.(*TableNode); ok {
+		return childrenTable(t)
+	}
+	return nil
+}
+
+// extSetEndPos sets the end position of an extension typed node. No-op for
+// non-extension nodes.
+func extSetEndPos(node Node, end Pos, text *string) {
+	if t, ok := node.(*TableNode); ok {
+		endPosTable(t, end, text)
+	}
 }
