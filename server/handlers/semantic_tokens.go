@@ -92,13 +92,13 @@ func DocumentSymbols(
 	params *protocol.DocumentSymbolParams,
 ) (any, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || len(doc.trees) == 0 {
+	if !ok || len(doc.typedTrees) == 0 {
 		return nil, nil
 	}
 
 	var symbols []protocol.DocumentSymbol
-	for name, t := range doc.trees {
-		if t.Root == nil || name == "t" {
+	for name, t := range doc.typedTrees {
+		if t == nil || t.Root == nil || name == "t" {
 			continue
 		}
 

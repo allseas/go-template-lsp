@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"go/types"
 	"strings"
-	parse "text-template-parser"
+	serverTypes "text-template-server/types"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -29,16 +29,16 @@ func formatType(t types.Type) string {
 }
 
 // MessageElse generates a hover message for an else tag of a BranchNode, including the branch type and line number where the if statement starts.
-func MessageElse(n *parse.Node, pos protocol.Position) string {
+func MessageElse(n *serverTypes.Node, pos protocol.Position) string {
 	const withBranch = "```go\nelse\n```\nFrom `%s` at line %d."
 	const withoutBranch = "```go\nelse\n```\nUnknown start."
 
 	switch (*n).(type) {
-	case *parse.IfNode:
+	case *serverTypes.IfNode:
 		return withLink(fmt.Sprintf(withBranch, "if", pos.Line+1))
-	case *parse.RangeNode:
+	case *serverTypes.RangeNode:
 		return withLink(fmt.Sprintf(withBranch, "range", pos.Line+1))
-	case *parse.WithNode:
+	case *serverTypes.WithNode:
 		return withLink(fmt.Sprintf(withBranch, "with", pos.Line+1))
 	default:
 		return withLink(withoutBranch)
@@ -47,18 +47,18 @@ func MessageElse(n *parse.Node, pos protocol.Position) string {
 
 // MessageEnd generates a hover message for an end tag of a BranchNode, including the branch type and line number where the branch starts.
 // TODO: should hyperlink the line number to the start tag of the branch
-func MessageEnd(n parse.Node, pos protocol.Position) string {
+func MessageEnd(n serverTypes.Node, pos protocol.Position) string {
 	const withBranch = "```go\nend\n```\nFrom `%s` at line %d."
 	const withoutBranch = "```go\nelse\n```\nFrom `unknown`."
 
 	switch node := n.(type) {
-	case *parse.IfNode:
+	case *serverTypes.IfNode:
 		return fmt.Sprintf(withBranch, "if", pos.Line+1)
-	case *parse.RangeNode:
+	case *serverTypes.RangeNode:
 		return fmt.Sprintf(withBranch, "range", pos.Line+1)
-	case *parse.WithNode:
+	case *serverTypes.WithNode:
 		return fmt.Sprintf(withBranch, "with", pos.Line+1)
-	case *parse.TemplateNode:
+	case *serverTypes.TemplateNode:
 		return fmt.Sprintf(withBranch, "template "+node.Name, node.Line+1)
 	default:
 		return withoutBranch
@@ -66,17 +66,17 @@ func MessageEnd(n parse.Node, pos protocol.Position) string {
 }
 
 // MessageBranch generates a hover message for a BranchNode, including the branch type and relevant pipeline information.
-func MessageBranch(n *parse.BranchNode) string {
+func MessageBranch(n *serverTypes.BranchNode) string {
 	const ifMessage = "```go\nif %s\n```\nIf the value of the pipeline is empty, no output is generated; Otherwise, inside is executed."
 	const rangeMessage = "```go\nrange %s\n```\nBranch executed for each item in a collection."
 	const withMessage = "```go\nwith %s\n```\nBranch executed with a new context."
 
 	switch n.NodeType {
-	case parse.NodeIf:
+	case serverTypes.NodeIf:
 		return withLink(fmt.Sprintf(ifMessage, n.Pipe.String()))
-	case parse.NodeRange:
+	case serverTypes.NodeRange:
 		return withLink(fmt.Sprintf(rangeMessage, n.Pipe.String()))
-	case parse.NodeWith:
+	case serverTypes.NodeWith:
 		return withLink(fmt.Sprintf(withMessage, n.Pipe.String()))
 	}
 
@@ -86,7 +86,7 @@ func MessageBranch(n *parse.BranchNode) string {
 
 // MessageDot generates a hover message for a DotNode. If typ is non-nil the
 // Go type of the current context is included.
-func MessageDot(_ *parse.DotNode, typ types.Type) string {
+func MessageDot(_ *serverTypes.DotNode, typ types.Type) string {
 	const dotMessage = "```go\ndot\n```\nReturns the current context."
 	const dotMessageTyped = "```go\ndot %s\n```\nReturns the current context."
 
@@ -98,7 +98,7 @@ func MessageDot(_ *parse.DotNode, typ types.Type) string {
 
 // MessageField generates a hover message for a FieldNode, including the field
 // name and (when known) the resolved Go type of the full field chain.
-func MessageField(n *parse.FieldNode, typ types.Type) string {
+func MessageField(n *serverTypes.FieldNode, typ types.Type) string {
 	const fieldMessage = "```go\nfield %s\n```\nAccesses the `%s` field of the `.%s` context."
 	const fieldMessageTyped = "```go\nfield %s %s\n```\nAccesses the `%s` field of the `.%s` context."
 
@@ -117,7 +117,7 @@ func MessageField(n *parse.FieldNode, typ types.Type) string {
 }
 
 // MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name.
-func MessageIdentifier(n *parse.IdentifierNode) string {
+func MessageIdentifier(n *serverTypes.IdentifierNode) string {
 	const identifierMessage = "```go\n%s\n```\nRepresents an identifier in a command or action."
 
 	// TODO: add more special messages
@@ -135,7 +135,7 @@ func MessageIdentifier(n *parse.IdentifierNode) string {
 }
 
 // MessageIndexVariable generates a hover message for a VariableNode that serves as an index variable in a range loop, including the variable name.
-func MessageIndexVariable(n *parse.VariableNode) string {
+func MessageIndexVariable(n *serverTypes.VariableNode) string {
 	const indexMessage = "```go\nvar %s int\n```\nServes as the index variable in the `range` loop, representing the current iteration count."
 
 	ident := ""
@@ -147,7 +147,7 @@ func MessageIndexVariable(n *parse.VariableNode) string {
 
 // MessageVariable generates a hover message for a VariableNode, including the
 // variable name and (when known) its resolved Go type and/or constant value.
-func MessageVariable(n *parse.VariableNode, varValue any, typ types.Type) string {
+func MessageVariable(n *serverTypes.VariableNode, varValue any, typ types.Type) string {
 	const withValueAndType = "```go\nvar %s %s = %v\n```"
 	const withValue = "```go\nvar %s = %v\n```"
 	const withType = "```go\nvar %s %s\n```"
@@ -174,14 +174,14 @@ func MessageVariable(n *parse.VariableNode, varValue any, typ types.Type) string
 // the information that would be provided is not that informative, so it's easier to not provide any
 
 // // MessageTemplate generates a hover message for a TemplateNode, including the template name.
-// func MessageTemplate(n *parse.TemplateNode) string {
+// func MessageTemplate(n *serverTypes.TemplateNode) string {
 // 	const templateMessage = "```go\ntemplate \"%s\"\n```\nExecutes a template named `%s` with the pipelined data."
 
 // 	return withLink(fmt.Sprintf(templateMessage, n.Name, n.Name))
 // }
 
 // MessageNil generates a hover message for a NilNode, which represents a nil value in Go templates.
-func MessageNil(_ *parse.NilNode) string {
+func MessageNil(_ *serverTypes.NilNode) string {
 	return "```go\nvar nil\n```\nnil is a predeclared identifier representing the zero value for a pointer, channel, func, interface, map, or slice type."
 }
 

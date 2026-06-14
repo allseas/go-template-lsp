@@ -77,6 +77,18 @@ func nodeChildren(n Node) []Node {
 	return nil
 }
 
+// Inspect performs a depth-first walk over the typed tree rooted at n,
+// invoking visitor on each node. If visitor returns false, the node's
+// children are not visited.
+func Inspect(n Node, visitor func(Node) bool) {
+	if n == nil || !visitor(n) {
+		return
+	}
+	for _, child := range nodeChildren(n) {
+		Inspect(child, visitor)
+	}
+}
+
 // NodeFind returns the deepest node in the typed tree whose start position is
 // less than or equal to offset
 func NodeFind(root Node, offset Pos) Node {

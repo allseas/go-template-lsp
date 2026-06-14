@@ -1,3 +1,5 @@
+//go:build allseas
+
 package parse
 
 import (

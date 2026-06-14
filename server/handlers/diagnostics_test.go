@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
-	parse "text-template-parser"
+	serverTypes "text-template-server/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -210,9 +210,9 @@ func TestPublishDiagnostics_NilContext(t *testing.T) {
 
 // ai generated below
 func TestExtractBranchNodes(t *testing.T) {
-	ifPipe, ifList, ifElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
-	p, l, e := extractBranchNodes(&parse.IfNode{
-		BranchNode: parse.BranchNode{
+	ifPipe, ifList, ifElse := &serverTypes.PipeNode{}, &serverTypes.ListNode{}, &serverTypes.ListNode{}
+	p, l, e := extractBranchNodes(&serverTypes.IfNode{
+		BranchNode: serverTypes.BranchNode{
 			Pipe:     ifPipe,
 			List:     ifList,
 			ElseList: ifElse,
@@ -222,9 +222,9 @@ func TestExtractBranchNodes(t *testing.T) {
 	assert.Equal(t, ifList, l)
 	assert.Equal(t, ifElse, e)
 
-	rangePipe, rangeList, rangeElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
-	p, l, e = extractBranchNodes(&parse.RangeNode{
-		BranchNode: parse.BranchNode{
+	rangePipe, rangeList, rangeElse := &serverTypes.PipeNode{}, &serverTypes.ListNode{}, &serverTypes.ListNode{}
+	p, l, e = extractBranchNodes(&serverTypes.RangeNode{
+		BranchNode: serverTypes.BranchNode{
 			Pipe:     rangePipe,
 			List:     rangeList,
 			ElseList: rangeElse,
@@ -234,9 +234,9 @@ func TestExtractBranchNodes(t *testing.T) {
 	assert.Equal(t, rangeList, l)
 	assert.Equal(t, rangeElse, e)
 
-	withPipe, withList, withElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
-	p, l, e = extractBranchNodes(&parse.WithNode{
-		BranchNode: parse.BranchNode{
+	withPipe, withList, withElse := &serverTypes.PipeNode{}, &serverTypes.ListNode{}, &serverTypes.ListNode{}
+	p, l, e = extractBranchNodes(&serverTypes.WithNode{
+		BranchNode: serverTypes.BranchNode{
 			Pipe:     withPipe,
 			List:     withList,
 			ElseList: withElse,
@@ -246,22 +246,22 @@ func TestExtractBranchNodes(t *testing.T) {
 	assert.Equal(t, withList, l)
 	assert.Equal(t, withElse, e)
 
-	p, l, e = extractBranchNodes(&parse.TextNode{})
+	p, l, e = extractBranchNodes(&serverTypes.TextNode{})
 	assert.Nil(t, p)
 	assert.Nil(t, l)
 	assert.Nil(t, e)
 }
 
 func TestCollectDeclarations(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{}}
+	ctx := &diagCtx{Vars: map[string]serverTypes.Node{}}
 	assert.Nil(t, collectDeclarations(nil, "", ctx))
 
-	pipeWithNil := &parse.PipeNode{Decl: []*parse.VariableNode{nil}}
+	pipeWithNil := &serverTypes.PipeNode{Decl: []*serverTypes.VariableNode{nil}}
 	assert.Empty(t, collectDeclarations(pipeWithNil, "", ctx))
 
 	text := "{{ $newVar := . }}"
-	declVar := &parse.VariableNode{Ident: []string{"$newVar"}}
-	pipe := &parse.PipeNode{Decl: []*parse.VariableNode{declVar}}
+	declVar := &serverTypes.VariableNode{Ident: []string{"$newVar"}}
+	pipe := &serverTypes.PipeNode{Decl: []*serverTypes.VariableNode{declVar}}
 
 	diags := collectDeclarations(pipe, text, ctx)
 	assert.Empty(t, diags)
@@ -274,45 +274,47 @@ func TestCollectDeclarations(t *testing.T) {
 }
 
 func TestCheckPipeUsage(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+	ctx := &diagCtx{Vars: map[string]serverTypes.Node{"$": nil}}
 	assert.Nil(t, checkPipeUsage(nil, "", ctx))
 
-	ctx.Vars["$defined"] = &parse.PipeNode{}
-	vnode := &parse.VariableNode{Ident: []string{"$defined"}}
-	cmd := &parse.CommandNode{Args: []parse.Node{vnode}}
-	pipe := &parse.PipeNode{Cmds: []*parse.CommandNode{cmd}}
+	ctx.Vars["$defined"] = &serverTypes.PipeNode{}
+	vnode := &serverTypes.VariableNode{Ident: []string{"$defined"}}
+	cmd := &serverTypes.CommandNode{Args: []serverTypes.Node{vnode}}
+	pipe := &serverTypes.PipeNode{Cmds: []*serverTypes.CommandNode{cmd}}
 	assert.Empty(t, checkPipeUsage(pipe, "{{ $defined }}", ctx))
 
-	vnodeUndef := &parse.VariableNode{Ident: []string{"$undef"}}
-	cmdUndef := &parse.CommandNode{Args: []parse.Node{vnodeUndef}}
-	pipeUndef := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdUndef}}
+	vnodeUndef := &serverTypes.VariableNode{Ident: []string{"$undef"}}
+	cmdUndef := &serverTypes.CommandNode{Args: []serverTypes.Node{vnodeUndef}}
+	pipeUndef := &serverTypes.PipeNode{Cmds: []*serverTypes.CommandNode{cmdUndef}}
 	diags := checkPipeUsage(pipeUndef, "{{ $undef }}", ctx)
 	require.Len(t, diags, 1)
 	assert.Contains(t, diags[0].Message, "undeclared variable: $undef")
 }
 
 func TestDeclareNode(t *testing.T) {
-	actVar := &parse.VariableNode{Ident: []string{"$act"}}
-	rngVar := &parse.VariableNode{Ident: []string{"$rng"}}
-	ifVar := &parse.VariableNode{Ident: []string{"$if"}}
+	actVar := &serverTypes.VariableNode{Ident: []string{"$act"}}
+	rngVar := &serverTypes.VariableNode{Ident: []string{"$rng"}}
+	ifVar := &serverTypes.VariableNode{Ident: []string{"$if"}}
 
 	tests := []struct {
 		name    string
-		node    parse.Node
+		node    serverTypes.Node
 		text    string
 		varName string
 	}{
 		{
-			name:    "action node",
-			node:    &parse.ActionNode{Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{actVar}}},
+			name: "action node",
+			node: &serverTypes.ActionNode{
+				Pipe: &serverTypes.PipeNode{Decl: []*serverTypes.VariableNode{actVar}},
+			},
 			text:    "{{ $act := . }}",
 			varName: "$act",
 		},
 		{
 			name: "range node",
-			node: &parse.RangeNode{
-				BranchNode: parse.BranchNode{
-					Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{rngVar}},
+			node: &serverTypes.RangeNode{
+				BranchNode: serverTypes.BranchNode{
+					Pipe: &serverTypes.PipeNode{Decl: []*serverTypes.VariableNode{rngVar}},
 				},
 			},
 			text:    "{{ range $rng := . }}",
@@ -320,9 +322,9 @@ func TestDeclareNode(t *testing.T) {
 		},
 		{
 			name: "if node",
-			node: &parse.IfNode{
-				BranchNode: parse.BranchNode{
-					Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{ifVar}},
+			node: &serverTypes.IfNode{
+				BranchNode: serverTypes.BranchNode{
+					Pipe: &serverTypes.PipeNode{Decl: []*serverTypes.VariableNode{ifVar}},
 				},
 			},
 			text:    "{{ if $if := . }}",
@@ -331,7 +333,7 @@ func TestDeclareNode(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
+		ctx := &diagCtx{Vars: map[string]serverTypes.Node{"$": nil}}
 		diags := declareNode(tc.node, tc.text, ctx)
 		assert.Empty(t, diags, tc.name)
 		assert.NotNil(t, ctx.Vars[tc.varName], tc.name)
@@ -339,34 +341,34 @@ func TestDeclareNode(t *testing.T) {
 }
 
 func TestAnalyzeNode_PipeWrappers(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	vnode := &parse.VariableNode{Ident: []string{"$undef"}}
-	cmd := &parse.CommandNode{Args: []parse.Node{vnode}}
-	pipe := &parse.PipeNode{Cmds: []*parse.CommandNode{cmd}}
+	ctx := &diagCtx{Vars: map[string]serverTypes.Node{"$": nil}}
+	vnode := &serverTypes.VariableNode{Ident: []string{"$undef"}}
+	cmd := &serverTypes.CommandNode{Args: []serverTypes.Node{vnode}}
+	pipe := &serverTypes.PipeNode{Cmds: []*serverTypes.CommandNode{cmd}}
 
 	tests := []struct {
 		name string
-		node parse.Node
+		node serverTypes.Node
 		text string
 	}{
 		{
 			name: "action block",
-			node: &parse.ActionNode{Pipe: pipe},
+			node: &serverTypes.ActionNode{Pipe: pipe},
 			text: "{{ $undef }}",
 		},
 		{
 			name: "range block",
-			node: &parse.RangeNode{BranchNode: parse.BranchNode{Pipe: pipe}},
+			node: &serverTypes.RangeNode{BranchNode: serverTypes.BranchNode{Pipe: pipe}},
 			text: "{{ range $undef }}",
 		},
 		{
 			name: "if block",
-			node: &parse.IfNode{BranchNode: parse.BranchNode{Pipe: pipe}},
+			node: &serverTypes.IfNode{BranchNode: serverTypes.BranchNode{Pipe: pipe}},
 			text: "{{ if $undef }}",
 		},
 		{
 			name: "with block",
-			node: &parse.WithNode{BranchNode: parse.BranchNode{Pipe: pipe}},
+			node: &serverTypes.WithNode{BranchNode: serverTypes.BranchNode{Pipe: pipe}},
 			text: "{{ with $undef }}",
 		},
 	}
@@ -379,9 +381,9 @@ func TestAnalyzeNode_PipeWrappers(t *testing.T) {
 }
 
 func TestAnalyzeNode_CommandNode(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	ident := &parse.IdentifierNode{Ident: "unregisteredCommand"}
-	cmd := &parse.CommandNode{Args: []parse.Node{ident}}
+	ctx := &diagCtx{Vars: map[string]serverTypes.Node{"$": nil}}
+	ident := &serverTypes.IdentifierNode{Ident: "unregisteredCommand"}
+	cmd := &serverTypes.CommandNode{Args: []serverTypes.Node{ident}}
 
 	diags := analyzeNode(cmd, "{{ unregisteredCommand }}", ctx)
 	require.Len(t, diags, 1)
@@ -434,19 +436,19 @@ func TestPublishDiagnostics_UnknownDiagnosticFallback(t *testing.T) {
 }
 
 func TestCollectDeclarations_RootIdent(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	declVar := &parse.VariableNode{Ident: []string{"$"}}
-	pipe := &parse.PipeNode{Decl: []*parse.VariableNode{declVar}}
+	ctx := &diagCtx{Vars: map[string]serverTypes.Node{"$": nil}}
+	declVar := &serverTypes.VariableNode{Ident: []string{"$"}}
+	pipe := &serverTypes.PipeNode{Decl: []*serverTypes.VariableNode{declVar}}
 
 	diags := collectDeclarations(pipe, "{{ $ := . }}", ctx)
 	assert.Empty(t, diags)
 }
 
 func TestCollectDeclarations_Assignment(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil, "$x": &parse.PipeNode{}}}
-	declVar := &parse.VariableNode{Ident: []string{"$x"}}
-	pipe := &parse.PipeNode{
-		Decl:     []*parse.VariableNode{declVar},
+	ctx := &diagCtx{Vars: map[string]serverTypes.Node{"$": nil, "$x": &serverTypes.PipeNode{}}}
+	declVar := &serverTypes.VariableNode{Ident: []string{"$x"}}
+	pipe := &serverTypes.PipeNode{
+		Decl:     []*serverTypes.VariableNode{declVar},
 		IsAssign: true,
 	}
 	diags := collectDeclarations(pipe, "{{ $x = . }}", ctx)
@@ -455,20 +457,20 @@ func TestCollectDeclarations_Assignment(t *testing.T) {
 }
 
 func TestCheckPipeUsage_SpecialVariables(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	vnodeRoot := &parse.VariableNode{Ident: []string{"$"}}
-	cmdRoot := &parse.CommandNode{Args: []parse.Node{vnodeRoot}}
-	pipeRoot := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdRoot}}
+	ctx := &diagCtx{Vars: map[string]serverTypes.Node{"$": nil}}
+	vnodeRoot := &serverTypes.VariableNode{Ident: []string{"$"}}
+	cmdRoot := &serverTypes.CommandNode{Args: []serverTypes.Node{vnodeRoot}}
+	pipeRoot := &serverTypes.PipeNode{Cmds: []*serverTypes.CommandNode{cmdRoot}}
 	assert.Empty(t, checkPipeUsage(pipeRoot, "{{ $ }}", ctx))
-	vnodeEmpty := &parse.VariableNode{Ident: []string{""}}
-	cmdEmpty := &parse.CommandNode{Args: []parse.Node{vnodeEmpty}}
-	pipeEmpty := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdEmpty}}
+	vnodeEmpty := &serverTypes.VariableNode{Ident: []string{""}}
+	cmdEmpty := &serverTypes.CommandNode{Args: []serverTypes.Node{vnodeEmpty}}
+	pipeEmpty := &serverTypes.PipeNode{Cmds: []*serverTypes.CommandNode{cmdEmpty}}
 	assert.Empty(t, checkPipeUsage(pipeEmpty, "{{}}", ctx))
 }
 
 func TestAnalyzeNode_UndefinedNodeEmptyName(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	undefNode := &parse.UndefinedNode{}
+	ctx := &diagCtx{Vars: map[string]serverTypes.Node{"$": nil}}
+	undefNode := &serverTypes.UndefinedNode{}
 	diags := analyzeNode(undefNode, "{{ }}", ctx)
 	assert.Empty(t, diags)
 }

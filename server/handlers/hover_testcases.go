@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	parse "text-template-parser"
+	serverTypes "text-template-server/types"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -50,10 +50,21 @@ c
 `
 
 var (
-	docRootNode, _, _      = tryParse(docText)
-	shortDocRootNode, _, _ = tryParse(shortDocText)
-	elseRootNode, _, _     = tryParse(docElseText)
+	docRootNode      = parseTypedRoot(docText)
+	shortDocRootNode = parseTypedRoot(shortDocText)
+	elseRootNode     = parseTypedRoot(docElseText)
 )
+
+// parseTypedRoot parses src and returns the analysed (typed) tree, or nil if
+// parsing failed. Used by the hover testcases to construct expected hover
+// values that reference the typed AST.
+func parseTypedRoot(src string) *serverTypes.Tree {
+	tree, _, _ := tryParse(src)
+	if tree == nil {
+		return nil
+	}
+	return buildTypedTree(tree, nil, nil)
+}
 
 var shortDocText = `
 {{range $i, $v := .Items }}
@@ -128,7 +139,7 @@ var hoverTestCases = []hoverTestCase{
 			Contents: protocol.MarkupContent{
 				Kind: protocol.MarkupKindMarkdown,
 				Value: MessageEnd(
-					docRootNode.Root.Nodes[1].(*parse.WithNode).List.Nodes[6],
+					docRootNode.Root.Nodes[1].(*serverTypes.WithNode).List.Nodes[6],
 					protocol.Position{Line: 7, Character: 3},
 				),
 			},
@@ -185,7 +196,7 @@ var hoverTestCases = []hoverTestCase{
 			Contents: protocol.MarkupContent{
 				Kind: protocol.MarkupKindMarkdown,
 				Value: MessageEnd(
-					docRootNode.Root.Nodes[1].(*parse.WithNode).List.Nodes[4],
+					docRootNode.Root.Nodes[1].(*serverTypes.WithNode).List.Nodes[4],
 					protocol.Position{Line: 4, Character: 3},
 				),
 			},
@@ -203,7 +214,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIndexVariable(&parse.VariableNode{Ident: []string{"$i"}}),
+				Value: MessageIndexVariable(&serverTypes.VariableNode{Ident: []string{"$i"}}),
 			},
 		},
 		expectingError: false,
@@ -219,7 +230,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIndexVariable(&parse.VariableNode{Ident: []string{"$i"}}),
+				Value: MessageIndexVariable(&serverTypes.VariableNode{Ident: []string{"$i"}}),
 			},
 		},
 		expectingError: false,
@@ -235,7 +246,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageVariable(&parse.VariableNode{Ident: []string{"$v"}}, nil, nil),
+				Value: MessageVariable(&serverTypes.VariableNode{Ident: []string{"$v"}}, nil, nil),
 			},
 		},
 		expectingError: false,
@@ -252,7 +263,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageField(&parse.FieldNode{Ident: []string{"Name"}}, nil),
+				Value: MessageField(&serverTypes.FieldNode{Ident: []string{"Name"}}, nil),
 			},
 		},
 		expectingError: false,
@@ -269,7 +280,7 @@ var hoverTestCases = []hoverTestCase{
 			Contents: protocol.MarkupContent{
 				Kind: protocol.MarkupKindMarkdown,
 				Value: MessageVariable(
-					&parse.VariableNode{Ident: []string{"$lastLogin"}},
+					&serverTypes.VariableNode{Ident: []string{"$lastLogin"}},
 					nil,
 					nil,
 				),
@@ -289,11 +300,15 @@ var hoverTestCases = []hoverTestCase{
 			Contents: protocol.MarkupContent{
 				Kind: protocol.MarkupKindMarkdown,
 				Value: MessageBranch(
-					&parse.BranchNode{
-						NodeType: parse.NodeIf,
-						Pipe: &parse.PipeNode{
-							Cmds: []*parse.CommandNode{
-								{Args: []parse.Node{&parse.IdentifierNode{Ident: ".IsActive"}}},
+					&serverTypes.BranchNode{
+						NodeType: serverTypes.NodeIf,
+						Pipe: &serverTypes.PipeNode{
+							Cmds: []*serverTypes.CommandNode{
+								{
+									Args: []serverTypes.Node{
+										&serverTypes.IdentifierNode{Ident: ".IsActive"},
+									},
+								},
 							},
 						},
 					},
@@ -314,11 +329,15 @@ var hoverTestCases = []hoverTestCase{
 			Contents: protocol.MarkupContent{
 				Kind: protocol.MarkupKindMarkdown,
 				Value: MessageBranch(
-					&parse.BranchNode{
-						NodeType: parse.NodeRange,
-						Pipe: &parse.PipeNode{
-							Cmds: []*parse.CommandNode{
-								{Args: []parse.Node{&parse.IdentifierNode{Ident: ".Roles"}}},
+					&serverTypes.BranchNode{
+						NodeType: serverTypes.NodeRange,
+						Pipe: &serverTypes.PipeNode{
+							Cmds: []*serverTypes.CommandNode{
+								{
+									Args: []serverTypes.Node{
+										&serverTypes.IdentifierNode{Ident: ".Roles"},
+									},
+								},
 							},
 						},
 					},
@@ -339,11 +358,15 @@ var hoverTestCases = []hoverTestCase{
 			Contents: protocol.MarkupContent{
 				Kind: protocol.MarkupKindMarkdown,
 				Value: MessageBranch(
-					&parse.BranchNode{
-						NodeType: parse.NodeWith,
-						Pipe: &parse.PipeNode{
-							Cmds: []*parse.CommandNode{
-								{Args: []parse.Node{&parse.IdentifierNode{Ident: ".User"}}},
+					&serverTypes.BranchNode{
+						NodeType: serverTypes.NodeWith,
+						Pipe: &serverTypes.PipeNode{
+							Cmds: []*serverTypes.CommandNode{
+								{
+									Args: []serverTypes.Node{
+										&serverTypes.IdentifierNode{Ident: ".User"},
+									},
+								},
 							},
 						},
 					},
@@ -363,7 +386,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIndexVariable(&parse.VariableNode{Ident: []string{"$i"}}),
+				Value: MessageIndexVariable(&serverTypes.VariableNode{Ident: []string{"$i"}}),
 			},
 		},
 		expectingError: false,
@@ -379,7 +402,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "and"}),
+				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "and"}),
 			},
 		},
 		expectingError: false,
@@ -395,7 +418,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "not"}),
+				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "not"}),
 			},
 		},
 		expectingError: false,
@@ -411,7 +434,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIdentifier(&parse.IdentifierNode{Ident: "ge"}),
+				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "ge"}),
 			},
 		},
 		expectingError: false,
