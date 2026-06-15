@@ -82,7 +82,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		}
 		return nil, nil
 	case *types.FieldNode:
-		return fieldNodeDefinition(loadedType, target, offset)
+		return fieldNodeDefinition(loadedType, dotTypeAt(target), target, offset)
 	}
 
 	log.Debug().
@@ -92,8 +92,19 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 	return nil, nil
 }
 
-func fieldNodeDefinition(loadedType *types.Tree, target *types.FieldNode, offset int) (any, error) {
-	if loadedType == nil || loadedType.Fset == nil || loadedType.DotType == nil {
+func fieldNodeDefinition(
+	loadedType *types.Tree,
+	dotType gotypes.Type,
+	target *types.FieldNode,
+	offset int,
+) (any, error) {
+	if loadedType == nil || loadedType.Fset == nil {
+		return nil, nil
+	}
+	if dotType == nil {
+		dotType = loadedType.DotType
+	}
+	if dotType == nil {
 		return nil, nil
 	}
 	if len(target.Ident) == 0 {
@@ -103,14 +114,14 @@ func fieldNodeDefinition(loadedType *types.Tree, target *types.FieldNode, offset
 	targetIdx := getFieldIdentIdx(target, offset)
 
 	// log.Debug().
-	// 	Any("dotType", loadedType.DotType).
+	// 	Any("dotType", dotType).
 	// 	Any("Ident", target.Ident).
 	// 	Any("target", targetIdx).
 	// 	Any("cursorPosition", offset).
 	// 	Any("fieldNodePos", target.Pos).
 	// 	Msg("definition NodeField")
 
-	var currentType gotypes.Type = loadedType.DotType
+	currentType := dotType
 	for i := 0; i <= targetIdx; i++ {
 		obj, _, _ := gotypes.LookupFieldOrMethod(
 			currentType,

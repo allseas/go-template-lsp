@@ -101,6 +101,8 @@ func MessageDot(_ *serverTypes.DotNode, typ types.Type) string {
 func MessageField(n *serverTypes.FieldNode, typ types.Type) string {
 	const fieldMessage = "```go\nfield %s\n```\nAccesses the `%s` field of the `.%s` context."
 	const fieldMessageTyped = "```go\nfield %s %s\n```\nAccesses the `%s` field of the `.%s` context."
+	const fieldMessageCtx = "```go\nfield %s\n```\nAccesses the `%s` field of the `%s` dot context."
+	const fieldMessageTypedCtx = "```go\nfield %s %s\n```\nAccesses the `%s` field of the `%s` dot context."
 
 	ctx := ""
 	if len(n.Ident) > 1 {
@@ -110,8 +112,20 @@ func MessageField(n *serverTypes.FieldNode, typ types.Type) string {
 	if len(n.Ident) > 0 {
 		field = n.Ident[0]
 	}
-	if s := formatType(typ); s != "" {
-		return withLink(fmt.Sprintf(fieldMessageTyped, n.String(), s, field, ctx))
+
+	ctxTypeName := formatType(n.ValueType())
+	fieldTypeName := formatType(typ)
+
+	if ctxTypeName != "" {
+		if fieldTypeName != "" {
+			return withLink(
+				fmt.Sprintf(fieldMessageTypedCtx, n.String(), fieldTypeName, field, ctxTypeName),
+			)
+		}
+		return withLink(fmt.Sprintf(fieldMessageCtx, n.String(), field, ctxTypeName))
+	}
+	if fieldTypeName != "" {
+		return withLink(fmt.Sprintf(fieldMessageTyped, n.String(), fieldTypeName, field, ctx))
 	}
 	return withLink(fmt.Sprintf(fieldMessage, n.String(), field, ctx))
 }

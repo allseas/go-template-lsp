@@ -33,6 +33,8 @@ type document struct {
 	loadedTypes map[string]*types.Tree
 	// typedTrees is the per-tree analysed (typed) tree, paired with loadedTypes.
 	typedTrees map[string]*types.Tree
+	// failedHints maps tree name to the error message when its gotype hint failed to load from all dirs.
+	failedHints map[string]string
 }
 
 type documentStore struct {
@@ -58,12 +60,14 @@ func (s *documentStore) Set(uri, text string) {
 	loadDirs := []string{WorkspaceRoot, uriDir(uri)}
 
 	loadedTypes := make(map[string]*types.Tree)
+	failedHints := make(map[string]string)
 	for name, tr := range treeSet {
 		isRoot := tree != nil && tr == tree
 		hint := hintTypeForTree(text, tr, isRoot)
 		if hint == "" {
 			continue
 		}
+		var lastErr error
 		for _, dir := range loadDirs {
 			if dir == "" {
 				continue
@@ -71,10 +75,15 @@ func (s *documentStore) Set(uri, text string) {
 			loaded, lerr := types.CachedLoadTypeFromHint(hint, dir)
 			if lerr != nil {
 				log.Debug().Str("hint", hint).Str("dir", dir).Err(lerr).Msg("type hint load failed")
+				lastErr = lerr
 				continue
 			}
 			loadedTypes[name] = loaded
+			lastErr = nil
 			break
+		}
+		if lastErr != nil {
+			failedHints[name] = lastErr.Error()
 		}
 	}
 
@@ -151,6 +160,7 @@ func (s *documentStore) Set(uri, text string) {
 		typedTree:   typed,
 		loadedTypes: loadedTypes,
 		typedTrees:  typedTrees,
+		failedHints: failedHints,
 	}
 }
 

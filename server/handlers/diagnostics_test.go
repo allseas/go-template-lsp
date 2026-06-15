@@ -401,3 +401,60 @@ func TestCollectDiagnostics_TemplateArgTypeCheck(t *testing.T) {
 		)
 	})
 }
+
+func TestCollectDiagnostics_HintLoadFailure(t *testing.T) {
+	fileURI := "file:///hint-load-failure.tmpl"
+	t.Cleanup(func() { store.Remove(fileURI) })
+
+	t.Run("unresolvable root hint emits warning on comment", func(t *testing.T) {
+		src := "{{/*gotype: nonexistent/pkg.Type*/}}\n{{ .Name }}\n"
+		store.Set(fileURI, src)
+
+		diags := collectDiagnostics(src, fileURI)
+		diag, ok := findDiagnosticContaining(diags, "could not load type")
+		require.True(t, ok, "expected hint-load-failure diagnostic, got: %v", diagMessages(diags))
+
+		assert.Equal(t, uint32(0), diag.Range.Start.Line, "diagnostic should be on line 0")
+		require.NotNil(t, diag.Severity)
+		assert.Equal(t, protocol.DiagnosticSeverityWarning, *diag.Severity)
+	})
+
+	t.Run("valid hint emits no hint-load-failure diagnostic", func(t *testing.T) {
+		const resourceDir = "../../test/resources/definition-tests-server"
+		t.Cleanup(func() { WorkspaceRoot = "" })
+		WorkspaceRoot = resourceDir
+
+		src := "{{/*gotype: text-template-server/src/model.Order*/}}\n{{ .CustomerName }}\n"
+		store.Set(fileURI, src)
+
+		diags := collectDiagnostics(src, fileURI)
+		_, ok := findDiagnosticContaining(diags, "could not load type")
+		require.False(
+			t,
+			ok,
+			"expected no hint-load-failure diagnostic for valid hint, got: %v",
+			diagMessages(diags),
+		)
+	})
+
+	t.Run("unresolvable define-block hint emits warning on its comment", func(t *testing.T) {
+		src := "{{- define \"myblock\" -}}\n{{/*gotype: nonexistent/pkg.Type*/}}\n{{ .Name }}\n{{- end -}}\n"
+		store.Set(fileURI, src)
+
+		diags := collectDiagnostics(src, fileURI)
+		diag, ok := findDiagnosticContaining(diags, "could not load type")
+		require.True(
+			t,
+			ok,
+			"expected hint-load-failure diagnostic for define block, got: %v",
+			diagMessages(diags),
+		)
+
+		assert.Equal(
+			t,
+			uint32(1),
+			diag.Range.Start.Line,
+			"diagnostic should be on the gotype comment line",
+		)
+	})
+}
