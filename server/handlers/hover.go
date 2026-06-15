@@ -92,7 +92,7 @@ func hoverMessage(target parse.Node, doc *document) string {
 	case *parse.DotNode:
 		return MessageDot(t, lookupTypedNodeType(doc, t))
 	case *parse.FieldNode:
-		return MessageField(t, lookupTypedNodeType(doc, t))
+		return MessageField(t, lookupTypedNodeType(doc, t), lookupDotContextType(doc, t))
 	case *parse.IdentifierNode:
 		return MessageIdentifier(t)
 	case *parse.NilNode:
