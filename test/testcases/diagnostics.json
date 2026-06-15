@@ -17,6 +17,13 @@
     }
   },
   {
+    "name": "No diagnostics on correct file without gotype",
+    "content": "{{/*some comment*/}}\n\n{{ $test := 0 }}\n\n{{ .Address.Country }}\n\n{{ $test }}\n{{ $test }}{{$variable := \"abc\"}}{{ $variable }}",
+    "expected": {
+      "count": 0
+    }
+  },
+  {
     "name": "Diagnostics on missing closing tag",
     "content": "{{ if .Condition }}\nContent without closing tag\n",
     "expected": {

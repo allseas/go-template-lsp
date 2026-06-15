@@ -38,12 +38,24 @@ func semanticOrderType(t *testing.T) *serverTypes.Tree {
 // bypassing the type-hint loading mechanism that requires a workspace root.
 func setDocWithTypedTree(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	t.Helper()
-	tree, _, err := tryParse(src)
+	tree, treeSet, err := tryParse(src)
 	require.NoError(t, err)
 	typedTree := buildTypedTree(tree, lt, nil)
-	doc := &document{text: src, tree: tree, loadedType: lt, typedTree: typedTree}
-	if doc.typedTree != nil {
-		serverTypes.SetEndsForTree(*doc.typedTree, serverTypes.Pos(len(src)), &doc.text)
+	typedTrees := make(map[string]*serverTypes.Tree, len(treeSet))
+	for name, tr := range treeSet {
+		typedTrees[name] = buildTypedTree(tr, lt, nil)
+	}
+	doc := &document{
+		text:       src,
+		tree:       tree,
+		loadedType: lt,
+		typedTree:  typedTree,
+		typedTrees: typedTrees,
+	}
+	for _, tt := range typedTrees {
+		if tt != nil {
+			serverTypes.SetEndsForTree(*tt, serverTypes.Pos(len(src)), &doc.text)
+		}
 	}
 	store.mu.Lock()
 	store.docs[uri] = doc
@@ -376,6 +388,51 @@ func TestDocumentSymbolsThreeDefines(t *testing.T) {
 		names[i] = s.Name
 	}
 	assert.ElementsMatch(t, []string{"a", "b", "c"}, names)
+}
+
+func TestDocumentSymbolsNameSubstringOfDefine(t *testing.T) {
+	for _, name := range []string{"e", "n", "in", "define"} {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			uri := "file:///sym-name-" + name + ".tmpl"
+			src := `{{define "` + name + `"}}body{{end}}`
+			setDocFromSource(t, uri, src)
+			defer store.Delete(uri)
+
+			result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+			require.NoError(t, err)
+			syms := castDocSymbols(t, result)
+			require.Len(t, syms, 1)
+
+			sym := syms[0]
+			assert.Equal(t, name, sym.Name)
+
+			expectedChar := uint32(10)
+			assert.Equal(t, expectedChar, sym.SelectionRange.Start.Character,
+				"selectionRange should point at the name, not inside the keyword")
+		})
+	}
+}
+
+// TestDocumentSymbolsBlockTreeExcluded verifies that {{block}} trees are not
+// included in the document symbols output (they have no {{define}} header).
+func TestDocumentSymbolsBlockTreeExcluded(t *testing.T) {
+	uri := "file:///sym-block.tmpl"
+	// {{block}} creates a tree in the treeSet but has no {{define}} header.
+	src := `{{define "outer"}}{{block "inner" .}}default{{end}}{{end}}`
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+
+	names := make([]string, len(syms))
+	for i, s := range syms {
+		names[i] = s.Name
+	}
+	// Only "outer" should appear; "inner" is a {{block}}, not a {{define}}.
+	assert.ElementsMatch(t, []string{"outer"}, names)
 }
 
 // TestSemanticTokensAdditionalCases covers node kinds not exercised by
