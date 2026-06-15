@@ -102,7 +102,6 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 		}
 	}
 
-
 	// Always seed the cache: builtins first, then workspace-defined globals.
 	{
 		funcs, err := types.ComputeGlobalFuncs(handlers.WorkspaceRoot)
