@@ -2,7 +2,7 @@
 
 {{ define "control_logger.conf.tmpl.taglist" }}
   {{- /*gotype: cg/model.Instance*/ -}}
-  {{- $taglist := "" }}
+  {{# $taglist := "" }}
   {{- with $tagMap := .IdentifyingSelection }}
     {{- range $key := .Order }}
       {{- if $taglist }}

@@ -14,3 +14,7 @@ import (
 func extDefinitionDotScope(_ types.Node, _, _ string) (protocol.Location, bool) {
 	return protocol.Location{}, false
 }
+
+func WelcomeMessage() string {
+	return "NOT ALLSEAS"
+}

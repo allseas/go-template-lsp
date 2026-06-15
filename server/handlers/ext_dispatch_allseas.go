@@ -22,3 +22,7 @@ func extDefinitionDotScope(n types.Node, uri, text string) (protocol.Location, b
 	}
 	return protocol.Location{}, false
 }
+
+func WelcomeMessage() string {
+	return "ALLSEAS"
+}

@@ -33,7 +33,7 @@ platforms.forEach(([goos, goarch, outputName]) => {
     console.log(`  Building ${outputName} (GOOS=${goos} GOARCH=${goarch})...`);
     
     execSync(
-        `go build -o "${outputPath}" -tags "allseas"`,
+        `go build -o "${outputPath}" -tags allseas`,
         {
             stdio: 'inherit',
             cwd: serverDirectory,

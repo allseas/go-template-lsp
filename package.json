@@ -16,7 +16,7 @@
     "package:vscode": "npm run build:server && npm run package:no-verify -w clients/VSCode",
     "package:vscode:allseas": "npm run build:server:allseas && npm run package:no-verify -w clients/VSCode",
     "watch:vscode": "(ts-node --esm scripts/watch-server-binaries.ts) | (npm run watch -w clients/VSCode)",
-    "watch:vscode:allseas": "(ts-node --esm scripts/watch-server-binaries.ts) | (npm run watch -w clients/VSCode)",
+    "watch:vscode:allseas": "(ts-node --esm scripts/watch-server-binaries_allseas.ts) | (npm run watch -w clients/VSCode)",
     "launch:vscode": "npm run package:vscode && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test",
     "launch:vscode:allseas": "npm run package:vscode:allseas && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test",
     "package:jetbrains": "npm run build:server && cd clients/JetBrains/go-text-template && ./gradlew clean buildPlugin --no-build-cache --no-configuration-cache && find ./build/distributions | grep '.zip' | xargs -i mv {} ../../../go-template-jetbrains.zip",
