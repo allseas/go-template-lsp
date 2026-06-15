@@ -17,34 +17,15 @@ Diagnostics report errors in template files as squiggly underlines. They are pub
 
 ## Request flow
 
-```
-Document opened / changed
-        │
-        ▼
-handlers/documents.go : onOpen() / onChange()
-        │
-        ▼
-handlers/diagnostics.go : publishDiagnostics()
-        │
-        ├── collectDiagnostics(text, uri)
-        │       │
-        │       ├── store.Get(uri)          re-use already-parsed tree if available
-        │       ├── tryParse(text)          otherwise parse with ParsePartial mode
-        │       └── walkAndAnalyze(root, text, ctx, visited, analyzeNode)
-        │               │
-        │               └── analyzeNode(node, text, ctx)   called for every AST node
-        │                       │
-        │                       ├── declareNode()           record variable declarations
-        │                       └── switch node type
-        │                               ├── UndefinedNode   → error from parser (see below)
-        │                               ├── ActionNode      → checkPipeUsage()
-        │                               ├── RangeNode       → checkPipeUsage()
-        │                               ├── IfNode          → checkPipeUsage()
-        │                               ├── WithNode        → checkPipeUsage()
-        │                               └── CommandNode     → unknown function check
-        │
-        ▼
-ctx.Notify(publishDiagnostics, diagnostics)
+```mermaid
+flowchart TD
+    A[Document opened or changed] --> B["collectDiagnostics - get or parse tree"]
+    B --> C["walkAndAnalyze - visit every AST node"]
+    C --> D{node type}
+    D -->|UndefinedNode| E[parser error]
+    D -->|"ActionNode / IfNode / RangeNode / WithNode"| F["checkPipeUsage - variable checks"]
+    D -->|CommandNode| G[unknown function check]
+    E & F & G --> H[publishDiagnostics]
 ```
 
 ## UndefinedNode
@@ -55,11 +36,11 @@ There are two distinct categories of `UndefinedNode`:
 
 Created when the lexer encounters a bad token (e.g. `bad character U+003F '?'`) or the parser encounters something it cannot handle. `n.str` contains the original source fragment and `n.Err` holds the corresponding error. These are reported directly as diagnostics.
 
-```
+```go
 {{ $?????
          ↑
          lexer.errorf("bad character U+003F '?'")
-         → UndefinedNode{Pos: <offset of $>, str: "bad character U+003F '?'", Err: …}
+         -> UndefinedNode{Pos: <offset of $>, str: "bad character U+003F '?'", Err: …}
 ```
 
 ### 2. Recovery markers (`str == ""`)
@@ -68,15 +49,15 @@ Created when the lexer encounters a bad token (e.g. `bad character U+003F '?'`) 
 
 | Sub-case                                 | Err message                     | Action                                                                                     |
 | ---------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ |
-| `{{ }}` — empty action with no lex error | `"… missing value for command"` | Report the error; position is valid                                                        |
-| `{{ $?????` — post-lex-error recovery    | nil or unrelated message        | Skip; the real error is already covered by the non-empty `UndefinedNode` for the bad token |
+| `{{ }}` - empty action with no lex error | `"… missing value for command"` | Report the error; position is valid                                                        |
+| `{{ $?????` - post-lex-error recovery    | nil or unrelated message        | Skip; the real error is already covered by the non-empty `UndefinedNode` for the bad token |
 
 The server handles these with the following logic (`analyzeNode`):
 
-```
-str != ""                               →  report as "undefined variable: <str>"
-str == "" && err contains "missing value"  →  report using err.Error() as message
-str == "" && everything else            →  skip (structural artifact)
+```go
+str != ""                                  // ->  report as "undefined variable: <str>"
+str == "" && err contains "missing value"  // ->  report using err.Error() as message
+str == "" && everything else               // ->  skip (structural artifact)
 ```
 
 `lexer.errorf()` records the error item and returns nil to terminate the current state-machine step. It does not modify `l.pos`, `l.start`, or `l.input`, so subsequent `nextItem()` calls resume lexing from the position immediately after the bad token:
@@ -94,8 +75,8 @@ This means each bad character in `{{ $?????` produces its own error token (and t
 
 Diagnostics use `expandToFullBracketsFromOffset(pos, text)` to expand a byte offset to the full surrounding `{{ … }}` block:
 
-1. Search backwards from `pos` for the nearest `{{` — that becomes the start.
-2. Search forwards from `pos` for the nearest `}}` — that becomes the end.
+1. Search backwards from `pos` for the nearest `{{` - that becomes the start.
+2. Search forwards from `pos` for the nearest `}}` - that becomes the end.
 3. If no `}}` is found before a newline, the end is capped at the newline (handles unterminated actions).
 
 Both offsets are then converted to `(line, character)` positions with `offsetToPosition`.
@@ -104,23 +85,15 @@ Both offsets are then converted to `(line, character)` positions with `offsetToP
 
 Type errors from template calls are collected separately from AST-based diagnostics. These errors are generated during type analysis by the `server/types` package:
 
-```flow
-collectDiagnostics(uri)
-    │
-    ├── walkAndAnalyze(...)  ← AST-based diagnostics
-    │
-    └── For each typed tree in document:
-            │
-            └── typedTree.TypeErrors
-                    │
-                    ├── Filter for ErrorTypeInvalidTemplateArg
-                    └── Convert to protocol.Diagnostic
-                            │
-                            ▼
-                    User sees squiggly underline on {{ template ... }}
+```mermaid
+flowchart TD
+    A["collectDiagnostics(uri)"] --> B["walkAndAnalyze - AST-based diagnostics"]
+    A --> C["For each typed tree - iterate TypeErrors"]
+    C --> D["filter ErrorTypeInvalidTemplateArg → protocol.Diagnostic"]
+    B & D --> E[publishDiagnostics]
 ```
 
-**When this occurs:** When a `{{template "name" arg}}` call is analyzed:
+**When this occurs:** When a `{{template "name" arg}}` call is analysed:
 
 1. The type system looks up the template name in the global `templateInputTypes` registry
 2. If a type is found, the argument's type is resolved
@@ -129,14 +102,11 @@ collectDiagnostics(uri)
 
 **Example:** Template `AuthorTpl` declares `/*gotype: models.Author*/` but is called with an `Order`:
 
-```flow
-Document:
-    {{template "AuthorTpl" .}}
-                           ↑
-                    (. is models.Order)
+```go
+Document:  {{template "AuthorTpl" .}}
+                                   ^ (. is models.Order)
 
-Diagnostic:
-    template "AuthorTpl" expects argument of type models.Author, but got models.Order
+Diagnostic: template "AuthorTpl" expects argument of type models.Author, but got models.Order
 ```
 
 See [template_checking.md](template_checking.md) for more details on how template type hints work.

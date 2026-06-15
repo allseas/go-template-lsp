@@ -1,0 +1,67 @@
+{{- define "control-argus.json.tmpl.InstanceInfluxChannelClass.InfluxSignalClass"}}
+{{- /*gotype: cg/model/controlmodel.SignalInstance*/}}
+{
+    "name": "{{ .Name }}",
+    "description": "TBD",
+    {{- if .Signal.Unit }}
+    "unitOfMeasurement": "{{ .Signal.Unit }}",
+    {{- end }}
+    "influxField": "{{ .Name | kebabCase }}",
+    "dataType": "{{ .Signal.Datatype.Golang }}"
+}
+{{- end }}
+{{- define "control-argus.json.tmpl.InstanceInfluxChannelClass" }}
+{{- /*gotype: cg/model/controlmodel.Instance*/}}
+{
+    {{- with .Block }}
+    "name": "{{ .Name }}",
+    "description": "{{ .Description }}",
+    "influxSeriesSchema": {
+        "name": "{{ .Name | kebabCase }}"
+        {{- if .IdentifyingSelection }},
+        "tagKeys": [
+            {{- range $idx, $identifyingSelection := .IdentifyingSelection }}
+            {{- if $idx }},{{end}}
+            {
+                "name": "{{ $identifyingSelection }}"
+            }
+            {{- end }}
+        ]
+        {{- end }}
+    },
+    {{- end }}
+    "influxSignalClasses": [
+        {{- $comma := false}}
+        {{- range .Inputs }}
+        {{- if $comma }},{{- end }}
+        {{- template "control-argus.json.tmpl.InstanceInfluxChannelClass.InfluxSignalClass" . }}
+        {{- $comma = true}}
+        {{- end }}
+        {{- range .Outputs }}
+        {{- if $comma }},{{- end }}
+        {{- template "control-argus.json.tmpl.InstanceInfluxChannelClass.InfluxSignalClass" . }}
+        {{- $comma = true}}
+        {{- end }}
+    ]
+}
+{{- end }}
+{{- /*gotype: cg/model/controlmodel.Model*/ -}}
+{
+    "influxChannelClasses": [
+        {{- $comma := false -}}
+        {{- if .Machine.Inputs }}
+        {{- $comma = true}}
+            {{- template "control-argus.json.tmpl.InstanceInfluxChannelClass" .Machine }}
+        {{- end }}
+        {{- range .Instances }}
+        {{- if or .Inputs .Outputs }}
+        {{- if $comma }},{{- end }}
+            {{- template "control-argus.json.tmpl.InstanceInfluxChannelClass" . }}
+        {{- $comma = true }}
+        {{- end }}
+        {{- end }}
+        {{- range .Commands }}
+
+        {{- end }}
+    ]
+}

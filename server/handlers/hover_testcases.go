@@ -252,7 +252,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageField(&parse.FieldNode{Ident: []string{"Name"}}, nil),
+				Value: MessageField(&parse.FieldNode{Ident: []string{"Name"}}, nil, nil),
 			},
 		},
 		expectingError: false,

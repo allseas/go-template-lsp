@@ -66,12 +66,16 @@ func SemanticTokensFull(
 	params *protocol.SemanticTokensParams,
 ) (*protocol.SemanticTokens, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || doc.typedTree == nil || doc.typedTree.Root == nil {
+	if !ok {
 		return nil, nil
 	}
 
 	var tokens []rawToken
-	walkSemanticNode(doc.typedTree.Root, doc.text, &tokens)
+	for _, tt := range doc.typedTrees {
+		if tt != nil && tt.Root != nil {
+			walkSemanticNode(tt.Root, doc.text, &tokens)
+		}
+	}
 
 	sort.Slice(tokens, func(i, j int) bool {
 		return tokens[i].startByte < tokens[j].startByte
@@ -106,21 +110,23 @@ func DocumentSymbols(
 		blockEnd := int(t.End)
 
 		// Search backward from the body start to find the nearest {{define.
-		// FindAllStringIndex is used so we take the last (closest) match;
-		// FindStringIndex would return the first match and attribute the
-		// wrong block range to every define after the first one.
 		blockStart := bodyStart
 		if ms := reDefine.FindAllStringIndex(doc.text[:bodyStart], -1); ms != nil {
 			blockStart = ms[len(ms)-1][0]
 		}
 
-		// The name string sits between "define " and "}}" - find it for selectionRange.
+		// Verify this tree was introduced by a {{define "name"}} (not {{block}}).
+		quotedName := `"` + name + `"`
+		headerFull := doc.text[blockStart:bodyStart]
+		rdelimIdx := strings.Index(headerFull, "}}")
+		if rdelimIdx < 0 || !strings.Contains(headerFull[:rdelimIdx+2], quotedName) {
+			continue
+		}
+		defineHeader := headerFull[:rdelimIdx+2]
+
 		nameStart := bodyStart
-		if bodyStart > blockStart {
-			header := doc.text[blockStart:bodyStart]
-			if idx := strings.Index(header, name); idx >= 0 {
-				nameStart = blockStart + idx
-			}
+		if idx := strings.Index(defineHeader, quotedName); idx >= 0 {
+			nameStart = blockStart + idx + 1 // +1 skips the opening quote
 		}
 		nameEnd := nameStart + len(name)
 

@@ -166,14 +166,14 @@ func TestDocumentMultipleDefines(t *testing.T) {
 
 	doc := &document{text: src, tree: tree, trees: treeSet}
 
-	// treeAt: positions inside each define body → correct define tree
+	// treeAt: positions inside each define body -> correct define tree
 	offA := strings.Index(src, "alpha-body")
 	offB := strings.Index(src, "beta-body")
 	assert.Equal(t, treeSet["A"], doc.treeAt(parse.Pos(offA)), "offset inside define A body")
 	assert.Equal(t, treeSet["B"], doc.treeAt(parse.Pos(offB)), "offset inside define B body")
 
 	// treeAt: position at the very start of the file (on the {{define}} directive,
-	// before any define's content) → root template
+	// before any define's content) -> root template
 	assert.Equal(
 		t,
 		tree,
@@ -182,7 +182,7 @@ func TestDocumentMultipleDefines(t *testing.T) {
 	)
 
 	// treeAt: position at the {{define "B"}} directive (after A's {{end}},
-	// before B's content) → root template
+	// before B's content) -> root template
 	offDefineB := strings.Index(src, "{{- define \"B\"")
 	assert.Greater(t, offDefineB, 0, "sanity: found define B directive")
 	assert.Equal(
@@ -193,7 +193,7 @@ func TestDocumentMultipleDefines(t *testing.T) {
 	)
 
 	// treeAt: position at the very last byte of the source (after all {{end}}s)
-	// → root template
+	// -> root template
 	assert.Equal(
 		t,
 		tree,
@@ -224,7 +224,7 @@ func TestTreeAtMultiDefinesWithRoot(t *testing.T) {
 
 	doc := &document{text: src, tree: tree, trees: treeSet}
 
-	// --- positions inside define bodies → correct define tree ---
+	// --- positions inside define bodies -> correct define tree ---
 
 	offCustomerName := strings.Index(src, "CustomerName")
 	assert.Equal(t, treeSet["OrderTpl"], doc.treeAt(parse.Pos(offCustomerName)),
@@ -238,7 +238,7 @@ func TestTreeAtMultiDefinesWithRoot(t *testing.T) {
 	assert.Equal(t, treeSet["NoHint"], doc.treeAt(parse.Pos(offLocal)),
 		"offset inside NoHint body ($local) should return NoHint tree")
 
-	// --- positions in root template → root tree ---
+	// --- positions in root template -> root tree ---
 
 	// First root content line: {{ .Country }} (occurrence 0, before OrderTpl)
 	offCountry0 := strings.Index(src, ".Country")
