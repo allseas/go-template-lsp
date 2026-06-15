@@ -1,157 +1,138 @@
 package model
 
-// Model is the top-level data passed to the template.
-// gotype hint: {{- /*gotype: cg/model.Model*/ -}}
-type Model struct {
-	Machine        Instance
-	Instances      []Instance
-	Commands       []CommandGroup
-	AlarmInstances []AlarmInstance
-	ControlSystem  ControlSystem
-	LoggerInfo     LoggerInfo
+import "fmt"
+
+// Address is used as a nested struct inside Order.
+type Address struct {
+	Street  string
+	City    string
+	Country string
+	Zip     string
+	Info    InfoS
 }
 
-// Instance represents a controller block instance.
-// gotype hint: {{- /*gotype: cg/model.Instance*/ -}}
-type Instance struct {
-	Block                Block
-	IdentifyingSelection IdentifyingSelection
-	Inputs               []SignalInstance
-	Outputs              []SignalInstance
+type InfoS struct {
+	Info1 string
+	Info2 string
+	Desc  Description
 }
 
-// Block describes a controller block.
-type Block struct {
-	Name        string
-	IsComponent bool
-	Logging     []LoggingField
-}
-
-// IdentifyingSelection holds an ordered set of identifying key-value pairs.
-type IdentifyingSelection struct {
-	Order []string
-	vals  map[string]string
-}
-
-// Get returns the value for the given key.
-func (s IdentifyingSelection) Get(key string) string {
-	return s.vals[key]
-}
-
-// SignalInstance is one signal (input or output) on an instance.
-type SignalInstance struct {
-	Name   string
-	Signal Signal
-}
-
-// Signal describes a data signal.
-type Signal struct {
-	Datatype Datatype
-}
-
-// Datatype holds type information for a signal.
-type Datatype struct {
-	Golang string
-}
-
-// CommandGroup holds all instances of a single command type.
-type CommandGroup struct {
-	CommandInstances []CommandInstance
-}
-
-// CommandInstance is a single use of a command.
-type CommandInstance struct {
-	Command Command
-	Inputs  []SignalInstance
-	Outputs []SignalInstance
-}
-
-// Command describes a hardware command.
-type Command struct {
-	Name               string
-	HasHardwareInputs  bool
-	HasHardwareOutputs bool
-}
-
-// AlarmInstance pairs an alarm definition with its instance.
-type AlarmInstance struct {
-	Instance Instance
-	Alarm    Alarm
-}
-
-// Alarm describes an alarm.
-type Alarm struct {
-	Name string
-}
-
-// LoggingField is a field exposed through a block's logging list.
-type LoggingField struct {
-	Name     string
-	Datatype Datatype
-}
-
-// ControlSystem is the top-level control system.
-type ControlSystem struct {
-	Block Block
-}
-
-// LoggerInfo holds logger configuration.
-type LoggerInfo struct {
-	EnablePing      bool
-	UdpHeader       UdpHeader
-	IgnoreCRCErrors bool
-}
-
-// UdpHeader holds UDP-level header configuration.
-type UdpHeader struct {
-	SystemInstanceID string
-}
-
-// Offset is the byte/bit position of a field in the binary layout.
-type Offset struct {
-	Byte int
-	Bit  int
-}
-
-// Layout tracks the current position while iterating fields.
-type Layout struct {
-	bytePos int
-	bitPos  int
-}
-
-// Add advances the layout by one field and returns the current offset.
-func (l *Layout) Add(signal interface{}) Offset {
-	o := Offset{Byte: l.bytePos}
-	l.bytePos++
-	return o
-}
-
-// AddBit advances by one bit and returns the current offset.
-func (l *Layout) AddBit() Offset {
-	o := Offset{Byte: l.bytePos, Bit: l.bitPos}
-	l.bitPos++
-	return o
-}
-
-// Align advances to the next byte boundary.
-func (l *Layout) Align() string {
-	if l.bitPos > 0 {
-		l.bytePos++
-		l.bitPos = 0
+// Copy returns a copy of the address.
+func (a Address) Copy() Address {
+	return Address{
+		Street:  a.Street,
+		City:    a.City,
+		Country: a.Country,
+		Zip:     a.Zip,
+		Info:    a.Info,
 	}
-	return ""
 }
 
-// StartBitSet marks the start of a bit-packed region at byte n.
-func (l *Layout) StartBitSet(n int) string {
-	l.bytePos = n
-	l.bitPos = 0
-	return ""
+// Line returns a single-line formatted address.
+func (a Address) Line() string {
+	return a.Street + ", " + a.City
 }
 
-// EndBitSet finalises a bit-packed region.
-func (l *Layout) EndBitSet() string {
-	l.bytePos++
-	l.bitPos = 0
-	return ""
+// IsLocal reports whether the address is in the US.
+func (a Address) IsLocal() bool {
+	return a.Country == "US"
+}
+
+// ZipCode returns the postal code.
+func (a Address) ZipCode() string {
+	return a.Zip
+}
+
+type Description struct {
+	Long  string
+	Short string
+	Tags  []string
+}
+
+func (d Description) Summarize() string {
+	return "You are exactly right! It's not just ... -- it's ..."
+}
+
+// Item is one line in an order.
+type Item struct {
+	SKU       string
+	Name      string
+	Qty       int
+	UnitPrice float64
+	Desc      Description
+}
+
+// Label returns a short display label for the item.
+func (i Item) Label() string {
+	return fmt.Sprintf("%s x%d", i.Name, i.Qty)
+}
+
+// Total returns the line total (quantity × unit price).
+func (i Item) Total() float64 {
+	return float64(i.Qty) * i.UnitPrice
+}
+
+// IsExpensive reports whether the unit price exceeds 100.
+func (i Item) IsExpensive() bool {
+	return i.UnitPrice > 100
+}
+
+// Describe returns a human-readable summary of the item.
+func (i Item) Describe() string {
+	return fmt.Sprintf("%s: %d @ %.2f", i.Name, i.Qty, i.UnitPrice)
+}
+
+// Order is the top-level model.
+// Import path: text-template-server/src/model
+// gotype hint:  {{/*gotype: text-template-server/src/model.Order*/}}
+type Order struct {
+	ID           string
+	CustomerName string
+	Email        string
+	Address      Address
+	Items        []Item
+	TotalAmount  float64
+	Paid         bool
+}
+
+// DisplayName returns a human-readable label - 1 return value, always callable.
+func (o Order) DisplayName() string {
+	return o.CustomerName + " (" + o.ID + ")"
+}
+
+// Summary returns a short description or an error - (string, error) contract.
+func (o Order) Summary() (string, error) {
+	if o.ID == "" {
+		return "", fmt.Errorf("order has no ID")
+	}
+	return fmt.Sprintf("Order %s: %.2f", o.ID, o.TotalAmount), nil
+}
+
+// ItemCount returns the number of line items - int return.
+func (o Order) ItemCount() int {
+	return len(o.Items)
+}
+
+// IsLargeOrder reports whether the total exceeds a threshold - bool return.
+func (o Order) IsLargeOrder() bool {
+	return o.TotalAmount > 1000
+}
+
+// Format formats the total with a given currency symbol - takes an arg, filtered by TakesArgs.
+func (o Order) Format(currency string) string {
+	return currency + fmt.Sprintf("%.2f", o.TotalAmount)
+}
+
+func (o Order) Oper(valu int) int {
+	return valu
+}
+
+// badReturn has three return values - filtered out by the template contract check.
+func (o Order) badReturn() (string, int, error) {
+	return "", 0, nil
+}
+
+// wrongSecond has a non-error second return - also filtered out.
+func (o Order) wrongSecond() (string, int) {
+	return "", 0
 }
