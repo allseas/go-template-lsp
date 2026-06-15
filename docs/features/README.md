@@ -17,62 +17,62 @@ The GoTemplate LSP provides IDE support for Go's `text/template` language across
 
 ## Editor Features
 
-| Feature                           | VS Code (tested) | JetBrains (tested) | Priority | Notes                                                        |
-|-----------------------------------|------------------|--------------------|----------|--------------------------------------------------------------|
+| Feature                           | VS Code (tested) | JetBrains (tested) | Priority | Notes                                                                     |
+| --------------------------------- | ---------------- | ------------------ | -------- | ------------------------------------------------------------------------- |
 | **Syntax Highlighting**           |                  |                    |          |
-| Static syntax highlighting        | ✅ (⏳)            | ✅ (⏳)              | Must     | Syntax defined in `.tmpl` files                              |
-| Dynamic syntax highlighting       | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Highlighting based on variables and context                  |
-| Target language syntax            | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.) |
+| Static syntax highlighting        | ✅ (⏳)            | ✅ (⏳)              | Must     | Syntax defined in `.tmpl` files                                           |
+| Dynamic syntax highlighting       | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Highlighting based on variables and context                               |
+| Target language syntax            | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.)              |
 | **Code Completion**               |                  |                    |          |
-| Completion on template variables  | ✅ (✅)            | ✅ (✅)              | Must     | Suggests available variables in current scope                |
-| Completion on struct field names  | ✅ (⏳)            | ✅ (⏳)              | Must     | Auto-complete struct field access                            |
-| Completion on built-in functions  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests standard template functions                         |
-| Completion on local functions     | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Suggests user-defined template functions                     |
+| Completion on template variables  | ✅ (✅)            | ✅ (✅)              | Must     | Suggests available variables in current scope                             |
+| Completion on struct field names  | ✅ (✅)            | ✅ (✅)              | Must     | Auto-complete struct field access and chained field accesses              |
+| Completion on built-in functions  | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests standard template functions                                      |
+| Completion on local functions     | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests user-defined template functions via `//tmpl:func "global"` hints |
 | **Navigation**                    |                  |                    |          |
-| Jump to definition                | ✅ (✅)            | ✅ (✅)              | Must     | Go to variable or function definition                        |
-| Find references / Usages          | ✅ (✅)            | ✅ (✅)              | Must     | Find all usages of a symbol                                  |
-| Peek definition on hover          | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Show definition in hover tooltip                             |
+| Jump to definition                | ✅ (✅)            | ✅ (✅)              | Must     | Go to variable or function definition                                     |
+| Find references / Usages          | ✅ (✅)            | ✅ (✅)              | Must     | Find all usages of a symbol                                               |
+| Peek definition on hover          | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Show definition in hover tooltip                                          |
 | **Inspections & Diagnostics**     |                  |                    |          |
-| Incorrect syntax                  | ✅ (⏳)            | ✅ (⏳)              | Must     | Warn about incorrect syntax                                  |
-| Duplicate variable detection      | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Warn about redefined variables                               |
-| Type checking                     | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Validate type compatibility in templates                     |
-| Unused variable detection         | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Flag declared but unused variables                           |
-| Missing whitespace trim detection | ⏳ (⏳)            | ⏳ (⏳)              | Could    | Suggest whitespace trim operators when needed                |
+| Incorrect syntax                  | ✅ (✅)            | ✅ (✅)              | Must     | Warn about incorrect syntax                                               |
+| Duplicate variable detection      | ✅ (✅)            | ✅ (✅)              | Must     | Warn about redefined variables                                            |
+| Type checking                     | ✅ (⏳)            | ✅ (⏳)              | Should   | Validate type compatibility in templates and template calls               |
+| Unused variable detection         | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Flag declared but unused variables                                        |
+| Missing whitespace trim detection | ⏳ (⏳)            | ⏳ (⏳)              | Could    | Suggest whitespace trim operators when needed                             |
 | **Code Actions & Refactoring**    |                  |                    |          |
-| Wrap selection in comment         | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- /* ... */ -}}`                                          |
-| Wrap selection in a block         | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- if ... }} ... {{- end }}`                               |
+| Wrap selection in comment         | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- /* ... */ -}}`                                                       |
+| Wrap selection in a block         | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- if ... }} ... {{- end }}`                                            |
 | **Snippets**                      |                  |                    |          |
-| Built-in snippets                 | ✅ (✅)            | ✅ (✅)              | Could    | Common template patterns                                     |
+| Built-in snippets                 | ✅ (✅)            | ✅ (✅)              | Could    | Common template patterns                                                  |
 | **Other**                         |                  |                    |          |
-| Block boundary highlighting       | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Highlight matching `{{- end }}` tags                         |
-| Feature toggle support            | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Enable/disable features per file or project                  |
+| Block boundary highlighting       | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Highlight matching `{{- end }}` tags                                      |
+| Feature toggle support            | ⏳ (⏳)            | ⏳ (⏳)              | Must     | Enable/disable features per file or project                               |
 
 ## Language Server Features
 
 The language server provides the backend intelligence for all editor features. These features support multiple IDEs through the LSP protocol.
 
-| Feature                         | Supported (tested) | Priority | Notes                                               |
-|---------------------------------|--------------------|----------|-----------------------------------------------------|
+| Feature                         | Supported (tested) | Priority | Notes                                                                   |
+| ------------------------------- | ------------------ | -------- | ----------------------------------------------------------------------- |
 | **Configuration**               |                    |          |
-| User configuration              | ✅ (⏳)              | Should   | Per-user configuration, lower priority than project |
-| Project-level settings          | ✅ (⏳)              | Must     | Per-project configuration override                  |
-| Per-file configuration comments | ⏳ (⏳)              | Could    | `// @gotemplate disable-inspection-name`            |
-| Dotfile Config                  | ⏳ (⏳)              | Should   |                                                     |
+| User configuration              | ✅ (✅)              | Should   | Per-user configuration, lower priority than project                     |
+| Project-level settings          | ✅ (✅)              | Must     | Per-project configuration via `gotmpl.config.json`                      |
+| Per-file configuration comments | ⏳ (⏳)              | Could    | `// @gotemplate disable-inspection-name`                                |
+| Dotfile Config                  | ⏳ (⏳)              | Should   |                                                                         |
 | **Analysis**                    |                    |          |
-| Local syntax modifications      | ⏳ (⏳)              | Should   | Support custom delimiters or syntax extensions      |
-| Function inference from project | ⏳ (⏳)              | Should   | Detect custom template functions from source        |
-| Type inference                  | ⏳ (⏳)              | Should   | Infer types passed to templates                     |
+| Local syntax modifications      | ⏳ (⏳)              | Should   | Support custom delimiters or syntax extensions                          |
+| Function inference from project | ✅ (✅)              | Should   | Detect custom template functions from source via `//tmpl:func "global"` |
+| Type inference                  | ⏳ (⏳)              | Should   | Infer types passed to templates                                         |
 | **Extensibility**               |                    |          |
-| Custom function registration    | ⏳ (⏳)              | Should   | Register user-defined functions with server         |
-| Custom tag type support         | ⏳ (⏳)              | Should   | Support for custom action tag types                 |
+| Custom function registration    | ✅ (✅)              | Should   | Register user-defined functions via `//tmpl:func "global"` annotations  |
+| Custom tag type support         | ⏳ (⏳)              | Should   | Support for custom action tag types                                     |
 | **Formatting & Linting**        |                    |          |
-| Template code formatting        | ⏳ (⏳)              | Could    | Format template expressions                         |
-| Template linting rules          | ⏳ (⏳)              | Could    | Configurable linting rules                          |
+| Template code formatting        | ⏳ (⏳)              | Could    | Format template expressions                                             |
+| Template linting rules          | ⏳ (⏳)              | Could    | Configurable linting rules                                              |
 
 ## Specialized Support
 
 | Feature                 | Supported | Status  | Priority | Notes                                       |
-|-------------------------|-----------|---------|----------|---------------------------------------------|
+| ----------------------- | --------- | ------- | -------- | ------------------------------------------- |
 | **Helm Templates**      |           |         |          |                                             |
 | Helm syntax support     | ⏳         | Planned | Could    | Special handling for Helm `.yaml.tpl` files |
 | Helm built-in functions | ⏳         | Planned | Could    | Auto-complete and documentation             |
@@ -89,3 +89,17 @@ The Language Server Protocol (LSP) was chosen to provide a single backend implem
 ### Server in Go
 
 The language server is implemented in Go to make use of the parser already present in the Go library and the type checker.
+
+## Feature Documentation
+
+For detailed documentation on each feature, see:
+
+- [Syntax Highlighting](syntax.md) - Static syntax highlighting for Go templates
+- [Completions](completions.md) - Code completion for variables, fields, and functions
+- [Definition](definition.md) - Jump to definition for symbols
+- [References](references.md) - Find all usages of a symbol
+- [Hover](hover.md) - Hover information for symbols
+- [Diagnostics](diagnostics.md) - Error reporting and validation
+- [Type Hints](type_hints.md) - Declaring template input types via `/*gotype:*/` comments
+- [Function Hints](func_hints.md) - Registering custom template functions
+- [Type Checking](template_checking.md) - Validating template call arguments against declared types

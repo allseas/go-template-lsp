@@ -31,7 +31,14 @@ RUN curl -fsSL https://nodejs.org/dist/latest-v${NODE_MAJOR}.x/SHASUMS256.txt -o
     tar -xzf /tmp/node.tar.gz -C /usr/local --strip-components=1 && \
     rm -f /tmp/node.tar.gz /tmp/SHASUMS256.txt
 
-ENV PATH=/usr/local/bin:$PATH
+# Ensure Go (from the base image at /usr/local/go) and Node are on PATH for
+# all subsequent commands and at container runtime. The Go toolchain must be
+# discoverable by the spawned LSP server so `golang.org/x/tools/go/packages`
+# can invoke `go list` for type hint resolution.
+ENV PATH=/usr/local/go/bin:/usr/local/bin:$PATH
+
+# Verify both toolchains are available in the final image.
+RUN go version && node --version
 
 # Install ts-node and typescript globally for build scripts
 RUN npm install -g ts-node typescript

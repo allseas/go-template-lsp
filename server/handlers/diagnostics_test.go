@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"math"
+	"os"
 	"strings"
 	"testing"
 	parse "text-template-parser"
@@ -13,6 +14,13 @@ import (
 )
 
 // helpers
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path) // #nosec G304 -- test helper, path is test-controlled
+	require.NoError(t, err)
+	return string(data)
+}
+
 func diagMessages(diags []protocol.Diagnostic) []string {
 	msgs := make([]string, len(diags))
 	for i, d := range diags {
@@ -509,4 +517,108 @@ comment
 			assert.Empty(t, diags)
 		})
 	}
+}
+
+// TestCollectDiagnostics_MultiDefines verifies that diagnostics are collected
+// across every {{define}} tree in a single document and that a syntax error
+// in one define does not suppress diagnostics in another.
+func TestCollectDiagnostics_MultiDefines(t *testing.T) {
+	t.Run("clean multi-define document yields no diagnostics", func(t *testing.T) {
+		src := "{{- define \"A\" -}}\n" +
+			"{{- /*gotype: text-template-server/src/model.Order*/ -}}\n" +
+			"A: {{ .CustomerName }}\n" +
+			"{{- end -}}\n" +
+			"{{- define \"B\" -}}\n" +
+			"{{ $x := . }}\nB: {{ $x }}\n" +
+			"{{- end -}}\n"
+
+		diags := collectDiagnostics(src, "file:///diag-multi-clean.tmpl")
+		assert.Empty(t, diags, "expected no diagnostics, got: %v", diagMessages(diags))
+	})
+
+	t.Run("error in one define is reported per-tree", func(t *testing.T) {
+		src := "{{- define \"A\" -}}\n" +
+			"A: {{ random }}\n" + // unsupported function
+			"{{- end -}}\n" +
+			"{{- define \"B\" -}}\n" +
+			"B: {{ .Name }}\n" +
+			"{{- end -}}\n"
+
+		diags := collectDiagnostics(src, "file:///diag-multi-err.tmpl")
+		_, ok := findDiagnosticContaining(diags, "unsupported function or unregistered command")
+		require.True(
+			t,
+			ok,
+			"expected unsupported-function diagnostic in define A, got: %v",
+			diagMessages(diags),
+		)
+	})
+}
+
+// TestCollectDiagnostics_TemplateArgTypeCheck verifies that a diagnostic is
+// emitted when a {{template}} call passes an argument whose type doesn't match
+// the gotype hint declared on the target {{define}} block, and that no
+// diagnostic is emitted for correct or untyped calls.
+func TestCollectDiagnostics_TemplateArgTypeCheck(t *testing.T) {
+	const resourceDir = "../../test/resources/template-arg-typechecking"
+
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = resourceDir
+
+	uri := func(name string) string { return "file:///" + name }
+
+	t.Run("wrong type emits diagnostic", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/wrong-type-call.tmpl")
+		store.Set(uri("wrong-type-call.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("wrong-type-call.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("wrong-type-call.tmpl"))
+		_, ok := findDiagnosticContaining(diags, "person-card")
+		require.True(
+			t,
+			ok,
+			"expected type-mismatch diagnostic for person-card call, got: %v",
+			diagMessages(diags),
+		)
+	})
+
+	t.Run("correct type yields no type-mismatch diagnostic", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/correct-call.tmpl")
+		store.Set(uri("correct-call.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("correct-call.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("correct-call.tmpl"))
+		_, ok := findDiagnosticContaining(diags, "person-card")
+		require.False(
+			t,
+			ok,
+			"expected no type-mismatch diagnostic for correct call, got: %v",
+			diagMessages(diags),
+		)
+	})
+
+	t.Run("no-arg call yields no type-mismatch diagnostic", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/no-arg-call.tmpl")
+		store.Set(uri("no-arg-call.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("no-arg-call.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("no-arg-call.tmpl"))
+		_, ok := findDiagnosticContaining(diags, "person-card")
+		require.False(t, ok, "expected no diagnostic for no-arg call, got: %v", diagMessages(diags))
+	})
+
+	t.Run("unknown target yields no type-mismatch diagnostic", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/unknown-target.tmpl")
+		store.Set(uri("unknown-target.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("unknown-target.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("unknown-target.tmpl"))
+		_, ok := findDiagnosticContaining(diags, "expects argument of type")
+		require.False(
+			t,
+			ok,
+			"expected no type-mismatch diagnostic for untyped target, got: %v",
+			diagMessages(diags),
+		)
+	})
 }

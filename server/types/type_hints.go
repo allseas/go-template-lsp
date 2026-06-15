@@ -5,15 +5,55 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"go/token"
 	"go/types"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/tools/go/packages"
 )
+
+// ParseDefineTypeHints scans template text for {{define "name"}} blocks and returns
+// a map from template name to the first gotype hint found at the top of that block.
+// It searches within the first 512 bytes after the opening {{define}} delimiter
+// so only hints placed near the top of the block are matched.
+func ParseDefineTypeHints(text string) map[string]string {
+	// Match {{define "name"}} or {{define `name`}} with optional trimming dashes/whitespace.
+	defineRe := regexp.MustCompile("\\{\\{-?\\s*define\\s+(?:\"([^\"]+)\"|`([^`]+)`)\\s*-?\\}\\}")
+	gotypeRe := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
+
+	result := make(map[string]string)
+	matches := defineRe.FindAllStringSubmatchIndex(text, -1)
+	for i, m := range matches {
+		var name string
+		if m[2] != -1 {
+			name = text[m[2]:m[3]] // double-quoted name
+		} else if m[4] != -1 {
+			name = text[m[4]:m[5]] // backtick-quoted name
+		}
+		if name == "" {
+			continue
+		}
+		// Bound the search at the start of the next {{define}} tag so we don't
+		// accidentally pick up a gotype hint that belongs to the next block.
+		start := m[1]
+		end := len(text)
+		if i+1 < len(matches) {
+			end = matches[i+1][0]
+		}
+		snippet := text[start:end]
+		if gm := gotypeRe.FindStringSubmatch(snippet); gm != nil {
+			result[name] = gm[1]
+		}
+	}
+	return result
+}
 
 // TypeHint represents a `gotype:` type hint found in a template file.
 type TypeHint struct {
@@ -75,6 +115,71 @@ type ParamType struct {
 	TypeName string
 }
 
+// goEnv returns the current process environment, augmenting PATH with the
+// directory of the Go binary if it is not already resolvable. It also mutates
+// the process PATH (os.Setenv) because golang.org/x/tools/go/packages calls
+// exec.LookPath("go") against the *process* PATH (not cfg.Env) before
+// invoking `go list`. This is needed when the server is spawned by a client
+// (e.g. VS Code's test runner) that does not inherit the shell PATH where
+// the Go toolchain lives.
+func goEnv() []string {
+	if _, err := exec.LookPath("go"); err == nil {
+		return os.Environ()
+	}
+	// Fallback: check common well-known Go installation directories.
+	candidates := []string{
+		"/usr/local/go/bin",
+		"/usr/lib/go/bin",
+		"/usr/local/bin",
+		"/usr/bin",
+	}
+	for _, dir := range candidates {
+		if _, statErr := os.Stat(filepath.Join(dir, "go")); statErr == nil {
+			newPATH := dir + string(os.PathListSeparator) + os.Getenv("PATH")
+			_ = os.Setenv("PATH", newPATH)
+			return os.Environ()
+		}
+	}
+	return os.Environ()
+}
+
+var (
+	typeHintCacheMu sync.RWMutex
+	typeHintCache   = make(map[string]*Tree)
+)
+
+// InvalidateTypeHintCache clears the cached type-hint results
+func InvalidateTypeHintCache() {
+	typeHintCacheMu.Lock()
+	defer typeHintCacheMu.Unlock()
+	typeHintCache = make(map[string]*Tree)
+}
+
+// CachedLoadTypeFromHint is like LoadTypeFromHint but returns the previously
+// computed result when the same (hint, workspaceRoot) pair has been resolved
+// before and the cache has not been invalidated.
+func CachedLoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
+	key := hint + "\x00" + workspaceRoot
+
+	typeHintCacheMu.RLock()
+	if t, ok := typeHintCache[key]; ok {
+		typeHintCacheMu.RUnlock()
+		return t, nil
+	}
+	typeHintCacheMu.RUnlock()
+
+	t, err := LoadTypeFromHint(hint, workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	typeHintCacheMu.Lock()
+	typeHintCache[key] = t
+	typeHintCacheMu.Unlock()
+
+	return t, nil
+}
+
 // LoadTypeFromHint loads the Go package identified by the hint and returns a
 // Tree with DotType and Pkg set.
 func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
@@ -97,9 +202,12 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 			dir = cwd
 		}
 	}
+	fset := token.NewFileSet()
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes,
 		Dir:  dir,
+		Fset: fset,
+		Env:  goEnv(),
 	}
 
 	pkgs, err := packages.Load(cfg, importPath)
@@ -147,7 +255,7 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		Int("numMethods", named.NumMethods()).
 		Msg("LoadTypeFromHint: type loaded successfully")
 
-	tree := &Tree{DotType: named, Pkg: pkg.Types}
+	tree := &Tree{DotType: named, Pkg: pkg.Types, Fset: fset}
 	return tree, nil
 }
 

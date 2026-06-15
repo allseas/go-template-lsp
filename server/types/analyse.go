@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"go/token"
 	"go/types"
 
 	parse "text-template-parser"
@@ -19,10 +20,12 @@ type Tree struct {
 	ParseName  string                 // name of the top-level template during parsing, for error messages.
 	Root       *ListNode              // top-level root of the tree.
 	Errors     []error                // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
+	End        Pos                    // position of the end of the template text; only set after parsing.
 	funcs      map[string]*types.Func // available functions with their signatures
 	DotType    *types.Named           // optional: type of dot context (from gotype hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
+	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
 }
 
 // ErrorType categorizes the type of an error for customization of inspections.
@@ -45,6 +48,8 @@ const (
 	ErrorUndeclaredVariable
 	// ErrorDoubleDeclaredVariable Variable declared more than once in the same scope
 	ErrorDoubleDeclaredVariable
+	// ErrorTypeInvalidTemplateArg Template called with an argument of the wrong type
+	ErrorTypeInvalidTemplateArg
 	// Add more error types as needed
 )
 
@@ -55,26 +60,34 @@ type TError struct {
 	typ  ErrorType // for categorization
 }
 
+// ErrType returns the category of this type error.
+func (e TError) ErrType() ErrorType { return e.typ }
+
 // NewTree creates a typed tree from a parse tree, optionally with type information.
+// templateInputTypes maps template names to their expected input types (from gotype hints
+// on {{define}} blocks). Pass nil if template argument type checking is not needed.
 func NewTree(
 	parseTree parse.Tree,
 	funcs map[string]*types.Func,
 	dotType types.Type,
 	pkg *types.Package,
+	templateInputTypes map[string]types.Type,
 ) Tree {
 	typeTree := Tree{
 		Name:      parseTree.Name,
 		ParseName: parseTree.ParseName,
 		Errors:    parseTree.Errors,
+		End:       Pos(parseTree.End),
 		funcs:     funcs,
 		Pkg:       pkg,
 	}
 
 	if parseTree.Root != nil {
 		typeTree.Root = analyseList(parseTree.Root, nil, &analysisCtx{
-			funcs:   funcs,
-			dotType: dotType,
-			tree:    &typeTree,
+			funcs:              funcs,
+			dotType:            dotType,
+			tree:               &typeTree,
+			templateInputTypes: templateInputTypes,
 			vars: []*VariableNode{
 				{
 					Pos:      0,
@@ -99,8 +112,9 @@ func NewTreeWithType(
 	funcs map[string]*types.Func,
 	dotType *types.Named,
 	pkg *types.Package,
+	templateInputTypes map[string]types.Type,
 ) Tree {
-	typeTree := NewTree(parseTree, funcs, dotType, pkg)
+	typeTree := NewTree(parseTree, funcs, dotType, pkg, templateInputTypes)
 	return typeTree
 }
 
@@ -200,9 +214,20 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 		return analyseContinue(n, parent, ctx)
 	case *parse.PipeNode:
 		return analysePipe(n, parent, ctx)
+	case *parse.UndefinedNode:
+		return analyseUndefined(n, parent)
 	default:
-		// Unknown node type
-		return nil
+		panic(fmt.Sprintf("unknown node type: %T", node))
+	}
+}
+
+func analyseUndefined(n *parse.UndefinedNode, parent Node) Node {
+	return &UndefinedNode{
+		NodeType: NodeUndefined,
+		Pos:      Pos(n.Position()),
+		parent:   parent,
+		Err:      n.Err,
+		str:      n.String(),
 	}
 }
 
@@ -233,6 +258,24 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 		parent:   parent,
 	}
 	t.Pipe = analysePipe(n.Pipe, t, ctx)
+
+	// Type-check the argument against the template's declared input type (if known).
+	if t.Pipe != nil && ctx.templateInputTypes != nil {
+		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
+			argType := t.Pipe.ValueType()
+			if argType != nil && argType.String() != expectedType.String() {
+				ctx.errorf(
+					t,
+					ErrorTypeInvalidTemplateArg,
+					"template %q expects argument of type %s, but got %s",
+					n.Name,
+					expectedType.String(),
+					argType.String(),
+				)
+			}
+		}
+	}
+
 	return t
 }
 
@@ -306,7 +349,9 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 	keepVars := len(ctx.vars)
 	r.Pipe = analysePipe(n.Pipe, r, ctx)
 	typ := getRangeableType(r.Pipe.typ)
-	if typ == nil {
+	if r.Pipe.typ == nil {
+		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over untyped value")
+	} else if typ == nil {
 		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over type %v", r.Pipe.typ)
 		ctx.dotType = nil
 	} else {
@@ -490,6 +535,71 @@ func walkFieldChain(
 	return currentType, true
 }
 
+// walkFieldChainWithMethodInfo is like walkFieldChain but additionally returns an isMethod slice
+// whose i-th element is true when path[i] resolves to a *types.Func (method) and false when it
+// resolves to a *types.Var (struct field). On failure the returned slice is nil.
+func walkFieldChainWithMethodInfo(
+	ctx *analysisCtx,
+	errNode Node,
+	base types.Type,
+	path []string,
+) (types.Type, []bool, bool) {
+	pkg := ctx.tree.Pkg
+	currentType := base
+	isMethod := make([]bool, len(path))
+	for i, name := range path {
+		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
+		if obj == nil {
+			ctx.errorf(
+				errNode,
+				ErrorTypeInvalidField,
+				"type %s has no field or method %q",
+				currentType.String(),
+				name,
+			)
+			return nil, nil, false
+		}
+		switch o := obj.(type) {
+		case *types.Var:
+			currentType = o.Type()
+			isMethod[i] = false
+		case *types.Func:
+			sig, ok := o.Type().Underlying().(*types.Signature)
+			if !ok || sig.Results().Len() == 0 {
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidField,
+					"method %q on type %s returns no values",
+					name,
+					currentType.String(),
+				)
+				return nil, nil, false
+			}
+			if sig.Results().Len() > 2 {
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidField,
+					"method %q on type %s returns more than 2 parameters",
+					name,
+					currentType.String(),
+				)
+			}
+			currentType = sig.Results().At(0).Type()
+			isMethod[i] = true
+		default:
+			ctx.errorf(
+				errNode,
+				ErrorTypeInvalidField,
+				"unexpected object type for %q on %s",
+				name,
+				currentType.String(),
+			)
+			return nil, nil, false
+		}
+	}
+	return currentType, isMethod, true
+}
+
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
 	ident := &IdentifierNode{
 		NodeType: NodeIdentifier,
@@ -578,8 +688,9 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		return fn
 	}
 
-	if typ, ok := walkFieldChain(ctx, fn, ctx.dotType, n.Ident); ok {
+	if typ, isMethod, ok := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); ok {
 		fn.typ = typ
+		fn.isMethod = isMethod
 	}
 	return fn
 }
@@ -684,7 +795,8 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 			// find the variable in the context and update its type
 			for i := len(ctx.vars) - 1; i >= 0; i-- {
 				if ctx.vars[i].Ident[0] == typePipe.Decl[0].Ident[0] {
-					if ctx.vars[i].typ != nil && !types.Identical(ctx.vars[i].typ, typePipe.typ) {
+					if ctx.vars[i].typ != nil && typePipe.typ != nil &&
+						!types.Identical(ctx.vars[i].typ, typePipe.typ) {
 						ctx.errorf(
 							typePipe.Decl[0],
 							ErrorTypeInvalidCommand,
@@ -773,10 +885,9 @@ func getNodeType(node Node) types.Type {
 // analysisCtx carries type information through the analysis.
 // It can be extended to track variable bindings, method signatures, etc.
 type analysisCtx struct {
-	// Future: Add fields for tracking type information during analysis
-	// For example:
-	vars    []*VariableNode        // Type of each variable in scope
-	dotType types.Type             // Current dot context type
-	funcs   map[string]*types.Func // Available functions with their signatures
-	tree    *Tree                  // Reference to the tree being built, for error reporting
+	vars               []*VariableNode        // Type of each variable in scope
+	dotType            types.Type             // Current dot context type
+	funcs              map[string]*types.Func // Available functions with their signatures
+	tree               *Tree                  // Reference to the tree being built, for error reporting
+	templateInputTypes map[string]types.Type  // Expected input type per template name (from gotype hints on {{define}} blocks)
 }

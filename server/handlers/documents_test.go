@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"strings"
 	"sync"
 	"testing"
+
+	parse "text-template-parser"
 
 	"github.com/stretchr/testify/assert"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -134,11 +137,142 @@ func TestDocumentStore(t *testing.T) {
 	})
 }
 
+func TestDocumentMultipleDefines(t *testing.T) {
+	// ai
+	src := "{{- define \"A\"}}\n" +
+		"{{- /*gotype: cg/model.A*/}}\n" +
+		"alpha-body\n" +
+		"{{- end }}\n" +
+		"{{- define \"B\" }}\n" +
+		"{{- /*gotype: cg/model.B*/}}\n" +
+		"beta-body\n" +
+		"{{- end }}\n"
+
+	tree, treeSet, err := tryParse(src)
+	assert.NoError(t, err)
+	assert.NotNil(t, tree)
+	// 3 entries: root + A + B
+	assert.Contains(t, treeSet, "A")
+	assert.Contains(t, treeSet, "B")
+	assert.Contains(t, treeSet, tree.Name)
+
+	// per-tree type hint lookup
+	rootHint := hintTypeForTree(src, tree, true)
+	hintA := hintTypeForTree(src, treeSet["A"], false)
+	hintB := hintTypeForTree(src, treeSet["B"], false)
+	assert.Equal(t, "", rootHint, "no hint expected on first line of file")
+	assert.Equal(t, "cg/model.A", hintA)
+	assert.Equal(t, "cg/model.B", hintB)
+
+	doc := &document{text: src, tree: tree, trees: treeSet}
+
+	// treeAt: positions inside each define body → correct define tree
+	offA := strings.Index(src, "alpha-body")
+	offB := strings.Index(src, "beta-body")
+	assert.Equal(t, treeSet["A"], doc.treeAt(parse.Pos(offA)), "offset inside define A body")
+	assert.Equal(t, treeSet["B"], doc.treeAt(parse.Pos(offB)), "offset inside define B body")
+
+	// treeAt: position at the very start of the file (on the {{define}} directive,
+	// before any define's content) → root template
+	assert.Equal(
+		t,
+		tree,
+		doc.treeAt(parse.Pos(0)),
+		"offset at start of file (before define A content) should be root",
+	)
+
+	// treeAt: position at the {{define "B"}} directive (after A's {{end}},
+	// before B's content) → root template
+	offDefineB := strings.Index(src, "{{- define \"B\"")
+	assert.Greater(t, offDefineB, 0, "sanity: found define B directive")
+	assert.Equal(
+		t,
+		tree,
+		doc.treeAt(parse.Pos(offDefineB)),
+		"offset at define B directive should be root",
+	)
+
+	// treeAt: position at the very last byte of the source (after all {{end}}s)
+	// → root template
+	assert.Equal(
+		t,
+		tree,
+		doc.treeAt(parse.Pos(len(src)-1)),
+		"offset after all defines should be root",
+	)
+}
+
+func TestDocumentRootHintOnFirstLine(t *testing.T) {
+	src := "{{- /*gotype: cg/model.Root*/ -}}\nhello {{ . }}\n"
+	tree, treeSet, err := tryParse(src)
+	assert.NoError(t, err)
+	assert.NotNil(t, tree)
+	hint := hintTypeForTree(src, tree, true)
+	assert.Equal(t, "cg/model.Root", hint)
+	_ = treeSet
+}
+
+// TestTreeAtMultiDefinesWithRoot verifies the treeAt logic for the canonical
+// multiDefinesTemplate which has a root type hint and content outside the
+// define blocks.  Positions inside a {{define}} must return that define's tree;
+// positions in the root (before/between/after defines) must return the root tree.
+func TestTreeAtMultiDefinesWithRoot(t *testing.T) {
+	src := multiDefinesTemplate
+	tree, treeSet, err := tryParse(src)
+	assert.NoError(t, err)
+	assert.NotNil(t, tree)
+
+	doc := &document{text: src, tree: tree, trees: treeSet}
+
+	// --- positions inside define bodies → correct define tree ---
+
+	offCustomerName := strings.Index(src, "CustomerName")
+	assert.Equal(t, treeSet["OrderTpl"], doc.treeAt(parse.Pos(offCustomerName)),
+		"offset inside OrderTpl body (CustomerName) should return OrderTpl tree")
+
+	offStreet := strings.Index(src, ".Street")
+	assert.Equal(t, treeSet["AddressTpl"], doc.treeAt(parse.Pos(offStreet)),
+		"offset inside AddressTpl body (.Street) should return AddressTpl tree")
+
+	offLocal := strings.Index(src, "$local := .")
+	assert.Equal(t, treeSet["NoHint"], doc.treeAt(parse.Pos(offLocal)),
+		"offset inside NoHint body ($local) should return NoHint tree")
+
+	// --- positions in root template → root tree ---
+
+	// First root content line: {{ .Country }} (occurrence 0, before OrderTpl)
+	offCountry0 := strings.Index(src, ".Country")
+	assert.Equal(t, tree, doc.treeAt(parse.Pos(offCountry0)),
+		"offset at first .Country in root (before defines) should return root tree")
+
+	// Root content between OrderTpl and AddressTpl: {{ .Zip }}
+	offZip := strings.Index(src, ".Zip")
+	assert.Equal(t, tree, doc.treeAt(parse.Pos(offZip)),
+		"offset at .Zip in root (between defines) should return root tree")
+
+	// Root content after all defines: {{ .Country }} (occurrence 1)
+	offCountry1 := strings.LastIndex(src, ".Country")
+	assert.NotEqual(t, offCountry0, offCountry1, "sanity: two distinct .Country occurrences")
+	assert.Equal(t, tree, doc.treeAt(parse.Pos(offCountry1)),
+		"offset at last .Country in root (after all defines) should return root tree")
+
+	// Root type hint on first line also lands in root tree
+	assert.Equal(t, tree, doc.treeAt(parse.Pos(0)),
+		"offset 0 (root hint line) should return root tree")
+}
+
 func TestDidOpenAndChange(t *testing.T) {
 	// ai
 	t.Run("DidOpen and DidChange", func(t *testing.T) {
 		originalConfig := GetConfig()
-		applyConfig(Config{EnableServer: true})
+		applyConfig(
+			Config{
+				EnableHover:          true,
+				EnableDefinition:     true,
+				EnableDiagnostics:    true,
+				EnableAutocompletion: true,
+			},
+		)
 		defer applyConfig(originalConfig)
 
 		uri := "file:///test-open-change.txt"
@@ -187,7 +321,14 @@ func TestDidOpenAndChange(t *testing.T) {
 	// ai
 	t.Run("DidClose", func(t *testing.T) {
 		originalConfig := GetConfig()
-		applyConfig(Config{EnableServer: true})
+		applyConfig(
+			Config{
+				EnableHover:          true,
+				EnableDefinition:     true,
+				EnableDiagnostics:    true,
+				EnableAutocompletion: true,
+			},
+		)
 		defer applyConfig(originalConfig)
 
 		uri := "file:///test-open-change.txt"

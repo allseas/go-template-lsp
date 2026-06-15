@@ -11,7 +11,7 @@ import (
 func TestAnalyze(t *testing.T) {
 	for _, tc := range analyseTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tree := NewTreeWithType(tc.parseTree, tc.funcs, tc.dotType, tc.pkg)
+			tree := NewTreeWithType(tc.parseTree, tc.funcs, tc.dotType, tc.pkg, nil)
 			if len(tree.TypeErrors) != len(tc.expectedErrors) {
 				t.Fatalf(
 					"Expected %d type errors, got %d: %v",
@@ -34,6 +34,32 @@ func TestAnalyze(t *testing.T) {
 			if diff := CompareTypeTrees(tree, tc.resTree); diff != "" {
 				t.Fatalf("type tree mismatch: %s", diff)
 			}
+		})
+	}
+}
+
+func TestAnalyseNode_UnknownNodeTypePanics(t *testing.T) {
+	for _, tc := range analyseNodePanicTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatal("expected panic, got none")
+				}
+				msg, ok := r.(string)
+				if !ok {
+					t.Fatalf("expected panic value to be a string, got %T: %v", r, r)
+				}
+				if msg != tc.wantPanic {
+					t.Fatalf("panic message: got %q, want %q", msg, tc.wantPanic)
+				}
+			}()
+
+			ctx := &analysisCtx{
+				funcs: make(map[string]*types.Func),
+				vars:  []*VariableNode{},
+			}
+			analyseNode(tc.node, nil, ctx)
 		})
 	}
 }

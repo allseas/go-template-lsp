@@ -11,18 +11,48 @@ The Go Text Template LSP supports consistent configuration across VS Code and Je
 
 These options are supported on all platforms:
 
-| Option         | Type      | Default    | Description                                          |
-|----------------|-----------|------------|------------------------------------------------------|
-| `enableServer` | `boolean` | `true`     | Enable/disable the language server                   |
-| `trace.server` | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose` |
+| Option                                | Type      | Default    | Description                                                       |
+|---------------------------------------|-----------|------------|-------------------------------------------------------------------|
+| `enableHover`                         | `boolean` | `true`     | Enable/disable hover information                                  |
+| `enableDefinition`                    | `boolean` | `true`     | Enable/disable go-to-definition                                   |
+| `enableDiagnostics`                   | `boolean` | `true`     | Enable/disable all diagnostics                                    |
+| `diagnostics.syntaxError`             | `boolean` | `true`     | Report syntax errors                                              |
+| `diagnostics.variableRedeclaration`   | `boolean` | `true`     | Report duplicate variable declarations                            |
+| `diagnostics.incorrectFunction`       | `boolean` | `true`     | Report unknown or incorrectly used functions                      |
+| `enableAutocompletion`                | `boolean` | `true`     | Enable/disable autocompletion                                     |
+| `trace.server`                        | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose`             |
 
 ## Configuration Hierarchy
 
 Settings follow this precedence (highest to lowest):
 
-1. **Project/Workspace** — `.vscode/settings.json` (VS Code) or `.idea/` config (JetBrains)
-2. **User** — Global IDE user settings
-3. **Defaults** — Plugin defaults (all servers enabled, trace at `messages` level)
+1. **Project File** — `gotmpl.config.json` in project root (applies to all IDEs)
+2. **IDE Project/Workspace** — `.vscode/settings.json` (VS Code) or `.idea/` config (JetBrains)
+3. **User** — Global IDE user settings
+4. **Defaults** — Plugin defaults (all servers enabled, trace at `messages` level)
+
+## Project Configuration File
+
+You can create a `gotmpl.config.json` file in your project root to configure the language server for your entire project. This configuration applies across all IDEs (VS Code, JetBrains, etc.):
+
+```json
+{
+  "enableHover": true,
+  "enableDefinition": true,
+  "enableDiagnostics": true,
+  "diagnostics": {
+    "syntaxError": true,
+    "variableRedeclaration": true,
+    "incorrectFunction": true
+  },
+  "enableAutocompletion": true,
+  "trace": {
+    "server": "messages"
+  }
+}
+```
+
+The project configuration takes precedence over IDE-specific settings and user preferences.
 
 ## Adding New Options
 

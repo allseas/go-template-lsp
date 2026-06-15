@@ -3,6 +3,7 @@ package handlers
 import (
 	"strings"
 	parse "text-template-parser"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -36,6 +37,18 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 	if ctx == nil {
 		return
 	}
+
+	if !GetConfig().EnableDiagnostics {
+		ctx.Notify(
+			protocol.ServerTextDocumentPublishDiagnostics,
+			&protocol.PublishDiagnosticsParams{
+				URI:         uri,
+				Diagnostics: []protocol.Diagnostic{},
+			},
+		)
+		return
+	}
+
 	diagnostics := collectDiagnostics(text, uri)
 	if diagnostics == nil {
 		diagnostics = []protocol.Diagnostic{}
@@ -59,23 +72,65 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 
 // collectDiagnostics returns diagnostics from AST analysis using the improved parser.
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
-	var tree *parse.Tree
+	var trees map[string]*parse.Tree
 
-	if doc, ok := store.Get(uri); ok && doc.tree != nil {
-		tree = doc.tree
+	if doc, ok := store.Get(uri); ok && len(doc.trees) > 0 {
+		trees = doc.trees
 	} else {
-		var err error
-		tree, err = tryParse(text)
+		_, parsed, err := tryParse(text)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to parse template")
 		}
+		trees = parsed
 	}
 
-	if tree != nil && tree.Root != nil {
+	if len(trees) == 0 {
+		log.Debug().Msg("no parse trees available for diagnostics")
+		return diagnostics
+	}
+
+	for _, tree := range trees {
+		if tree == nil || tree.Root == nil {
+			continue
+		}
 		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-		diagnostics = walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)
-	} else {
-		log.Debug().Msg("tree or root is nil")
+		diagnostics = append(
+			diagnostics,
+			walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)...,
+		)
+	}
+
+	// Surface template argument type errors from the typed trees.
+	if doc, ok := store.Get(uri); ok {
+		for _, tt := range doc.typedTrees {
+			diagnostics = append(diagnostics, collectTemplateArgTypeDiagnostics(tt, text)...)
+		}
+	}
+
+	return diagnostics
+}
+
+// collectTemplateArgTypeDiagnostics converts ErrorTypeInvalidTemplateArg entries from
+// a typed tree into protocol diagnostics.
+func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
+	if typedTree == nil {
+		return nil
+	}
+	var diagnostics []protocol.Diagnostic
+	for _, terr := range typedTree.TypeErrors {
+		if terr.ErrType() != types.ErrorTypeInvalidTemplateArg {
+			continue
+		}
+		if terr.Node == nil {
+			continue
+		}
+		pos := int(terr.Node.Position())
+		rng := expandToFullBracketsFromOffset(pos, text)
+		diagnostics = append(diagnostics, createDiagnostic(
+			withPos(text, pos, terr.Err),
+			rng,
+			true,
+		))
 	}
 	return diagnostics
 }
@@ -87,8 +142,13 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 	}
 	diagnostics = append(diagnostics, declareNode(node, text, ctx)...)
 
+	config := GetConfig()
+
 	switch n := node.(type) {
 	case *parse.UndefinedNode:
+		if !config.Diagnostics.SyntaxError {
+			break
+		}
 		if n.Err == nil && strings.TrimSpace(n.String()) == "" {
 			// Structural artifact with no attached error: skip.
 			break
@@ -125,29 +185,29 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 		}
 
 	case *parse.CommandNode:
+		if !config.Diagnostics.IncorrectFunction {
+			break
+		}
 		if len(n.Args) > 0 {
 			if identNode, ok := n.Args[0].(*parse.IdentifierNode); ok {
 				funcName := identNode.Ident
 				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
 				offset := int(identNode.Position())
-				if _, exists := builtinOutput[funcName]; !exists {
+				if _, known := types.GlobalFuncs()[funcName]; !known {
 					diagnostics = append(
 						diagnostics,
 						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
 					)
-				} else if currentKind := pipeOutputKind(ctx, false); currentKind != outputAny && currentKind != outputUntyped {
-					isMatch := false
-					for _, allowed := range functionsAccepting[currentKind] {
-						if allowed == funcName {
-							isMatch = true
-							break
+				} else {
+					currentKind := pipeOutputKind(ctx, false)
+					if currentKind != outputAny && currentKind != outputUntyped {
+						if !funcAcceptsKind(funcName, currentKind) {
+							msg := msgTypeMismatch(text, offset, funcName)
+							diagnostics = append(
+								diagnostics,
+								createDiagnostic(msg, rng, true),
+							)
 						}
-					}
-					if !isMatch {
-						diagnostics = append(
-							diagnostics,
-							createDiagnostic(msgTypeMismatch(text, offset, funcName), rng, true),
-						)
 					}
 				}
 			}
@@ -200,14 +260,16 @@ func collectDeclarations(
 				continue
 			}
 			if ctx.Vars[ident] != nil && !pipe.IsAssign {
-				diagnostics = append(
-					diagnostics,
-					createDiagnostic(
-						msgDuplicateDeclaration(text, int(decl.Position()), ident),
-						nodeToRange(decl, text),
-						false,
-					),
-				)
+				if GetConfig().Diagnostics.VariableRedeclaration {
+					diagnostics = append(
+						diagnostics,
+						createDiagnostic(
+							msgDuplicateDeclaration(text, int(decl.Position()), ident),
+							nodeToRange(decl, text),
+							false,
+						),
+					)
+				}
 				continue
 			}
 			if pipe.IsAssign {

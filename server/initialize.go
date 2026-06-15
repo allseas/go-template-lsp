@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"text-template-server/handlers"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -35,8 +36,11 @@ func setupHandlers() {
 		TextDocumentDefinition:          handlers.Definition,
 		SetTrace:                        handlers.SetTrace,
 		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
+		WorkspaceDidChangeWatchedFiles:  handlers.DidChangeWatchedFiles,
 		TextDocumentReferences:          handlers.References,
 		TextDocumentHover:               handlers.Hover,
+		TextDocumentSemanticTokensFull:  handlers.SemanticTokensFull,
+		TextDocumentDocumentSymbol:      handlers.DocumentSymbols,
 	}
 }
 
@@ -98,6 +102,16 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 		}
 	}
 
+
+	// Always seed the cache: builtins first, then workspace-defined globals.
+	{
+		funcs, err := types.ComputeGlobalFuncs(handlers.WorkspaceRoot)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to load global tmpl:func hints")
+		}
+		types.SetGlobalFuncs(funcs)
+		log.Debug().Int("count", len(funcs)).Msg("global funcs cache seeded")
+	}
 	capabilities := handler.CreateServerCapabilities()
 
 	openClose := true
@@ -112,6 +126,14 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 	capabilities.CompletionProvider = &protocol.CompletionOptions{
 		TriggerCharacters: []string{"$", "."},
 		ResolveProvider:   &resolveProvider,
+	}
+
+	capabilities.SemanticTokensProvider = &protocol.SemanticTokensOptions{
+		Legend: protocol.SemanticTokensLegend{
+			TokenTypes:     handlers.TokenTypes,
+			TokenModifiers: handlers.TokenModifiers,
+		},
+		Full: true,
 	}
 	v := version
 	return protocol.InitializeResult{
@@ -131,6 +153,9 @@ func initialized(context *glsp.Context, _ *protocol.InitializedParams) error {
 		if err := handlers.RequestConfig(ctx); err != nil {
 			log.Error().Err(err).Msg("failed to request config")
 		}
+		// Re-publish diagnostics for any documents that were opened before config loaded
+		handlers.RefreshAllDocuments(ctx)
+		handlers.RegisterGoFileWatcher(ctx)
 	}(context)
 
 	return nil

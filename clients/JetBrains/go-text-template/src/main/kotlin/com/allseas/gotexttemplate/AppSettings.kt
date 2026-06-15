@@ -10,7 +10,13 @@ import com.intellij.openapi.components.Storage
 @State(name = "com.example.gotexttemplate.AppSettings", storages = [Storage("GoTextTemplateSettings.xml")])
 class AppSettings : PersistentStateComponent<AppSettings.State> {
     data class State(
-        var enableServer: Boolean = true,
+        var enableHover: Boolean = true,
+        var enableDefinition: Boolean = true,
+        var enableDiagnostics: Boolean = true,
+        var diagnosticsSyntaxError: Boolean = true,
+        var diagnosticsVariableRedeclaration: Boolean = true,
+        var diagnosticsIncorrectFunction: Boolean = true,
+        var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
     )
 

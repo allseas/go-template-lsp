@@ -17,7 +17,7 @@ func suggestAt(t *testing.T, src string, offset int) []string {
 	t.Helper()
 	trees, err := parse.Parse("test", src, "", "", builtins())
 	require.NoError(t, err)
-	tt := serverTypes.NewTree(*trees["test"], nil, nil, nil)
+	tt := serverTypes.NewTree(*trees["test"], nil, nil, nil, nil)
 	cur := serverTypes.NodeFind(tt.Root, serverTypes.Pos(offset))
 	require.NotNil(t, cur)
 	items := suggest(cur, src[offset], false, protocol.Range{})
@@ -47,7 +47,7 @@ func suggestAtWithType(
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	tt := serverTypes.NewTree(*typ, nil, dotType, pkg)
+	tt := serverTypes.NewTree(*typ, nil, dotType, pkg, nil)
 	if lt != nil {
 		tt.DotType = lt.DotType
 		tt.Pkg = lt.Pkg
@@ -128,6 +128,27 @@ func TestCompletionSuggestions(t *testing.T) {
 	}
 }
 
+func TestChainEditCompletions(t *testing.T) {
+	lt := orderLoadedType(t)
+	for _, tc := range chainEditTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			offset := offsetOf(t, tc.src, tc.subStr, tc.occurrence) + tc.offsetAdj
+			var labels []string
+			if tc.withType {
+				labels = suggestAtWithType(t, tc.src, offset, tc.isInvoked, lt)
+			} else {
+				labels = suggestAt(t, tc.src, offset)
+			}
+			for _, want := range tc.contains {
+				assert.Contains(t, labels, want)
+			}
+			for _, notWant := range tc.notContains {
+				assert.NotContains(t, labels, notWant)
+			}
+		})
+	}
+}
+
 func TestNodeFind(t *testing.T) {
 	for _, tc := range nodeFindTestCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -172,10 +193,10 @@ func TestCompletionAst(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.serverDisabled {
 				original := GetConfig()
-				setConfig(Config{EnableServer: false})
+				setConfig(Config{EnableAutocompletion: false})
 				t.Cleanup(func() { setConfig(original) })
 			} else {
-				enableServer(t)
+				enableAutocompletion(t)
 			}
 			if !tc.skipStore {
 				store.Set(tc.uri, tc.content)
@@ -205,7 +226,7 @@ func TestCompletionAst(t *testing.T) {
 func TestCompletionWithFallback(t *testing.T) {
 	for _, tc := range completionFallbackTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			enableServer(t)
+			enableAutocompletion(t)
 			store.Set(tc.uri, tc.content)
 			t.Cleanup(func() { store.Remove(tc.uri) })
 			resp, err := CompletionWithFallback(nil, &protocol.CompletionParams{
@@ -247,7 +268,7 @@ func typedNodeAt(t *testing.T, src string, offset int, lt *serverTypes.Tree) ser
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	tt := serverTypes.NewTree(*typ, nil, dotType, pkg)
+	tt := serverTypes.NewTree(*typ, nil, dotType, pkg, nil)
 	cur := serverTypes.NodeFind(tt.Root, serverTypes.Pos(offset))
 	require.NotNil(t, cur)
 	return cur
@@ -545,7 +566,7 @@ func TestResolvePipeDotType(t *testing.T) {
 }
 
 func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
-	enableServer(t)
+	enableAutocompletion(t)
 	uri := "file:///invoked-dollar.tmpl"
 	content := `{{$top := .}}{{$}}`
 	store.Set(uri, content)
@@ -564,4 +585,43 @@ func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
 	labels := labelsFrom(t, result)
 	assert.Contains(t, labels, "top")
 	assert.NotContains(t, labels, "$top")
+}
+
+// TestCompletionAstMultiDefines drives completionAst across multiple
+// {{define}} blocks in one document, each carrying its own gotype hint, to
+// verify that dot-completion uses the per-tree loaded type.
+func TestCompletionAstMultiDefines(t *testing.T) {
+	loaded := loadModelTypes(t, "Order", "Address")
+	perTree := map[string]*serverTypes.Tree{
+		"t":          loaded["Address"],
+		"OrderTpl":   loaded["Order"],
+		"AddressTpl": loaded["Address"],
+	}
+
+	src := multiDefinesTemplate
+	uri := "file:///comp-multidefines.tmpl"
+	setDocMulti(t, uri, src, perTree)
+	t.Cleanup(func() { store.Remove(uri) })
+
+	for _, tc := range completionAstMultiDefineCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pos := posOfSubStr(t, src, tc.posSubStr, tc.posOccurrence)
+			pos.Character += uint32(tc.posCharOffset) //nolint:gosec
+
+			result := completionAst(nil, &protocol.CompletionParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+					Position:     pos,
+				},
+			})
+			require.NotNil(t, result)
+			labels := labelsFrom(t, result)
+			for _, want := range tc.wantContains {
+				assert.Contains(t, labels, want)
+			}
+			for _, notWant := range tc.wantNotContain {
+				assert.NotContains(t, labels, notWant)
+			}
+		})
+	}
 }

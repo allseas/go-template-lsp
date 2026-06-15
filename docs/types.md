@@ -19,14 +19,14 @@ expression at this position?" without re-walking the source.
 
 Defined in [analyse.go](../server/types/analyse.go):
 
-| Symbol                                         | Purpose                                                                                                                                                                                                          |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Tree`                                         | Typed counterpart of `parse.Tree`. Holds `Root *ListNode`, the function map, the optional `DotType` / `Pkg`, and accumulated `TypeErrors`.                                                                       |
-| `NewTree(parseTree, funcs, dotType, pkg) Tree` | Main constructor. Walks the parse tree and returns a fully analysed `Tree`.                                                                                                                                      |
-| `NewTreeWithType(...)`                         | Thin wrapper around `NewTree` for callers that have a `*types.Named` dot type.                                                                                                                                   |
-| `TError`                                       | A type error attached to a specific typed `Node`, categorised by `ErrorType`.                                                                                                                                    |
-| `ErrorType` constants                          | `ErrorTypeInvalidField`, `ErrorTypeInvalidFunction`, `ErrorTypeInvalidCommand`, `ErrorTypeInvalidRange`, `ErrorTypeInvalidIf`, `ErrorTypeInvalidWith`, `ErrorUndeclaredVariable`, `ErrorDoubleDeclaredVariable`. |
-| `Node` interface                               | Common interface for typed nodes; adds `ValueType() types.Type` and `IsElseList() bool` on top of the usual parse-node API.                                                                                      |
+| Symbol                                         | Purpose                                                                                                                                                                                                                                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Tree`                                         | Typed counterpart of `parse.Tree`. Holds `Root *ListNode`, the function map, the optional `DotType` / `Pkg`, and accumulated `TypeErrors`.                                                                                                      |
+| `NewTree(parseTree, funcs, dotType, pkg) Tree` | Main constructor. Walks the parse tree and returns a fully analysed `Tree`. `funcs` carries the template's known global functions (typically `types.GlobalFuncs()` — see [features/func_hints.md](features/func_hints.md)).                     |
+| `NewTreeWithType(...)`                         | Thin wrapper around `NewTree` for callers that have a `*types.Named` dot type.                                                                                                                                                                  |
+| `TError`                                       | A type error attached to a specific typed `Node`, categorised by `ErrorType`.                                                                                                                                                                   |
+| `ErrorType` constants                          | `ErrorTypeInvalidField`, `ErrorTypeInvalidFunction`, `ErrorTypeInvalidCommand`, `ErrorTypeInvalidRange`, `ErrorTypeInvalidIf`, `ErrorTypeInvalidWith`, `ErrorUndeclaredVariable`, `ErrorDoubleDeclaredVariable`, `ErrorTypeInvalidTemplateArg`. |
+| `Node` interface                               | Common interface for typed nodes; adds `ValueType() types.Type` and `IsElseList() bool` on top of the usual parse-node API.                                                                                                                     |
 
 Concrete node types (in [node.go](../server/types/node.go)) mirror the parse
 package: `ListNode`, `ActionNode`, `PipeNode`, `CommandNode`, `IdentifierNode`,
@@ -75,10 +75,18 @@ pattern is used inside branch helpers:
 ### Field / method chains
 
 `walkFieldChain` resolves a sequence of identifiers against a starting type
-using `types.LookupFieldOrMethod`. It is shared by `FieldNode`, `ChainNode`
-and dotted `VariableNode` (`$x.A.B`). Methods are accepted when they return
-one value, or two values where the second is `error`; anything else produces
-an `ErrorTypeInvalidField`.
+using `types.LookupFieldOrMethod`. It is shared by `ChainNode` and dotted
+`VariableNode` (`$x.A.B`). Methods are accepted when they return one value,
+or two values where the second is `error`; anything else produces an
+`ErrorTypeInvalidField`.
+
+`walkFieldChainWithMethodInfo` is a variant used exclusively by `analyseField`
+(i.e. `FieldNode`). It performs the same resolution but also returns an
+`isMethod []bool` slice whose i-th element is `true` when path[i] resolved to
+a method rather than a struct field. This information is stored on `FieldNode`
+and exposed via `FieldNode.IdentIsMethod(i int) bool`, allowing downstream
+consumers (e.g. semantic-token highlighting) to distinguish `.Address`
+(property) from `.DisplayName` (function call).
 
 ### Pipelines and commands
 
@@ -101,8 +109,11 @@ an `ErrorTypeInvalidField`.
 - support for variadic functions
 - support for iter.Seq in a range
 - indexing using key on maps in a range
-- type checking between different templates
 - special case for `call`
+
+### Implemented Features
+
+- **Template argument type checking** - When a `{{template "name" arg}}` is called, the argument type is checked against the template's declared input type (via `/*gotype:*/` hints). See [features/template_checking.md](features/template_checking.md).
 
 ### Error reporting
 
@@ -112,12 +123,14 @@ with the affected node left untyped.
 
 ## File Layout
 
-| File                                                         | Contents                                                                                                                                        |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [analyse.go](../server/types/analyse.go)                     | `Tree`, `NewTree`, `analysisCtx`, all `analyseXxx` helpers, `walkFieldChain`, `TError`.                                                         |
-| [node.go](../server/types/node.go)                           | Typed `Node` interface and all concrete node structs, including `String()` / `Copy()` / `writeTo()` implementations.                            |
-| [analyse_test.go](../server/types/analyse_test.go)           | Table-driven test runner and structural comparison helpers used to assert tree equality.                                                        |
-| [analyse_testcases.go](../server/types/analyse_testcases.go) | Test fixtures: mock types (`MockDot`, `Inner`), mock function map, parse-tree and typed-tree builder helpers, and the `analyseTestCases` table. |
+| File                                                         | Contents                                                                                                                                                                                                             |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [analyse.go](../server/types/analyse.go)                     | `Tree`, `NewTree`, `analysisCtx`, all `analyseXxx` helpers, `walkFieldChain`, `walkFieldChainWithMethodInfo`, `TError`.                                                                                              |
+| [node.go](../server/types/node.go)                           | Typed `Node` interface and all concrete node structs, including `String()` / `Copy()` / `writeTo()` implementations.                                                                                                 |
+| [analyse_test.go](../server/types/analyse_test.go)           | Table-driven test runner and structural comparison helpers used to assert tree equality.                                                                                                                             |
+| [analyse_testcases.go](../server/types/analyse_testcases.go) | Test fixtures: mock types (`MockDot`, `Inner`), mock function map, parse-tree and typed-tree builder helpers, and the `analyseTestCases` table.                                                                      |
+| [func_hints.go](../server/types/func_hints.go)               | Scans workspace Go sources for `//tmpl:func "global"` annotations and exposes the resulting `map[string]*types.Func` via `GlobalFuncs()` / `SetGlobalFuncs()`. See [features/func_hints.md](features/func_hints.md). |
+| [func_hints_test.go](../server/types/func_hints_test.go)     | Unit tests for the global-function loader (uses [`test/resources/funcmap-tests`](../test/resources/funcmap-tests)).                                                                                                  |
 
 `types/node.go` is excluded from linting and code coverage requirements, since it is taken from the standard Go library and only modified slightly.
 
