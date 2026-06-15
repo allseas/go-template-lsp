@@ -98,9 +98,11 @@ func MessageDot(_ *parse.DotNode, typ types.Type) string {
 
 // MessageField generates a hover message for a FieldNode, including the field
 // name and (when known) the resolved Go type of the full field chain.
-func MessageField(n *parse.FieldNode, typ types.Type) string {
+func MessageField(n *parse.FieldNode, typ types.Type, ctxType types.Type) string {
 	const fieldMessage = "```go\nfield %s\n```\nAccesses the `%s` field of the `.%s` context."
 	const fieldMessageTyped = "```go\nfield %s %s\n```\nAccesses the `%s` field of the `.%s` context."
+	const fieldMessageCtx = "```go\nfield %s\n```\nAccesses the `%s` field of the `%s` dot context."
+	const fieldMessageTypedCtx = "```go\nfield %s %s\n```\nAccesses the `%s` field of the `%s` dot context."
 
 	ctx := ""
 	if len(n.Ident) > 1 {
@@ -110,8 +112,20 @@ func MessageField(n *parse.FieldNode, typ types.Type) string {
 	if len(n.Ident) > 0 {
 		field = n.Ident[0]
 	}
-	if s := formatType(typ); s != "" {
-		return withLink(fmt.Sprintf(fieldMessageTyped, n.String(), s, field, ctx))
+
+	ctxTypeName := formatType(ctxType)
+	fieldTypeName := formatType(typ)
+
+	if ctxTypeName != "" {
+		if fieldTypeName != "" {
+			return withLink(
+				fmt.Sprintf(fieldMessageTypedCtx, n.String(), fieldTypeName, field, ctxTypeName),
+			)
+		}
+		return withLink(fmt.Sprintf(fieldMessageCtx, n.String(), field, ctxTypeName))
+	}
+	if fieldTypeName != "" {
+		return withLink(fmt.Sprintf(fieldMessageTyped, n.String(), fieldTypeName, field, ctx))
 	}
 	return withLink(fmt.Sprintf(fieldMessage, n.String(), field, ctx))
 }

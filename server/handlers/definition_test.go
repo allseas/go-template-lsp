@@ -444,6 +444,97 @@ func TestFunctionReturn(t *testing.T) {
 	assert.Equal(t, uint32(6), loc.Range.Start.Line)
 }
 
+func TestDefinitionFieldInRangeContext(t *testing.T) {
+	src := "{{ range .Items }}\n{{ .Name }}\n{{ end }}"
+	uri := "file:///def-field-range.tmpl"
+	lt := loadModelTypes(t, "Order")["Order"]
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 4),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	assert.Equal(t, uint32(40), loc.Range.Start.Line)
+}
+
+func TestDefinitionFieldInWithContext(t *testing.T) {
+	src := "{{ with .Address }}\n{{ .City }}\n{{ end }}"
+	uri := "file:///def-field-with.tmpl"
+	lt := loadModelTypes(t, "Order")["Order"]
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 4),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	assert.Equal(t, uint32(7), loc.Range.Start.Line)
+}
+
+func TestDefinitionMethodInRangeContext(t *testing.T) {
+	src := "{{ range .Items }}\n{{ .Describe }}\n{{ end }}"
+	uri := "file:///def-method-range.tmpl"
+	lt := loadModelTypes(t, "Order")["Order"]
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 4),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	assert.Equal(
+		t,
+		uint32(61),
+		loc.Range.Start.Line,
+	)
+}
+
 // TestDefinitionMultiDefines tests Definition inside a document with
 // multiple {{define}} blocks, each (optionally) preceded by its own gotype hint.
 func TestDefinitionMultiDefines(t *testing.T) {
