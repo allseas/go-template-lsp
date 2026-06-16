@@ -50,7 +50,7 @@ func (t *Tree) parseTable(context string) (pos Pos, line int, format string, pip
 	var next Node
 	list, next = t.itemList()
 
-	if next.Type() == nodeEnd && t.Mode&ParsePartial == 0 {
+	if next.Type() == nodeEnd {
 		return pipe.Position(), pipe.Line, format, pipe, list
 	}
 	if t.Mode&ParsePartial != 0 {
