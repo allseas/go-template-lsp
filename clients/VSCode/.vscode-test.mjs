@@ -4,7 +4,7 @@ import { defineConfig } from "@vscode/test-cli";
 const baseConfig = {
     files: "out/test/**/*.test.js",
     version: "stable",
-    workspaceFolder: "./test/resources",
+    workspaceFolder: "../../test/resources/templ-tests",
     extensionDevelopmentPath: "./",
     launchArgs: [
         "--extensionDevelopmentPath=.",
