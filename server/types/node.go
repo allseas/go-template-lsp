@@ -594,8 +594,9 @@ type VariableNode struct {
 	typ      types.Type // Resolved type of the variable (set during analysis)
 	parent   Node
 	endPos   Pos
-	isElse   bool   // Whether this is in an else list.
-	isMethod []bool // Per-identifier (Ident[1:]): true if the segment resolves to a method. (set during analysis)
+	isElse   bool       // Whether this is in an else list.
+	isMethod []bool     // Per-identifier (Ident[1:]): true if the segment resolves to a method. (set during analysis)
+	Base     types.Type // The base type of the variable (set during analysis)
 }
 
 func (v *VariableNode) IsElseList() bool {

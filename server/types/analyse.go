@@ -695,7 +695,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	var baseType types.Type
 	found := false
 	for i := len(ctx.vars) - 1; i >= 0; i-- {
-		if ctx.vars[i].Ident[0] == n.Ident[0] {
+		if len(ctx.vars[i].Ident) == 1 && ctx.vars[i].Ident[0] == n.Ident[0] {
 			baseType = ctx.vars[i].typ
 			found = true
 			break
@@ -704,6 +704,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if !found {
 		return v
 	}
+	v.Base = baseType
 
 	// $var with no field path -- type is the variable's type.
 	if len(n.Ident) == 1 {

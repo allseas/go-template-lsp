@@ -250,7 +250,7 @@ func chainContext(cur serverTypes.Node) (types.Type, bool) {
 	case *serverTypes.PipeNode:
 		return arg.ValueType(), true
 	case *serverTypes.VariableNode:
-		return chainPrefix(n.ValueType(), nil), true
+		return chainPrefix(n.Base, n.Ident[1:]), true
 	case *serverTypes.FieldNode:
 		if cur != arg {
 			return n.ValueType(), true
