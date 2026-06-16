@@ -17,9 +17,9 @@ class TextTemplateLspLanguageClient(
                 add(
                     "diagnostics",
                     JsonObject().apply {
-                        addProperty("syntaxError", config.diagnosticsSyntaxError)
-                        addProperty("variableRedeclaration", config.diagnosticsVariableRedeclaration)
-                        addProperty("incorrectFunction", config.diagnosticsIncorrectFunction)
+                        config.diagnostics.forEach { (key, value) ->
+                            addProperty(key, value)
+                        }
                     },
                 )
                 addProperty("enableAutocompletion", config.enableAutocompletion)

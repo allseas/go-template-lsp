@@ -99,7 +99,7 @@ suite("Diagnostics Test Suite", () => {
         assertWarning(diags[0], "First diagnostic");
         assert.strictEqual(
             diags[0].message,
-            "2:4: duplicate variable declaration: $variable",
+            "2:4: variable $variable already declared in this scope",
             "Diagnostic message should indicate variable redeclaration",
         );
     });
@@ -148,7 +148,7 @@ suite("Diagnostics Test Suite", () => {
             diags.length >= 1,
             `Expected at least 1 diagnostic, got ${diags.length}`,
         );
-        assertError(diags[0]);
+        assertWarning(diags[0]);
         assertContains(diags[0], "unknownFunc");
         assertContains(diags[0], "unsupported");
     });

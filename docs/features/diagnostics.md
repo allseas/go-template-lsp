@@ -83,7 +83,7 @@ Both offsets are then converted to `(line, character)` positions with `offsetToP
 
 ## Template Type Errors
 
-Type errors from template calls are collected separately from AST-based diagnostics. These errors are generated during type analysis by the `server/types` package:
+Type errors from templates are collected separately from AST-based diagnostics. These errors are generated during type analysis by the `server/types` package:
 
 ```mermaid
 flowchart TD

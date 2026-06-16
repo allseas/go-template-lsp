@@ -23,30 +23,12 @@ In `clients/VSCode/package.json`, add the new option under `contributes.configur
   "contributes": {
     "configuration": {
       "properties": {
-        "goTmplSupport.enableHover": {
-          ...
-        },
-        "goTmplSupport.enableDefinition": {
-          ...
-        },
-        "goTmplSupport.enableDiagnostics": {
-          ...
-        },
-        "goTmplSupport.diagnostics.syntaxError": {
-          ...
-        },
-        "goTmplSupport.diagnostics.variableRedeclaration": {
-          ...
-        },
-        "goTmplSupport.diagnostics.incorrectFunction": {
-          ...
-        },
-        "goTmplSupport.enableAutocompletion": {
-          ...
-        },
-        "goTmplSupport.trace.server": {
-          ...
-        },
+        "goTmplSupport.enableHover": { ... },
+        "goTmplSupport.enableDefinition": { ... },
+        "goTmplSupport.enableDiagnostics": { ... },
+        "goTmplSupport.diagnostics": { ... },
+        "goTmplSupport.enableAutocompletion": { ... },
+        "goTmplSupport.trace.server": { ... },
         "goTmplSupport.myNewOption": {
           "type": "string",
           "default": "default",
@@ -57,6 +39,8 @@ In `clients/VSCode/package.json`, add the new option under `contributes.configur
   }
 }
 ```
+
+Note: `goTmplSupport.diagnostics` is a single object property whose keys are error-type strings and whose values are severity strings (`"disabled"`, `"error"`, `"warning"`, `"information"`, `"hint"`). Do not add individual `goTmplSupport.diagnostics.*` sub-keys.
 
 Configuration property naming conventions:
 

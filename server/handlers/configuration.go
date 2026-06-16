@@ -3,10 +3,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"sync"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -17,12 +19,51 @@ import (
 // TraceValueMessages is the "messages" trace level. The "message" one in glsp is wrong.
 const TraceValueMessages = protocol.TraceValue("messages")
 
-// DiagnosticsConfig controls which individual diagnostic categories are reported.
-type DiagnosticsConfig struct {
-	SyntaxError           bool `json:"syntaxError"`
-	VariableRedeclaration bool `json:"variableRedeclaration"`
-	IncorrectFunction     bool `json:"incorrectFunction"`
+// DiagnosticsSeverity represents the severity level for diagnostics of a specific error type. It allows fine-grained control over which diagnostics are reported to the client and how they are categorized (e.g., as errors, warnings, informational messages, or hints).
+type DiagnosticsSeverity int
+
+const (
+	// DiagnosticSeverityDisabled means that diagnostics of this type are not reported to the client at all.
+	DiagnosticSeverityDisabled DiagnosticsSeverity = iota
+	// DiagnosticSeverityError means that diagnostics of this type are reported as errors.
+	DiagnosticSeverityError
+	// DiagnosticSeverityWarning means that diagnostics of this type are reported as warnings.
+	DiagnosticSeverityWarning
+	// DiagnosticSeverityInformation means that diagnostics of this type are reported as informational messages.
+	DiagnosticSeverityInformation
+	// DiagnosticSeverityHint means that diagnostics of this type are reported as hints.
+	DiagnosticSeverityHint
+)
+
+var diagnosticsSeverityNames = map[DiagnosticsSeverity]string{
+	DiagnosticSeverityDisabled:    "disabled",
+	DiagnosticSeverityError:       "error",
+	DiagnosticSeverityWarning:     "warning",
+	DiagnosticSeverityInformation: "information",
+	DiagnosticSeverityHint:        "hint",
 }
+
+// MarshalText implements encoding.TextMarshaler so DiagnosticsSeverity is serialized as a string in JSON.
+func (s DiagnosticsSeverity) MarshalText() ([]byte, error) {
+	if name, ok := diagnosticsSeverityNames[s]; ok {
+		return []byte(name), nil
+	}
+	return nil, fmt.Errorf("unknown DiagnosticsSeverity: %d", int(s))
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler so DiagnosticsSeverity can be deserialized from a string.
+func (s *DiagnosticsSeverity) UnmarshalText(data []byte) error {
+	for k, v := range diagnosticsSeverityNames {
+		if v == string(data) {
+			*s = k
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown DiagnosticsSeverity: %q", string(data))
+}
+
+// DiagnosticsConfig controls which individual diagnostic categories are reported.
+type DiagnosticsConfig map[types.ErrorType]DiagnosticsSeverity
 
 // Config represents the server's configuration settings. It is designed to be updated based on client settings and can be safely accessed across concurrent requests.
 type Config struct {
@@ -42,9 +83,19 @@ var (
 		EnableDefinition:  true,
 		EnableDiagnostics: true,
 		Diagnostics: DiagnosticsConfig{
-			SyntaxError:           true,
-			VariableRedeclaration: true,
-			IncorrectFunction:     true,
+			types.ErrorTypeInvalidField:       DiagnosticSeverityError,
+			types.ErrorTypeInvalidFunction:    DiagnosticSeverityWarning,
+			types.ErrorTypeInvalidCommand:     DiagnosticSeverityError,
+			types.ErrorTypeInvalidRange:       DiagnosticSeverityError,
+			types.ErrorTypeInvalidIf:          DiagnosticSeverityError,
+			types.ErrorTypeInvalidWith:        DiagnosticSeverityError,
+			types.ErrorUndeclaredVariable:     DiagnosticSeverityError,
+			types.ErrorDoubleDeclaredVariable: DiagnosticSeverityWarning,
+			types.ErrorTypeInvalidTemplateArg: DiagnosticSeverityError,
+			types.ErrorUnknownType:            DiagnosticSeverityInformation,
+			types.ErrorSyntaxError:            DiagnosticSeverityError,
+			types.ErrorHintLoadFailure:        DiagnosticSeverityWarning,
+			types.ErrorTypeUnknownRangeType:   DiagnosticSeverityWarning,
 		},
 		EnableAutocompletion: true,
 	}
