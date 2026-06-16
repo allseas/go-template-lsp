@@ -786,7 +786,7 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx, n
 	resultType := getNodeType(typeCmd.Args[0])
 
 	if resultType == nil {
-		return nil
+		return typeCmd
 	}
 
 	args := []types.Type{}
@@ -829,26 +829,34 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx, n
 			}
 			for i := 0; i < t.Params().Len()-1; i++ {
 				if !types.Identical(args[i], t.Params().At(i).Type()) {
+					tstring := "nil"
+					if args[i] != nil {
+						tstring = args[i].String()
+					}
 					ctx.errorf(
 						typeCmd,
 						ErrorTypeInvalidCommand,
 						"argument %d: expected type %s but got %s",
 						i+1,
 						t.Params().At(i).Type().String(),
-						args[i].String(),
+						tstring,
 					)
 				}
 			}
 			variadicType := t.Params().At(t.Params().Len() - 1).Type().(*types.Slice).Elem()
 			for i := t.Params().Len() - 1; i < len(args); i++ {
 				if !types.Identical(args[i], variadicType) {
+					tstring := "nil"
+					if args[i] != nil {
+						tstring = args[i].String()
+					}
 					ctx.errorf(
 						typeCmd,
 						ErrorTypeInvalidCommand,
 						"variadic argument %d: expected type %s but got %s",
 						i+1,
 						variadicType.String(),
-						args[i].String(),
+						tstring,
 					)
 				}
 			}
@@ -858,13 +866,17 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx, n
 
 		for i := 0; i < t.Params().Len(); i++ {
 			if !types.Identical(args[i], t.Params().At(i).Type()) {
+				tstring := "nil"
+				if args[i] != nil {
+					tstring = args[i].String()
+				}
 				ctx.errorf(
 					typeCmd,
 					ErrorTypeInvalidCommand,
 					"argument %d: expected type %s but got %s",
 					i+1,
 					t.Params().At(i).Type().String(),
-					args[i].String(),
+					tstring,
 				)
 			}
 		}
