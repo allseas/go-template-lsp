@@ -92,6 +92,7 @@ var (
 			types.ErrorUndeclaredVariable:     DiagnosticSeverityError,
 			types.ErrorDoubleDeclaredVariable: DiagnosticSeverityWarning,
 			types.ErrorTypeInvalidTemplateArg: DiagnosticSeverityError,
+			types.ErrorArgumentNumberMismatch: DiagnosticSeverityError,
 			types.ErrorUnknownType:            DiagnosticSeverityInformation,
 			types.ErrorSyntaxError:            DiagnosticSeverityError,
 			types.ErrorHintLoadFailure:        DiagnosticSeverityWarning,

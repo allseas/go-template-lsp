@@ -49,6 +49,7 @@ class ProjectSettingsConfigurable(
                         "undeclaredVariable" to "Undeclared variable",
                         "doubleDeclaredVariable" to "Duplicate variable declaration",
                         "invalidTemplateArg" to "Invalid template argument",
+                        "argumentNumberMismatch" to "Argument count mismatch",
                         "unknownType" to "Unknown type",
                         "hintLoadFailure" to "Type hint load failure",
                         "unknownRangeType" to "Unknown range type",
