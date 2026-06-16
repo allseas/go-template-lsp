@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !allseas
+//go:build allseas
 
 package parse
 
@@ -36,7 +36,7 @@ var itemName = map[itemType]string{
 
 	// keywords
 	itemDot:      ".",
-	itemBlock:    "block",
+	itemBlock:    "slot",
 	itemBreak:    "break",
 	itemContinue: "continue",
 	itemDefine:   "define",
@@ -72,7 +72,7 @@ func mkItem(typ itemType, text string) item {
 
 var (
 	tDot        = mkItem(itemDot, ".")
-	tBlock      = mkItem(itemBlock, "block")
+	tBlock      = mkItem(itemBlock, "slot")
 	tEOF        = mkItem(itemEOF, "")
 	tFor        = mkItem(itemIdentifier, "for")
 	tLeft       = mkItem(itemLeftDelim, "{{")
@@ -120,7 +120,7 @@ var lexTests = []lexTest{
 	}},
 	{"empty action", `{{}}`, []item{tLeft, tRight, tEOF}},
 	{"for", `{{for}}`, []item{tLeft, tFor, tRight, tEOF}},
-	{"block", `{{block "foo" .}}`, []item{
+	{"block", `{{slot "foo" .}}`, []item{
 		tLeft, tBlock, tSpace, mkItem(itemString, `"foo"`), tSpace, tDot, tRight, tEOF,
 	}},
 	{"quote", `{{"abc \n\t\" "}}`, []item{tLeft, tQuote, tRight, tEOF}},
