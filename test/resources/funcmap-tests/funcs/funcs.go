@@ -28,6 +28,7 @@ func localOnly() string { return "nope" }
 //tmpl:func "global"
 func GlobalFuncs() template.FuncMap {
 	return template.FuncMap{
+		"wc":      func(s int) int { return s + 1 },
 		"upper":   Upper,
 		"lower":   Lower,
 		"repeat":  Repeat,
