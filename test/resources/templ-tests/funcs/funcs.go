@@ -33,7 +33,7 @@ func GlobalFuncs() template.FuncMap {
 		"siemensLayout": func() *model.Layout { return &model.Layout{} },
 		"kebabCase":     func(s string) string { return strings.ReplaceAll(s, " ", "-") },
 		"upper":         Upper,
-		"dict":          func() map[string]string { return map[string]string{"a": "A", "b": "B"} },
+		"dict":          func(any...) map[string]string { return map[string]string{"a": "A", "b": "B"} },
 		"lower":         Lower,
 		"repeat":        Repeat,
 		"shout":         func(s string) string { return s + "!" },

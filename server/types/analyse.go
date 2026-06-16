@@ -940,35 +940,33 @@ func analyseCommand(
 				)
 			}
 			for i := 0; i < t.Params().Len()-1; i++ {
-				if !types.Identical(args[i], t.Params().At(i).Type()) {
-					tstring := "nil"
-					if args[i] != nil {
-						tstring = args[i].String()
-					}
+				if args[i] == nil {
+					continue
+				}
+				if !types.AssignableTo(args[i], t.Params().At(i).Type()) {
 					ctx.errorf(
 						typeCmd,
 						ErrorTypeInvalidCommand,
 						"argument %d: expected type %s but got %s",
 						i+1,
 						t.Params().At(i).Type().String(),
-						tstring,
+						args[i].String(),
 					)
 				}
 			}
 			variadicType := t.Params().At(t.Params().Len() - 1).Type().(*types.Slice).Elem()
 			for i := t.Params().Len() - 1; i < len(args); i++ {
-				if !types.Identical(args[i], variadicType) {
-					tstring := "nil"
-					if args[i] != nil {
-						tstring = args[i].String()
-					}
+				if args[i] == nil {
+					continue
+				}
+				if !types.AssignableTo(args[i], variadicType) {
 					ctx.errorf(
 						typeCmd,
 						ErrorTypeInvalidCommand,
 						"variadic argument %d: expected type %s but got %s",
 						i+1,
 						variadicType.String(),
-						tstring,
+						args[i].String(),
 					)
 				}
 			}
@@ -977,18 +975,17 @@ func analyseCommand(
 		}
 
 		for i := 0; i < t.Params().Len(); i++ {
-			if !types.Identical(args[i], t.Params().At(i).Type()) {
-				tstring := "nil"
-				if args[i] != nil {
-					tstring = args[i].String()
-				}
+			if args[i] == nil {
+				continue
+			}
+			if !types.AssignableTo(args[i], t.Params().At(i).Type()) {
 				ctx.errorf(
 					typeCmd,
 					ErrorTypeInvalidCommand,
 					"argument %d: expected type %s but got %s",
 					i+1,
 					t.Params().At(i).Type().String(),
-					tstring,
+					args[i].String(),
 				)
 			}
 		}

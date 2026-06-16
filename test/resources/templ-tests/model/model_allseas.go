@@ -9,6 +9,7 @@ type Model struct {
 	AlarmInstances []AlarmInstance
 	ControlSystem  ControlSystem
 	LoggerInfo     LoggerInfo
+	Number         int
 }
 
 // Instance represents a controller block instance.
