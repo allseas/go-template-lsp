@@ -12,11 +12,20 @@ import (
 func createDiagnostic(
 	msg string,
 	rang protocol.Range,
-	isError bool,
+	severity DiagnosticsSeverity,
 ) (diagnostic protocol.Diagnostic) {
 	sev := new(protocol.DiagnosticSeverityError)
-	if !isError {
+	switch severity {
+	case DiagnosticSeverityDisabled:
+		sev = nil
+	case DiagnosticSeverityError:
+		sev = new(protocol.DiagnosticSeverityError)
+	case DiagnosticSeverityWarning:
 		sev = new(protocol.DiagnosticSeverityWarning)
+	case DiagnosticSeverityInformation:
+		sev = new(protocol.DiagnosticSeverityInformation)
+	case DiagnosticSeverityHint:
+		sev = new(protocol.DiagnosticSeverityHint)
 	}
 
 	source := "text-template-support"
@@ -104,7 +113,7 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	// Surface template argument type errors and hint load failures from the stored document.
 	if doc, ok := store.Get(uri); ok {
 		for _, tt := range doc.typedTrees {
-			diagnostics = append(diagnostics, collectTemplateArgTypeDiagnostics(tt, text)...)
+			diagnostics = append(diagnostics, collectTemplateDiagnostics(tt, text)...)
 		}
 		diagnostics = append(diagnostics, collectHintLoadFailureDiagnostics(doc, text)...)
 	}
@@ -114,6 +123,10 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 
 func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Diagnostic {
 	if doc == nil || len(doc.failedHints) == 0 {
+		return nil
+	}
+	severity := GetConfig().Diagnostics[types.ErrorHintLoadFailure]
+	if severity == DiagnosticSeverityDisabled {
 		return nil
 	}
 	var diagnostics []protocol.Diagnostic
@@ -127,7 +140,7 @@ func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Di
 		diagnostics = append(diagnostics, createDiagnostic(
 			"gotype: could not load type: "+errMsg,
 			rng,
-			false,
+			severity,
 		))
 	}
 	return diagnostics
@@ -191,18 +204,17 @@ func lineStartOffset(text string, line int) int {
 	return -1
 }
 
-// collectTemplateArgTypeDiagnostics converts ErrorTypeInvalidTemplateArg entries from
-// a typed tree into protocol diagnostics.
-func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
+// collectTemplateDiagnostics collects TypeErrors entries from
+// a typed tree, and converts them into protocol diagnostics.
+func collectTemplateDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
 	if typedTree == nil {
 		return nil
 	}
+	config := GetConfig()
+
 	var diagnostics []protocol.Diagnostic
 	for _, terr := range typedTree.TypeErrors {
-		if terr.ErrType() != types.ErrorTypeInvalidTemplateArg {
-			continue
-		}
-		if terr.Node == nil {
+		if terr.Node == nil || config.Diagnostics[terr.ErrType()] == DiagnosticSeverityDisabled {
 			continue
 		}
 		pos := int(terr.Node.Position())
@@ -210,7 +222,7 @@ func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []pro
 		diagnostics = append(diagnostics, createDiagnostic(
 			withPos(text, pos, terr.Err),
 			rng,
-			true,
+			config.Diagnostics[terr.ErrType()],
 		))
 	}
 	return diagnostics
@@ -227,7 +239,7 @@ func analyzeNode(node types.Node, text string) (diagnostics []protocol.Diagnosti
 
 	switch n := node.(type) {
 	case *types.UndefinedNode:
-		if !config.Diagnostics.SyntaxError {
+		if config.Diagnostics[types.ErrorSyntaxError] == DiagnosticSeverityDisabled {
 			break
 		}
 		if n.Err == nil && strings.TrimSpace(n.String()) == "" {
@@ -242,24 +254,25 @@ func analyzeNode(node types.Node, text string) (diagnostics []protocol.Diagnosti
 		}
 		diagnostics = append(
 			diagnostics,
-			createDiagnostic(msg, expandToFullBracketsFromOffset(int(n.Position()), text), true),
+			createDiagnostic(
+				msg,
+				expandToFullBracketsFromOffset(int(n.Position()), text),
+				config.Diagnostics[types.ErrorSyntaxError],
+			),
 		)
 
 	case *types.ActionNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
 			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
 	case *types.RangeNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
 			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
 	case *types.IfNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
 			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
@@ -268,77 +281,22 @@ func analyzeNode(node types.Node, text string) (diagnostics []protocol.Diagnosti
 			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *types.CommandNode:
-		if !config.Diagnostics.IncorrectFunction {
-			break
-		}
-		if len(n.Args) > 0 {
-			if identNode, ok := n.Args[0].(*types.IdentifierNode); ok {
-				funcName := identNode.Ident
-				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
-				offset := int(identNode.Position())
-				if _, known := types.GlobalFuncs()[funcName]; !known {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
-					)
-				} else {
-					currentKind := pipeOutputKind(types.EnclosingPipe(n), false)
-					if currentKind != outputAny && currentKind != outputUntyped {
-						if !funcAcceptsKind(funcName, currentKind) {
-							msg := msgTypeMismatch(text, offset, funcName)
-							diagnostics = append(
-								diagnostics,
-								createDiagnostic(msg, rng, true),
-							)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return diagnostics
-}
-
-// collectDeclarations flags duplicate := declarations in pipe by comparing its
-// decls against the variables already visible at the pipe's position. Names
-// that pipe itself introduces are not registered separately: each call works
-// with on-demand scope derived from the typed tree's parent chain.
-func collectDeclarations(
-	pipe *types.PipeNode,
-	text string,
-) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil || pipe.IsAssign {
-		return nil
-	}
-	visible := visibleVarNames(pipe)
-	seen := map[string]bool{}
-	for _, decl := range pipe.Decl {
-		if decl == nil {
-			continue
-		}
-		for _, ident := range decl.Ident {
-			if name := strings.TrimPrefix(ident, "$"); name == "" {
-				continue
-			}
-			isDup := visible[ident] || seen[ident]
-			seen[ident] = true
-			if !isDup {
-				continue
-			}
-			if GetConfig().Diagnostics.VariableRedeclaration {
+	case *types.IdentifierNode:
+		if config.Diagnostics[types.ErrorTypeInvalidFunction] != DiagnosticSeverityDisabled {
+			if _, known := types.GlobalFuncs()[n.Ident]; !known {
+				offset := int(n.Position())
 				diagnostics = append(
 					diagnostics,
 					createDiagnostic(
-						msgDuplicateDeclaration(text, int(decl.Position()), ident),
-						nodeRange(decl, text),
-						false,
+						msgUnknownFunction(text, offset, n.Ident),
+						expandToFullBracketsFromOffset(offset, text),
+						config.Diagnostics[types.ErrorTypeInvalidFunction],
 					),
 				)
 			}
 		}
 	}
+
 	return diagnostics
 }
 
@@ -379,7 +337,7 @@ func checkPipeUsage(
 					createDiagnostic(
 						msgUndeclaredVariable(text, int(vnode.Position()), name),
 						nodeRange(vnode, text),
-						true,
+						GetConfig().Diagnostics[types.ErrorUndeclaredVariable],
 					),
 				)
 			}

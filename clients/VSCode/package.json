@@ -99,20 +99,34 @@
                     "default": true,
                     "description": "Enable/disable all diagnostics."
                 },
-                "goTmplSupport.diagnostics.syntaxError": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Report syntax errors."
-                },
-                "goTmplSupport.diagnostics.variableRedeclaration": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Report duplicate variable declarations."
-                },
-                "goTmplSupport.diagnostics.incorrectFunction": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Report unknown or incorrectly used functions."
+                "goTmplSupport.diagnostics": {
+                    "type": "object",
+                    "default": {
+                        "invalidField": "error",
+                        "invalidFunction": "warning",
+                        "invalidCommand": "error",
+                        "invalidRange": "error",
+                        "invalidIf": "error",
+                        "invalidWith": "error",
+                        "undeclaredVariable": "error",
+                        "doubleDeclaredVariable": "warning",
+                        "invalidTemplateArg": "error",
+                        "unknownType": "information",
+                        "syntaxError": "error",
+                        "hintLoadFailure": "warning",
+                        "unknownRangeType": "warning"
+                    },
+                    "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                            "disabled",
+                            "error",
+                            "warning",
+                            "information",
+                            "hint"
+                        ]
+                    },
+                    "description": "Per-diagnostic severity levels. Valid values: \"disabled\", \"error\", \"warning\", \"information\", \"hint\"."
                 },
                 "goTmplSupport.enableAutocompletion": {
                     "type": "boolean",

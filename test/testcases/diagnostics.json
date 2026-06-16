@@ -39,7 +39,7 @@
     "expected": {
       "count": 1,
       "diagnostics": [
-        { "index": 0, "severity": "warning", "message": "2:4: duplicate variable declaration: $variable" }
+        { "index": 0, "severity": "warning", "message": "2:4: variable $variable already declared in this scope" }
       ]
     }
   },
@@ -80,7 +80,7 @@
     "expected": {
       "minCount": 1,
       "diagnostics": [
-        { "index": 0, "severity": "error", "messageContains": "unknownFunc" }
+        { "index": 0, "severity": "warning", "messageContains": "unknownFunc" }
       ]
     }
   },
@@ -100,8 +100,8 @@
     "expected": {
       "minCount": 2,
       "diagnostics": [
-        { "index": 0, "severity": "error", "messageContains": "badOne", "rangeStartLine": 0 },
-        { "index": 1, "severity": "error", "messageContains": "badTwo", "rangeStartLine": 1 }
+        { "index": 0, "severity": "warning", "messageContains": "badOne", "rangeStartLine": 0 },
+        { "index": 1, "severity": "warning", "messageContains": "badTwo", "rangeStartLine": 1 }
       ]
     }
   },

@@ -235,9 +235,9 @@ Create a `gotmpl.config.json` file in the root of your project to configure the 
   "enableDefinition": true,
   "enableDiagnostics": true,
   "diagnostics": {
-    "syntaxError": true,
-    "variableRedeclaration": true,
-    "incorrectFunction": true
+    "syntaxError": "error",
+    "doubleDeclaredVariable": "warning",
+    "invalidFunction": "warning"
   },
   "enableAutocompletion": true,
   "trace": {
@@ -255,7 +255,9 @@ Open *Settings* (<kbd>Ctrl</kbd>+<kbd>,</kbd>) and search for `Go Template`, or 
 ```json
 {
   "goTmplSupport.enableDiagnostics": true,
-  "goTmplSupport.diagnostics.incorrectFunction": false,
+  "goTmplSupport.diagnostics": {
+    "invalidFunction": "disabled"
+  },
   "goTmplSupport.trace.server": "off"
 }
 ```
@@ -271,9 +273,10 @@ Go to *Settings -> Tools -> Go Text Template*. Application-level settings apply 
 | `enableHover`                       | boolean | `true`       | Show hover tooltips                                    |
 | `enableDefinition`                  | boolean | `true`       | Enable go-to-definition                                |
 | `enableDiagnostics`                 | boolean | `true`       | Enable all diagnostics                                 |
-| `diagnostics.syntaxError`           | boolean | `true`       | Report syntax errors                                   |
-| `diagnostics.variableRedeclaration` | boolean | `true`       | Report duplicate variable names                        |
-| `diagnostics.incorrectFunction`     | boolean | `true`       | Report unknown functions                               |
+| `diagnostics.syntaxError`           | string  | `"error"`    | Severity for syntax errors                             |
+| `diagnostics.doubleDeclaredVariable`| string  | `"warning"`  | Severity for duplicate variable declarations           |
+| `diagnostics.invalidFunction`       | string  | `"warning"`  | Severity for unknown functions                         |
+| `diagnostics.unknownRangeType`      | string  | `"warning"`  | Severity for ranging over a value of undetermined type |
 | `enableAutocompletion`              | boolean | `true`       | Enable completions                                     |
 | `trace.server`                      | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"` |
 

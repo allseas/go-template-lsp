@@ -1,11 +1,9 @@
 {
-  "enableHover": true,
-  "enableDefinition": true,
-  "enableDiagnostics": true,
-  "diagnostics": {
-    "syntaxError": true,
-    "variableRedeclaration": true,
-    "incorrectFunction": true
+  "enableServer": true,
+  "trace": {
+    "server": "messages"
   },
-  "enableAutocompletion": true
+  "diagnostics": {
+    "invalidField": "error"
+  }
 }
