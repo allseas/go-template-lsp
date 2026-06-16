@@ -134,6 +134,11 @@ func DocumentSymbols(
 		selRange := bytesToRange(doc.text, nameStart, nameEnd)
 		kind := protocol.SymbolKindFunction
 
+		if name == "" {
+			// empty define name - diagnostic emitted by collectEmptyDefineNameDiagnostics
+			continue
+		}
+
 		symbols = append(symbols, protocol.DocumentSymbol{
 			Name:           name,
 			Kind:           kind,
