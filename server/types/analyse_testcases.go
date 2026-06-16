@@ -934,4 +934,208 @@ var analyseTestCases = []analyseTestCase{
 		funcs:          funcs,
 		expectedErrors: []TError{},
 	},
+	{
+		// {{ FuncA 42 }}  -- FuncA :: string -> int, called with an int.
+		// Expect a single ErrorTypeInvalidCommand for the bad argument type.
+		// The command's result type is still FuncA's return type (int).
+		name: "wrong argument type (single param)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncA"), num(42)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+			tcom(
+				types.Typ[types.Int],
+				tident("FuncA", funcs["FuncA"].Type()),
+				tnum(42),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ FuncB 1 "hi" }}  -- FuncB :: (int, int) -> string, second arg
+		// is a string instead of an int. Expect one ErrorTypeInvalidCommand.
+		name: "wrong argument type (second of two params)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncB"), num(1), str("hi")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tnum(1),
+				tstr("hi"),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ FuncB "hi" 2 }}  -- FuncB :: (int, int) -> string, first arg
+		// is a string instead of an int. Expect one ErrorTypeInvalidCommand.
+		name: "wrong argument type (first of two params)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncB"), str("hi"), num(2)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tstr("hi"),
+				tnum(2),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ FuncB "x" "y" }}  -- both args wrong type. Expect two
+		// ErrorTypeInvalidCommand entries (one per mismatched argument).
+		name: "wrong argument type (both params wrong)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncB"), str("x"), str("y")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tstr("x"),
+				tstr("y"),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ FuncA "x" "y" }}  -- FuncA expects 1 arg, given 2.
+		// Expect a single ErrorArgumentNumberMismatch. The provided first
+		// argument type matches so no other errors are reported.
+		name: "too many arguments (single-param func)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncA"), str("x"), str("y")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+			tcom(
+				types.Typ[types.Int],
+				tident("FuncA", funcs["FuncA"].Type()),
+				tstr("x"),
+				tstr("y"),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorArgumentNumberMismatch},
+		},
+	},
+	{
+		// {{ FuncB 1 2 3 }}  -- FuncB expects 2 args, given 3.
+		// Expect a single ErrorArgumentNumberMismatch.
+		name: "too many arguments (multi-param func)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncB"), num(1), num(2), num(3)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tnum(1),
+				tnum(2),
+				tnum(3),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorArgumentNumberMismatch},
+		},
+	},
+	{
+		// {{ "hello" | FuncD }}  -- FuncD :: int -> string, but the
+		// pipelined value is a string. Expect one ErrorTypeInvalidCommand.
+		name: "wrong argument type via pipeline",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(str("hello")),
+			com(ident("FuncD")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tstr("hello")),
+			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ "x" | FuncB 1 }}  -- FuncB :: (int, int) -> string. The
+		// literal arg supplies the first int; the pipeline supplies a
+		// string for the second. Expect one ErrorTypeInvalidCommand on
+		// the second argument.
+		name: "wrong argument type via pipeline (multi-param func)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(str("x")),
+			com(ident("FuncB"), num(1)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tstr("x")),
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tnum(1),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ 1 | FuncB 1 2 }}  -- FuncB expects 2 args; literal supplies
+		// 2 and the pipeline adds a 3rd, yielding 3 args total. Expect a
+		// single ErrorArgumentNumberMismatch.
+		name: "too many arguments via pipeline",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(num(1)),
+			com(ident("FuncB"), num(1), num(2)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.Int], tnum(1)),
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tnum(1),
+				tnum(2),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorArgumentNumberMismatch},
+		},
+	},
 }
