@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !allseas
+//go:build allseas
 
 package parse
 
@@ -79,7 +79,8 @@ const (
 
 var key = map[string]itemType{
 	".":        itemDot,
-	"block":    itemBlock,
+	"block":    itemTable,
+	"slot":     itemBlock,
 	"break":    itemBreak,
 	"continue": itemContinue,
 	"define":   itemDefine,
@@ -275,6 +276,8 @@ func lexText(l *lexer) stateFn {
 			delimEnd := l.pos + Pos(len(l.leftDelim))
 			if hasLeftTrimMarker(l.input[delimEnd:]) {
 				trimLength = rightTrimLength(l.input[l.start:l.pos])
+			} else if hasLeftLineTrimMarker(l.input[delimEnd:]) { // ALLSEAS ADDITION
+				trimLength = rightTrimCharsLength(l.input[l.start:l.pos], lineSpaceChars) // ALLSEAS ADDITION
 			}
 			l.pos -= trimLength
 			l.line += strings.Count(l.input[l.start:l.pos], "\n")
@@ -330,6 +333,8 @@ func lexLeftDelim(l *lexer) stateFn {
 		l.pos += afterMarker
 		l.ignore()
 		return lexComment
+	} else if hasLeftLineTrimMarker(l.input[l.pos:]) { // ALLSEAS ADDITION
+		afterMarker = trimLineMarkerLen // ALLSEAS ADDITION
 	}
 	i := l.thisItem(itemLeftDelim)
 	l.insideAction = true
@@ -385,7 +390,10 @@ func lexRightDelim(l *lexer) stateFn {
 }
 
 func (l *lexer) atLeftDelim() bool {
-	return strings.HasPrefix(l.input[l.pos:], l.leftDelim)
+	if strings.HasPrefix(l.input[l.pos:], l.leftDelim) {
+		return true
+	}
+	return false
 }
 
 // lexInsideAction scans the elements inside action delimiters.

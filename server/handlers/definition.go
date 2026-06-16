@@ -5,8 +5,6 @@ import (
 	"text-template-server/types"
 	"text-template-server/utils"
 
-	parse "text-template-parser"
-
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -27,7 +25,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 	}
 
 	offset := positionToOffset(doc.text, position)
-	tree := doc.treeAt(parse.Pos(offset))
+	tree := doc.typedTreeAtTyped(types.Pos(offset))
 	if tree == nil || tree.Root == nil {
 		log.Debug().
 			Str("handler", "definition").
@@ -35,23 +33,57 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 			Msg("no parse tree at offset")
 		return nil, nil
 	}
-	node := nodeFind(tree.Root, parse.Pos(offset))
+	node := types.NodeFind(tree.Root, types.Pos(offset))
 
 	if node == nil {
 		log.Debug().Str("handler", "definition").Any("position", position).Msg("no node found")
 		return nil, nil
 	}
 
-	loadedType := doc.loadedTypeAt(parse.Pos(offset))
+	loadedType := doc.loadedTypeAtTyped(types.Pos(offset))
 
 	switch target := node.(type) {
-	case *parse.VariableNode:
-		return definitionVariable(target, tree, uri, doc)
-	case *parse.DotNode:
-		return definitionDot(tree, node, uri, doc)
-	case *parse.FieldNode:
-		return definitionField(loadedType, target, offset)
-	case *parse.IdentifierNode:
+	case *types.VariableNode:
+		varName := target.Ident[0]
+
+		var results []protocol.Location
+
+		decls := FindVarDeclarationsTyped(tree.Root, varName)
+		for _, decl := range decls {
+			results = append(results, protocol.Location{
+				URI:   uri,
+				Range: nodeRange(decl, doc.text),
+			})
+		}
+
+		if len(results) == 0 {
+			return nil, nil
+		}
+		return results, nil
+	case *types.DotNode:
+		// TODO: decide if that is the correct behaviour to go to the previous range/with?
+		for cur := node.Parent(); cur != nil; cur = cur.Parent() {
+			switch branch := cur.(type) {
+			case *types.RangeNode:
+				return protocol.Location{
+					URI:   uri,
+					Range: nodeRange(branch.Pipe, doc.text),
+				}, nil
+			case *types.WithNode:
+				return protocol.Location{
+					URI:   uri,
+					Range: nodeRange(branch.Pipe, doc.text),
+				}, nil
+			default:
+				if loc, ok := extDefinitionDotScope(cur, uri, doc.text); ok {
+					return loc, nil
+				}
+			}
+		}
+		return nil, nil
+	case *types.FieldNode:
+		return fieldNodeDefinition(loadedType, dotTypeAt(target), target, offset)
+	case *types.IdentifierNode:
 		return definitionIdentifier(target)
 	}
 
@@ -62,60 +94,19 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 	return nil, nil
 }
 
-func definitionVariable(
-	target *parse.VariableNode,
-	tree *parse.Tree,
-	uri protocol.DocumentUri,
-	doc *document,
+func fieldNodeDefinition(
+	loadedType *types.Tree,
+	dotType gotypes.Type,
+	target *types.FieldNode,
+	offset int,
 ) (any, error) {
-	varName := target.Ident[0]
-
-	var results []protocol.Location
-
-	decls := FindVarDeclarations(tree.Root, varName)
-	for _, decl := range decls {
-		results = append(results, protocol.Location{
-			URI:   uri,
-			Range: nodeToRange(decl, doc.text),
-		})
-	}
-
-	if len(results) == 0 {
+	if loadedType == nil || loadedType.Fset == nil {
 		return nil, nil
 	}
-	return results, nil
-}
-
-func definitionDot(
-	tree *parse.Tree,
-	node parse.Node,
-	uri protocol.DocumentUri,
-	doc *document,
-) (any, error) {
-	// TODO: decide if that is the correct behaviour to go to the previous range/with?
-
-	ctx := &Context{Vars: make(map[string]parse.Node)}
-	buildPath(tree.Root, node, ctx)
-
-	for i := len(ctx.Path) - 1; i >= 0; i-- {
-		switch branch := ctx.Path[i].(type) {
-		case *parse.RangeNode:
-			return protocol.Location{
-				URI:   uri,
-				Range: nodeToRange(branch.Pipe, doc.text),
-			}, nil
-		case *parse.WithNode:
-			return protocol.Location{
-				URI:   uri,
-				Range: nodeToRange(branch.Pipe, doc.text),
-			}, nil
-		}
+	if dotType == nil {
+		dotType = loadedType.DotType
 	}
-	return nil, nil
-}
-
-func definitionField(loadedType *types.Tree, target *parse.FieldNode, offset int) (any, error) {
-	if loadedType == nil || loadedType.Fset == nil || loadedType.DotType == nil {
+	if dotType == nil {
 		return nil, nil
 	}
 	if len(target.Ident) == 0 {
@@ -125,14 +116,14 @@ func definitionField(loadedType *types.Tree, target *parse.FieldNode, offset int
 	targetIdx := getFieldIdentIdx(target, offset)
 
 	// log.Debug().
-	// 	Any("dotType", loadedType.DotType).
+	// 	Any("dotType", dotType).
 	// 	Any("Ident", target.Ident).
 	// 	Any("target", targetIdx).
 	// 	Any("cursorPosition", offset).
 	// 	Any("fieldNodePos", target.Pos).
 	// 	Msg("definition NodeField")
 
-	var currentType gotypes.Type = loadedType.DotType
+	currentType := dotType
 	for i := 0; i <= targetIdx; i++ {
 		obj, _, _ := gotypes.LookupFieldOrMethod(
 			currentType,
@@ -183,7 +174,7 @@ func definitionField(loadedType *types.Tree, target *parse.FieldNode, offset int
 	return nil, nil
 }
 
-func definitionIdentifier(target *parse.IdentifierNode) (any, error) {
+func definitionIdentifier(target *types.IdentifierNode) (any, error) {
 	log.Debug().
 		Str("handler", "definition").
 		Any("identifier", target.Ident).
@@ -222,7 +213,7 @@ func definitionIdentifier(target *parse.IdentifierNode) (any, error) {
 	}, nil
 }
 
-func getFieldIdentIdx(target *parse.FieldNode, offset int) int {
+func getFieldIdentIdx(target *types.FieldNode, offset int) int {
 	fieldOffset := int(target.Pos) + 1 // skip the leading '.'
 	targetIdx := len(target.Ident) - 1 // default to last ident
 	for i, ident := range target.Ident {

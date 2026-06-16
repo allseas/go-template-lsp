@@ -149,45 +149,6 @@ func TestChainEditCompletions(t *testing.T) {
 	}
 }
 
-func TestNodeFind(t *testing.T) {
-	for _, tc := range nodeFindTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			trees, err := parse.Parse("test", tc.src, "", "", builtins())
-			require.NoError(t, err)
-			node := nodeFind(trees["test"].Root, parse.Pos(tc.pos))
-			if tc.isDot {
-				_, ok := node.(*parse.DotNode)
-				assert.True(t, ok, "expected DotNode, got %T", node)
-			}
-			if tc.isIdent {
-				id, ok := node.(*parse.IdentifierNode)
-				require.True(t, ok, "expected IdentifierNode, got %T", node)
-				assert.Equal(t, tc.ident, id.Ident)
-			}
-			if tc.isVar {
-				v, ok := node.(*parse.VariableNode)
-				require.True(t, ok, "expected VariableNode, got %T", node)
-				assert.Equal(t, tc.varIdent, v.Ident[0])
-			}
-		})
-	}
-}
-
-func TestBuildPathScope(t *testing.T) {
-	for _, tc := range buildPathScopeTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			trees, err := parse.Parse("test", tc.src, "", "", builtins())
-			require.NoError(t, err)
-			root := trees["test"].Root
-			ctx := &Context{Vars: map[string]parse.Node{}}
-			pos := parse.Pos(offsetOf(t, tc.src, ".", tc.dotOccur))
-			buildPath(root, nodeFind(root, pos), ctx)
-			_, present := ctx.Vars[tc.varName]
-			assert.Equal(t, tc.wantPresent, present)
-		})
-	}
-}
-
 func TestCompletionAst(t *testing.T) {
 	for _, tc := range completionAstTestCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -393,14 +354,16 @@ func TestPipeFilteredItemsT(t *testing.T) {
 
 // firstActionPipe parses src and returns the first ActionNode's PipeNode.
 // Uses partial parsing so unknown identifiers (e.g. "foo", "x") do not fail.
-func firstActionPipe(t *testing.T, src string) *parse.PipeNode {
+func firstActionPipe(t *testing.T, src string) *serverTypes.PipeNode {
 	t.Helper()
 	typ := parse.New("test")
 	typ.Mode = parse.ParsePartial | parse.SkipFuncCheck
 	_, err := typ.Parse(src, "{{", "}}", map[string]*parse.Tree{}, builtins())
 	require.NoError(t, err)
-	for _, n := range typ.Root.Nodes {
-		if a, ok := n.(*parse.ActionNode); ok {
+	tt := buildTypedTree(typ, nil, nil)
+	require.NotNil(t, tt)
+	for _, n := range tt.Root.Nodes {
+		if a, ok := n.(*serverTypes.ActionNode); ok {
 			return a.Pipe
 		}
 	}
@@ -411,11 +374,11 @@ func firstActionPipe(t *testing.T, src string) *parse.PipeNode {
 func TestPipeOutputKind(t *testing.T) {
 	for _, tc := range pipeOutputKindTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := &Context{Vars: map[string]parse.Node{}}
+			var pipe *serverTypes.PipeNode
 			if !tc.nilPipe {
-				ctx.Pipe = firstActionPipe(t, tc.src)
+				pipe = firstActionPipe(t, tc.src)
 			}
-			got := pipeOutputKind(ctx, tc.isInvoked)
+			got := pipeOutputKind(pipe, tc.isInvoked)
 			assert.Equal(t, tc.want, got)
 		})
 	}
@@ -516,50 +479,6 @@ func TestToNamed(t *testing.T) {
 				assert.Nil(t, got)
 			} else {
 				assert.NotNil(t, got)
-			}
-		})
-	}
-}
-
-// firstBranchPipe returns the Pipe of the first RangeNode or WithNode in src.
-func firstBranchPipe(t *testing.T, src string) *parse.PipeNode {
-	t.Helper()
-	trees, err := parse.Parse("test", src, "", "", builtins())
-	require.NoError(t, err)
-	for _, n := range trees["test"].Root.Nodes {
-		switch v := n.(type) {
-		case *parse.RangeNode:
-			return v.Pipe
-		case *parse.WithNode:
-			return v.Pipe
-		}
-	}
-	t.Fatalf("no Range/With node found in %q", src)
-	return nil
-}
-
-func TestResolvePipeDotType(t *testing.T) {
-	lt := orderLoadedType(t)
-	for _, tc := range resolvePipeDotTypeTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			pipe := firstBranchPipe(t, tc.src)
-			ctx := &Context{Vars: map[string]parse.Node{}}
-			if !tc.nilCtxDot {
-				ctx.DotType = lt
-			}
-			got := resolvePipeDotType(pipe, tc.unwrapSlice, ctx)
-			if tc.wantNilDot {
-				assert.Nil(t, got)
-				return
-			}
-			require.NotNil(t, got)
-			require.NotNil(t, got.DotType)
-			if tc.wantOrder {
-				assert.Equal(t, "Order", got.DotType.Obj().Name())
-				return
-			}
-			if tc.wantName != "" {
-				assert.Equal(t, tc.wantName, got.DotType.Obj().Name())
 			}
 		})
 	}

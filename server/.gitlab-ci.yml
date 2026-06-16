@@ -41,3 +41,13 @@ testing:
       COVERAGE=$(echo "$COVER_OUTPUT" | grep '^total:' | awk '{print $3}' | tr -d '%')
       echo "Total coverage: ${COVERAGE}%"
       awk "BEGIN { if (${COVERAGE} < 80) { print \"Coverage ${COVERAGE}% is below the required 80%\"; exit 1 } }"
+    - echo "Running Allseas Tests"
+    - go test ./... -coverprofile=coverage.out -tags allseas
+    - grep -v -E '/(parse|types)/node\.go:' coverage.out > coverage.filtered.out
+    - mv coverage.filtered.out coverage.out
+    - |
+      COVER_OUTPUT=$(go tool cover -func=coverage.out)
+      echo "$COVER_OUTPUT"
+      COVERAGE=$(echo "$COVER_OUTPUT" | grep '^total:' | awk '{print $3}' | tr -d '%')
+      echo "Total coverage: ${COVERAGE}%"
+      awk "BEGIN { if (${COVERAGE} < 80) { print \"Coverage ${COVERAGE}% is below the required 80%\"; exit 1 } }"

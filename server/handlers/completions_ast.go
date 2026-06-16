@@ -4,27 +4,12 @@ package handlers
 import (
 	"go/types"
 	"strings"
-	parse "text-template-parser"
 	serverTypes "text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
-
-// Context struct is used only in completion_ast to construct Context to be scope aware
-// not needed anymore
-// Deprecated: Use type tree instead
-type Context struct {
-	// chain from root to the Node
-	Path []parse.Node
-	// variables in the scope on the node
-	Vars map[string]parse.Node
-	// used for the previous functions in the pipe to extract the context using Pipe.Cmds
-	Pipe *parse.PipeNode
-	// DotType is the resolved Go type of the current dot (.) object.
-	DotType *serverTypes.Tree
-}
 
 type outputKind int
 
@@ -84,7 +69,17 @@ func funcAcceptsKind(funcName string, kind outputKind) bool {
 	return false
 }
 
-// deprecated, built in output can be derived from the type tree
+// builtinOutput maps each Go text/template builtin to the outputKind its
+// result produces. It's used as a fallback by pipeOutputKind/pipeOutputInfo
+// when the analyser couldn't propagate a result type — which currently
+// happens for every variadic builtin (eq, ne, and, or, print, printf,
+// println, html, js, urlquery, call, index, slice) because analyseCommand's
+// arity check doesn't yet handle variadic signatures.
+//
+// TODO: lift this fallback into the types package alongside BuiltinFuncs,
+// then fix analyseCommand to handle variadic signatures correctly. Once both
+// are done this map can be deleted: callers can rely solely on
+// CommandNode.ValueType().
 var builtinOutput = map[string]outputKind{
 	"len":      outputInt,
 	"not":      outputBool,
@@ -137,7 +132,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 		return nil
 	}
 
-	typedTree := doc.typedTreeAt(parse.Pos(offset))
+	typedTree := doc.typedTreeAtTyped(serverTypes.Pos(offset))
 	if typedTree == nil || typedTree.Root == nil {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no typed tree")
 		return nil
@@ -204,12 +199,12 @@ var functionsAccepting = map[outputKind][]string{
 	},
 }
 
-func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
-	if ctx.Pipe == nil {
+func pipeOutputKind(pipe *serverTypes.PipeNode, isInvoked bool) outputKind {
+	if pipe == nil {
 		log.Debug().Msg("no pipe")
 		return outputAny
 	}
-	cmds := ctx.Pipe.Cmds
+	cmds := pipe.Cmds
 	// precedingIdx is -1 when the user invokes the suggestion mid-typing and -2 when automatically suggested
 	// TODO: preceding is not always len(cmds) - 2 as we are not always editing the last cmd
 	precedingIdx := len(cmds) - 2
@@ -223,7 +218,7 @@ func pipeOutputKind(ctx *Context, isInvoked bool) outputKind {
 	if len(preceding.Args) == 0 {
 		return outputAny
 	}
-	id, ok := preceding.Args[0].(*parse.IdentifierNode)
+	id, ok := preceding.Args[0].(*serverTypes.IdentifierNode)
 	if !ok {
 		return outputAny
 	}
@@ -398,40 +393,12 @@ func chainPrefix(base types.Type, path []string) types.Type {
 // "$top") visible at cur, by walking the same scope used for variable
 // completions.
 func varBaseType(cur serverTypes.Node, name string) types.Type {
-	for _, v := range visibleVarsAt(cur) {
+	for _, v := range serverTypes.VisibleVarsAt(cur) {
 		if v != nil && len(v.Ident) > 0 && v.Ident[0] == name {
 			return v.ValueType()
 		}
 	}
 	return nil
-}
-
-// visibleVarsAt returns variables in scope at cur. It starts from the snapshot
-// stored on the enclosing ListNode and adds top-level decls from
-// preceding actions in the same list whose start precedes cur.
-func visibleVarsAt(cur serverTypes.Node) []*serverTypes.VariableNode {
-	list := serverTypes.EnclosingList(cur)
-	if list == nil {
-		return nil
-	}
-	vars := append([]*serverTypes.VariableNode{}, list.Vars()...)
-	curPos := cur.Position()
-	for _, child := range list.Nodes {
-		if child == nil {
-			continue
-		}
-		if child.Position() >= curPos {
-			break
-		}
-		a, ok := child.(*serverTypes.ActionNode)
-		if !ok {
-			continue
-		}
-		if a.Pipe != nil && !a.Pipe.IsAssign {
-			vars = append(vars, a.Pipe.Decl...)
-		}
-	}
-	return vars
 }
 
 // suggest builds the completion list for cur, deriving all scope information
@@ -447,7 +414,7 @@ func suggest(
 	}
 
 	if sChar == '$' {
-		return varsItemsT(visibleVarsAt(cur), true, wordRange)
+		return varsItemsT(serverTypes.VisibleVarsAt(cur), true, wordRange)
 	}
 
 	if sChar == '.' {
@@ -464,7 +431,7 @@ func suggest(
 	switch cur.Parent().(type) {
 	case *serverTypes.ChainNode, *serverTypes.TemplateNode:
 		items := dotItemsT(cur, false, nil, outputAny, wordRange)
-		return append(items, varsItemsT(visibleVarsAt(cur), false, wordRange)...)
+		return append(items, varsItemsT(serverTypes.VisibleVarsAt(cur), false, wordRange)...)
 	}
 
 	pipeIn, kind := pipeOutputInfo(cur, isInvoked)
@@ -484,7 +451,7 @@ func pipeFilteredItemsT(
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	items := dotItemsT(cur, false, pipeInputType, kind, wordRange)
-	items = append(items, varsItemsT(visibleVarsAt(cur), false, wordRange)...)
+	items = append(items, varsItemsT(serverTypes.VisibleVarsAt(cur), false, wordRange)...)
 
 	effectiveKind := kind
 	if effectiveKind == outputAny && inputType != nil {
@@ -743,217 +710,4 @@ func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
 		items = append(items, newItem(name, protocol.CompletionItemKindKeyword, wordRange))
 	}
 	return items
-}
-
-// extract method for buildPath
-func isLeafNode(n parse.Node) bool {
-	switch n.(type) {
-	case *parse.IdentifierNode,
-		*parse.VariableNode,
-		*parse.FieldNode,
-		*parse.DotNode,
-		*parse.NilNode,
-		*parse.BoolNode,
-		*parse.NumberNode,
-		*parse.StringNode,
-		*parse.TextNode,
-		*parse.CommentNode,
-		*parse.BreakNode,
-		*parse.UndefinedNode,
-		*parse.ContinueNode:
-		return true
-	}
-	return false
-}
-
-// main build path function that calls supporting functions and builds path and context
-func buildPath(n parse.Node, target parse.Node, ctx *Context) bool {
-	if n == target {
-		return true
-	}
-	ctx.Path = append(ctx.Path, n)
-
-	found := buildPathChildren(n, target, ctx)
-
-	if !found {
-		ctx.Path = ctx.Path[:len(ctx.Path)-1]
-	}
-	return found
-}
-
-// builds path on the branch by taking snapshots and falling back in case not found
-func buildPathBranch(
-	pipe *parse.PipeNode,
-	list *parse.ListNode,
-	elseList *parse.ListNode,
-	target parse.Node,
-	ctx *Context,
-) bool {
-	if ctx == nil {
-		return false
-	}
-	if ctx.Vars == nil {
-		ctx.Vars = make(map[string]parse.Node)
-	}
-	snapshot := snapshotVars(ctx.Vars)
-
-	found := buildPath(pipe, target, ctx) ||
-		buildPath(list, target, ctx) ||
-		(elseList != nil && buildPath(elseList, target, ctx))
-
-	if !found {
-		ctx.Vars = snapshot
-	}
-	return found
-}
-
-// resolvePipeDotType derives the dot type for the body of a range or with block.
-func resolvePipeDotType(
-	pipe *parse.PipeNode,
-	unwrapSlice bool,
-	ctx *Context,
-) *serverTypes.Tree {
-	if ctx.DotType == nil || pipe == nil || len(pipe.Cmds) != 1 {
-		return ctx.DotType
-	}
-	cmd := pipe.Cmds[0]
-	if len(cmd.Args) != 1 {
-		return ctx.DotType
-	}
-	field, ok := cmd.Args[0].(*parse.FieldNode)
-	if !ok || len(field.Ident) != 1 {
-		return ctx.DotType
-	}
-	fieldName := field.Ident[0]
-	var fieldType types.Type
-	for _, f := range serverTypes.StructFields(ctx.DotType.DotType) {
-		if f.Name == fieldName {
-			fieldType = f.Type
-			break
-		}
-	}
-	if fieldType == nil {
-		return ctx.DotType
-	}
-	t := fieldType
-	if unwrapSlice {
-		sl, ok := t.Underlying().(*types.Slice)
-		if !ok {
-			// probably trying to iterate over a struct, not a slice
-			return nil
-		}
-		t = sl.Elem()
-	} else {
-		if _, ok := t.Underlying().(*types.Slice); ok {
-			return nil
-		}
-	}
-	named, ok := t.(*types.Named)
-	if !ok {
-		if ptr, ok2 := t.(*types.Pointer); ok2 {
-			named, ok = ptr.Elem().(*types.Named)
-			if !ok {
-				return ctx.DotType
-			}
-		} else {
-			return ctx.DotType
-		}
-	}
-	return &serverTypes.Tree{
-		DotType: named,
-		Pkg:     ctx.DotType.Pkg,
-	}
-}
-
-// main traversal logic
-func buildPathChildren(n parse.Node, target parse.Node, ctx *Context) bool {
-	if isLeafNode(n) {
-		return false
-	}
-	if ctx == nil || n == nil {
-		return false
-	}
-
-	switch n := n.(type) {
-	case *parse.ListNode:
-		for _, child := range n.Nodes {
-			if buildPath(child, target, ctx) {
-				return true
-			}
-		}
-
-	case *parse.ActionNode:
-		return buildPath(n.Pipe, target, ctx)
-
-	case *parse.PipeNode:
-		if ctx.Vars == nil {
-			ctx.Vars = make(map[string]parse.Node)
-		}
-		for _, v := range n.Decl {
-			if v != nil && v == target {
-				return true
-			}
-			if v != nil && len(v.Ident) > 0 {
-				ctx.Vars[v.Ident[0]] = n
-			}
-		}
-		prevPipe := ctx.Pipe
-		ctx.Pipe = n
-		for _, cmd := range n.Cmds {
-			if buildPath(cmd, target, ctx) {
-				return true
-			}
-		}
-		ctx.Pipe = prevPipe
-		return false
-
-	case *parse.IfNode:
-		return buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
-
-	case *parse.RangeNode:
-		prevDot := ctx.DotType
-		ctx.DotType = resolvePipeDotType(n.Pipe, true, ctx)
-		found := buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
-		if !found {
-			ctx.DotType = prevDot
-		}
-		return found
-
-	case *parse.WithNode:
-		prevDot := ctx.DotType
-		ctx.DotType = resolvePipeDotType(n.Pipe, false, ctx)
-		found := buildPathBranch(n.Pipe, n.List, n.ElseList, target, ctx)
-		if !found {
-			ctx.DotType = prevDot
-		}
-		return found
-
-	case *parse.CommandNode:
-		for _, arg := range n.Args {
-			if buildPath(arg, target, ctx) {
-				return true
-			}
-		}
-
-	case *parse.TemplateNode:
-		if n.Pipe != nil {
-			return buildPath(n.Pipe, target, ctx)
-		}
-
-	case *parse.ChainNode:
-		return buildPath(n.Node, target, ctx)
-
-	default:
-		log.Error().Msg("The tree contains an incomplete Node")
-	}
-	return false
-}
-
-// Take snapshots of defined variables, needed to change scope when the Node wasn't found in some path
-func snapshotVars(vars map[string]parse.Node) map[string]parse.Node {
-	snap := make(map[string]parse.Node, len(vars))
-	for k, v := range vars {
-		snap[k] = v
-	}
-	return snap
 }
