@@ -19,7 +19,21 @@ class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
             val fileName = "completion-${tc.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")}.txt.tmpl"
             myFixture.configureByText(fileName, toCaret(tc.content))
             myFixture.complete(CompletionType.BASIC)
-            val completions = myFixture.lookupElementStrings ?: emptyList()
+            val suggestions = myFixture.lookupElementStrings
+
+            // A single matching completion is auto-inserted, so the lookup is
+            // null. Verify the resulting document text instead.
+            val expectedResult = tc.expectedResult
+            if (expectedResult != null) {
+                assertNull(
+                    "[${tc.name}] Expected a single completion to be auto-inserted",
+                    suggestions,
+                )
+                myFixture.checkResult(expectedResult)
+                continue
+            }
+
+            val completions = suggestions ?: emptyList()
 
             for (expected in tc.expectedIncludes) {
                 assertTrue(
@@ -42,26 +56,5 @@ class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
                 )
             }
         }
-    }
-
-    fun testPartialFieldNameFiltering() {
-        myFixture.configureByText(
-            "test_partial.txt.tmpl",
-            """
-            {{/*gotype: cg/model.Order*/}}
-            {{.Cus<caret>}}
-            """.trimIndent(),
-        )
-
-        myFixture.complete(CompletionType.BASIC)
-        val suggestions = myFixture.lookupElementStrings
-        // Only one suggestion, so returns null and autocompletes
-        assertNull(suggestions)
-        myFixture.checkResult(
-            """
-            {{/*gotype: cg/model.Order*/}}
-            {{.CustomerName}}
-            """.trimIndent(),
-        )
     }
 }

@@ -7,6 +7,7 @@ data class CompletionTestCase(
     val expectedIncludes: List<String>,
     val expectedExcludes: List<String>,
     val expectedIncludesExactlyOnce: List<String>? = null,
+    val expectedResult: String? = null,
     val vscodeOnly: Boolean? = null,
     val poll: Boolean? = null,
 )

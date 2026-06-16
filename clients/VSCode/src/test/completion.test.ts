@@ -14,6 +14,7 @@ interface CompletionTestCase {
     expectedIncludes: string[];
     expectedExcludes: string[];
     expectedIncludesExactlyOnce?: string[];
+    expectedResult?: string;
 }
 
 function extractCursor(content: string): {

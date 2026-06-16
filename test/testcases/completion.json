@@ -242,5 +242,13 @@
     "poll": true,
     "expectedIncludes": ["Left", "Right"],
     "expectedExcludes": []
+  },
+  {
+    "name": "Partial field name auto-inserts single match",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.Cus<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["CustomerName"],
+    "expectedExcludes": [],
+    "expectedResult": "{{/*gotype: cg/model.Order*/}}\n{{.CustomerName}}"
   }
 ]
