@@ -5,6 +5,8 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"sync"
@@ -52,23 +54,84 @@ func GlobalFuncs() map[string]*types.Func {
 // otherwise nil. Builtin functions are NOT included; use ComputeGlobalFuncs
 // to obtain the merged set.
 func LoadGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
-	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
-			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
-		Dir: workspaceRoot,
-	}
-	pkgs, err := packages.Load(cfg, "./...")
+	out := map[string]*types.Func{}
+
+	// Find all package roots to load (handles nested modules)
+	packageRoots, err := findPackageRoots(workspaceRoot)
 	if err != nil {
-		return nil, fmt.Errorf("packages.Load: %w", err)
+		return nil, fmt.Errorf("findPackageRoots: %w", err)
 	}
 
-	out := map[string]*types.Func{}
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Syntax {
-			collectGlobalFuncs(file, pkg.TypesInfo, out)
+	for _, root := range packageRoots {
+		cfg := &packages.Config{
+			Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
+				packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+			Dir: root,
+		}
+		pkgs, err := packages.Load(cfg, "./...")
+		if err != nil {
+			continue
+		}
+
+		for _, pkg := range pkgs {
+			for _, file := range pkg.Syntax {
+				collectGlobalFuncs(file, pkg.TypesInfo, out)
+			}
 		}
 	}
+
 	return out, nil
+}
+
+// findPackageRoots recursively discovers all directories that contain Go packages
+// (either with go.mod or .go files). Returns roots from which to load packages.
+func findPackageRoots(dir string) ([]string, error) {
+	var roots []string
+	seen := make(map[string]bool)
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !info.IsDir() {
+			return nil
+		}
+
+		if len(info.Name()) > 0 && info.Name()[0] == '.' {
+			return filepath.SkipDir
+		}
+		// skip common cache directories
+		if info.Name() == "node_modules" || info.Name() == "vendor" {
+			return filepath.SkipDir
+		}
+
+		// Check if this directory has a go.mod file (module root)
+		gomod := filepath.Join(path, "go.mod")
+		if _, err := os.Stat(gomod); err == nil {
+			if !seen[path] {
+				roots = append(roots, path)
+				seen[path] = true
+			}
+			// Don't descend into subdirectories of a module root
+			// as packages.Load with "./..." will find them
+			if path != dir {
+				return filepath.SkipDir
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// If no go.mod files found, add the root itself (it may be a standalone package)
+	if len(roots) == 0 {
+		roots = append(roots, dir)
+	}
+
+	return roots, nil
 }
 
 // ComputeGlobalFuncs returns the full set of functions that should be available

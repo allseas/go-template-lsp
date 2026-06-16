@@ -65,7 +65,7 @@ suite("Diagnostics Test Suite", () => {
     test("No Diagnostics on correct file", async () => {
         const diags = await getDiagnosticsFor(
             "diagnostics-correct-file-test.tmpl",
-            '{{/*gotype: cg/model.Order*/}}\n\n{{ $test := 0 }}\n\n{{ .Address.Country }}\n\n{{ $test }}\n{{ $test }}{{$variable := "abc"}}{{ $variable }}',
+            '{{/*some comment*/}}\n\n{{ $test := 0 }}\n\n{{ .Address.Country }}\n\n{{ $test }}\n{{ $test }}{{$variable := "abc"}}{{ $variable }}',
         );
         assert.strictEqual(
             diags.length,
