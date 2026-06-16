@@ -576,11 +576,6 @@ func walkFieldChainWithMethodInfo(
 	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
 	if base != nil {
 		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
-			ctx.errorf(
-				errNode,
-				ErrorUnknownType,
-				"cannot determine fields of empty interface; assuming any",
-			)
 			return types.NewInterfaceType(nil, nil).Complete(), make([]bool, len(path)), true
 		}
 	}
