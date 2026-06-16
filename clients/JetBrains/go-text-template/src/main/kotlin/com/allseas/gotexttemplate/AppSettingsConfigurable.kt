@@ -43,6 +43,7 @@ class AppSettingsConfigurable : BoundConfigurable("Go Text Template Support") {
                         "doubleDeclaredVariable" to "Duplicate variable declaration",
                         "invalidTemplateArg" to "Invalid template argument",
                         "unknownType" to "Unknown type",
+                        "hintLoadFailure" to "Type hint load failure",
                     )
                 for ((key, label) in diagnosticEntries) {
                     val k = key

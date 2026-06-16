@@ -26,6 +26,7 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
                 "invalidTemplateArg" to "error",
                 "unknownType" to "information",
                 "syntaxError" to "error",
+                "hintLoadFailure" to "warning",
             ),
         var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,

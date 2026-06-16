@@ -110,7 +110,8 @@
                         "doubleDeclaredVariable": "warning",
                         "invalidTemplateArg": "error",
                         "unknownType": "information",
-                        "syntaxError": "error"
+                        "syntaxError": "error",
+                        "hintLoadFailure": "warning"
                     },
                     "additionalProperties": {
                         "type": "string",
