@@ -13,12 +13,40 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
         var enableHover: Boolean = true,
         var enableDefinition: Boolean = true,
         var enableDiagnostics: Boolean = true,
-        var diagnosticsSyntaxError: Boolean = true,
-        var diagnosticsVariableRedeclaration: Boolean = true,
-        var diagnosticsIncorrectFunction: Boolean = true,
+        var diagnostics: MutableMap<String, String> =
+            mutableMapOf(
+                "invalidField" to "error",
+                "invalidFunction" to "warning",
+                "invalidCommand" to "error",
+                "invalidRange" to "error",
+                "invalidIf" to "error",
+                "invalidWith" to "error",
+                "undeclaredVariable" to "error",
+                "doubleDeclaredVariable" to "warning",
+                "invalidTemplateArg" to "error",
+                "unknownType" to "information",
+                "syntaxError" to "error",
+                "hintLoadFailure" to "warning",
+                "unknownRangeType" to "warning",
+            ),
         var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
     )
+
+    enum class DiagnosticSeverity(
+        val value: String,
+    ) {
+        DISABLED("disabled"),
+        ERROR("error"),
+        WARNING("warning"),
+        INFORMATION("information"),
+        HINT("hint"),
+        ;
+
+        companion object {
+            fun fromValue(value: String): DiagnosticSeverity = entries.firstOrNull { it.value == value } ?: ERROR
+        }
+    }
 
     enum class TraceLevel(
         val value: String,

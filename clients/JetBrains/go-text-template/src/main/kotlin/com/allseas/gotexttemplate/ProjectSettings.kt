@@ -13,9 +13,7 @@ class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
         var enableHoverOverride: Boolean? = null,
         var enableDefinitionOverride: Boolean? = null,
         var enableDiagnosticsOverride: Boolean? = null,
-        var diagnosticsSyntaxErrorOverride: Boolean? = null,
-        var diagnosticsVariableRedeclarationOverride: Boolean? = null,
-        var diagnosticsIncorrectFunctionOverride: Boolean? = null,
+        var diagnosticsOverride: MutableMap<String, String> = mutableMapOf(),
         var enableAutocompletionOverride: Boolean? = null,
         var traceServerOverride: AppSettings.TraceLevel? = null,
     )
@@ -38,9 +36,7 @@ class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
             enableHover = state.enableHoverOverride ?: appState.enableHover,
             enableDefinition = state.enableDefinitionOverride ?: appState.enableDefinition,
             enableDiagnostics = state.enableDiagnosticsOverride ?: appState.enableDiagnostics,
-            diagnosticsSyntaxError = state.diagnosticsSyntaxErrorOverride ?: appState.diagnosticsSyntaxError,
-            diagnosticsVariableRedeclaration = state.diagnosticsVariableRedeclarationOverride ?: appState.diagnosticsVariableRedeclaration,
-            diagnosticsIncorrectFunction = state.diagnosticsIncorrectFunctionOverride ?: appState.diagnosticsIncorrectFunction,
+            diagnostics = (appState.diagnostics + state.diagnosticsOverride).toMutableMap(),
             enableAutocompletion = state.enableAutocompletionOverride ?: appState.enableAutocompletion,
             traceServer = state.traceServerOverride ?: appState.traceServer,
         )
