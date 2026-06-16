@@ -73,6 +73,7 @@
   {
     "name": "Unknown field returns no results",
     "content": "{{/*gotype: cg/model.Order*/}}\n{{ .N<cursor>onExistent }}",
+    "vscodeOnly": true,
     "expected": {
       "noResult": true
     }

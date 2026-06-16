@@ -4,6 +4,9 @@ class CompletionTest : CustomPlatformTestCase() {
     fun testAllCompletionCases() {
         val testCases = loadCompletionTestCases()
         for (tc in testCases) {
+            // Cases that require a resolved Go type run in DotFieldsSuggestionsTest
+            // (heavy fixture with the Go model project copied in).
+            if (tc.vscodeOnly == true || requiresGoProject(tc.content)) continue
             val fileName = "completion-${tc.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")}.txt.tmpl"
             myFixture.configureByText(fileName, toCaret(tc.content))
             myFixture.complete(CompletionType.BASIC)

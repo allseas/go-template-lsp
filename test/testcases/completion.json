@@ -125,5 +125,122 @@
     "content": "{{define \"foo\"}}\n   {{$fooVar := 1}}\n{{end}}\n\n{{define \"bar\"}}\n   {{<cursor>}}\n{{end}}",
     "expectedIncludes": [],
     "expectedExcludes": ["$fooVar"]
+  },
+  {
+    "name": "All dot fields and methods recommended",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{<cursor>}}",
+    "poll": true,
+    "expectedIncludes": [
+      ".Address",
+      ".CustomerName",
+      ".DisplayName",
+      ".Items",
+      ".Paid",
+      ".TotalAmount"
+    ],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Nested field completions on struct field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.Address.<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["Street", "City", "Country", "Zip"],
+    "expectedExcludes": ["CustomerName", "Items"]
+  },
+  {
+    "name": "Nested method completions on struct field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.Address.<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["Line", "IsLocal", "ZipCode"],
+    "expectedExcludes": ["DisplayName", "ItemCount"]
+  },
+  {
+    "name": "Methods recommended on top-level dot",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{<cursor>}}",
+    "poll": true,
+    "expectedIncludes": [
+      ".DisplayName",
+      ".Summary",
+      ".ItemCount",
+      ".IsLargeOrder",
+      ".Format"
+    ],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Invalid methods excluded",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{<cursor>}}",
+    "poll": true,
+    "expectedIncludes": [".CustomerName"],
+    "expectedExcludes": [".badReturn", ".wrongSecond"]
+  },
+  {
+    "name": "No completions on primitive field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.CustomerName.<cursor>}}",
+    "vscodeOnly": true,
+    "expectedIncludes": [],
+    "expectedExcludes": ["ID", "CustomerName", "Street"]
+  },
+  {
+    "name": "Dot field completions inside if block",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{if .Paid}}\n{{<cursor>}}\n{{end}}",
+    "poll": true,
+    "expectedIncludes": [".Address", ".CustomerName", ".Items"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Dot field completions inside range block Item type",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{range .Items}}\n{{<cursor>}}\n{{end}}",
+    "poll": true,
+    "expectedIncludes": [".SKU", ".Name", ".Qty", ".UnitPrice"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Dot field completions inside range block Item methods",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{range .Items}}\n{{<cursor>}}\n{{end}}",
+    "poll": true,
+    "expectedIncludes": [".Label", ".Total", ".IsExpensive", ".Describe"],
+    "expectedExcludes": [".DisplayName", ".ItemCount"]
+  },
+  {
+    "name": "Dot field completions inside with block Address type",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{with .Address}}\n{{<cursor>}}\n{{end}}",
+    "poll": true,
+    "expectedIncludes": [".Street", ".City", ".Country", ".Zip"],
+    "expectedExcludes": [".CustomerName", ".Items"]
+  },
+  {
+    "name": "No builtins in dot completions",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["CustomerName"],
+    "expectedExcludes": ["len", "eq", "html", "print"]
+  },
+  {
+    "name": "Dot field completions in pipe expression",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{<cursor> | len}}",
+    "poll": true,
+    "expectedIncludes": [".Address", ".CustomerName", ".Items"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "No struct field completions without gotype",
+    "content": "{{.<cursor>}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["Address", "CustomerName", "Items"]
+  },
+  {
+    "name": "Dot field completions with Address gotype",
+    "content": "{{/*gotype: cg/model.Address*/}}\n{{<cursor>}}",
+    "poll": true,
+    "expectedIncludes": [".Street", ".City", ".Country", ".Zip"],
+    "expectedExcludes": [".CustomerName", ".Items"]
+  },
+  {
+    "name": "Multiple chained dots on recursive type",
+    "content": "{{/*gotype: cg/model.Tree*/}}\n{{.Left.Left.Left.Left.Left.<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["Left", "Right"],
+    "expectedExcludes": []
   }
 ]

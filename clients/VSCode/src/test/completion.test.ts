@@ -10,6 +10,7 @@ const testCasesDir = path.join(__dirname, "../../../../test/testcases");
 interface CompletionTestCase {
     name: string;
     content: string;
+    poll?: boolean;
     expectedIncludes: string[];
     expectedExcludes: string[];
     expectedIncludesExactlyOnce?: string[];
@@ -56,6 +57,32 @@ suite("Completion Test Suite", () => {
         );
     }
 
+    /**
+     * Polls the completion provider until all `includes` are present (or, when
+     * `includes` is empty, until any completion is returned) or the timeout
+     * expires. Used for cases that depend on asynchronous gotype resolution.
+     */
+    async function pollCompletions(
+        uri: vscode.Uri,
+        position: vscode.Position,
+        includes: string[],
+        timeoutMs = 10000,
+        intervalMs = 300,
+    ): Promise<string[]> {
+        const deadline = Date.now() + timeoutMs;
+        let labels: string[] = [];
+        while (Date.now() < deadline) {
+            labels = getLabels(await getCompletions(uri, position));
+            if (includes.length > 0) {
+                if (includes.every((e) => labels.includes(e))) return labels;
+            } else if (labels.length > 0) {
+                return labels;
+            }
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        }
+        return labels;
+    }
+
     const testCases: CompletionTestCase[] = JSON.parse(
         fs.readFileSync(path.join(testCasesDir, "completion.json"), "utf-8"),
     );
@@ -66,11 +93,14 @@ suite("Completion Test Suite", () => {
             const fileName = `completion-${tc.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.tmpl`;
             const { tmplUri } = await createDocument(fileName, content);
             try {
-                const list = await getCompletions(
-                    tmplUri,
-                    new vscode.Position(line, character),
-                );
-                const labels = getLabels(list);
+                const position = new vscode.Position(line, character);
+                const labels = tc.poll
+                    ? await pollCompletions(
+                          tmplUri,
+                          position,
+                          tc.expectedIncludes,
+                      )
+                    : getLabels(await getCompletions(tmplUri, position));
 
                 for (const expected of tc.expectedIncludes) {
                     assert.ok(
