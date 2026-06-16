@@ -759,7 +759,12 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 		} else {
 			switch resType.Underlying().(type) {
 			case *types.Signature:
-				typePipe.typ = resType.Underlying().(*types.Signature).Results().At(0).Type()
+				sig := resType.Underlying().(*types.Signature)
+				if sig.Results() == nil || sig.Results().Len() == 0 {
+					typePipe.typ = nil
+				} else {
+					typePipe.typ = sig.Results().At(0).Type()
+				}
 			case *types.Interface:
 				// Special case: if the last command returns an empty interface, the pipe can have any type
 				if resType.Underlying().(*types.Interface).NumMethods() == 0 {
