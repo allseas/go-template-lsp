@@ -50,6 +50,8 @@ const (
 	ErrorDoubleDeclaredVariable
 	// ErrorTypeInvalidTemplateArg Template called with an argument of the wrong type
 	ErrorTypeInvalidTemplateArg
+	// ErrorArgumentNumberMismatch function called with incorrect amound of arguments
+	ErrorArgumentNumberMismatch
 	// Add more error types as needed
 )
 
@@ -685,8 +687,13 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 	}
 
 	// Convert commands
+	next := false
+	t := (types.Type)(nil)
+
 	for i, cmd := range pipeNode.Cmds {
-		typePipe.Cmds[i] = analyseCommand(cmd, typePipe, ctx)
+		typePipe.Cmds[i] = analyseCommand(cmd, typePipe, ctx, next, t)
+		t = typePipe.Cmds[i].typ
+		next = true
 	}
 
 	// The type of the pipe is literal
@@ -776,7 +783,7 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 }
 
 // analyseCommand converts a parse CommandNode to a typed CommandNode.
-func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx) *CommandNode {
+func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx, next bool, pipedT types.Type) *CommandNode {
 	if cmdNode == nil {
 		return nil
 	}
@@ -794,36 +801,81 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx) *
 
 	resultType := getNodeType(typeCmd.Args[0])
 
+	if resultType == nil {
+		return nil
+	}
+
+	args := []types.Type{}
+	for _, arg := range typeCmd.Args[1:] {
+		args = append(args, arg.ValueType())
+	}
+
+	if next {
+		args = append(args, pipedT)
+	}
+
 	// TODO: special case for `call` builtin
 
 	// TODO: Typecheck between the command and its arguments to see errors
 
 	// call :: (... -> a) -> ... -> a
 
-	if resultType != nil {
-		switch t := resultType.Underlying().(type) {
-		case *types.Signature:
-			// If it's a function with all params provided, use the return type
-			// If one param is missing, use one step curried function type
-			// TODO: may be variadic ??
-			if t.Params().Len() == len(typeCmd.Args)-1 {
-				typeCmd.typ = t.Results().At(0).Type()
-			} else if t.Params().Len() == len(typeCmd.Args) {
-				typeCmd.typ = types.NewSignatureType(
-					nil,
-					nil,
-					nil,
-					types.NewTuple(t.Params().At(t.Params().Len()-1)),
-					t.Results(),
-					false,
-				)
-			}
-		default:
-			typeCmd.typ = resultType
+	switch t := resultType.Underlying().(type) {
+	case *types.Signature:
+		if !t.Variadic() && t.Params().Len() != len(args) {
+			ctx.errorf(typeCmd, ErrorArgumentNumberMismatch, "Expected %d arguments but got %d", t.Params().Len(), len(args))
 		}
 
-		return typeCmd
+		if t.Variadic() {
+			if len(args) < t.Params().Len()-1 {
+				ctx.errorf(typeCmd, ErrorArgumentNumberMismatch, "Expected at least %d arguments but got %d", t.Params().Len()-1, len(args))
+			}
+			for i := 0; i < t.Params().Len()-1; i++ {
+				if !types.Identical(args[i], t.Params().At(i).Type()) {
+					ctx.errorf(
+						typeCmd,
+						ErrorTypeInvalidCommand,
+						"argument %d: expected type %s but got %s",
+						i+1,
+						t.Params().At(i).Type().String(),
+						args[i].String(),
+					)
+				}
+			}
+			variadicType := t.Params().At(t.Params().Len() - 1).Type().(*types.Slice).Elem()
+			for i := t.Params().Len() - 1; i < len(args); i++ {
+				if !types.Identical(args[i], variadicType) {
+					ctx.errorf(
+						typeCmd,
+						ErrorTypeInvalidCommand,
+						"variadic argument %d: expected type %s but got %s",
+						i+1,
+						variadicType.String(),
+						args[i].String(),
+					)
+				}
+			}
+			typeCmd.typ = t.Results().At(0).Type()
+			return typeCmd
+		}
+
+		for i := 0; i < t.Params().Len(); i++ {
+			if !types.Identical(args[i], t.Params().At(i).Type()) {
+				ctx.errorf(
+					typeCmd,
+					ErrorTypeInvalidCommand,
+					"argument %d: expected type %s but got %s",
+					i+1,
+					t.Params().At(i).Type().String(),
+					args[i].String(),
+				)
+			}
+		}
+		typeCmd.typ = t.Results().At(0).Type()
+	default:
+		typeCmd.typ = resultType
 	}
+
 	return typeCmd
 }
 
