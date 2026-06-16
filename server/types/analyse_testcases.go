@@ -474,7 +474,7 @@ var analyseTestCases = []analyseTestCase{
 					tcoms(
 						tcom(types.Typ[types.Int], tnum(42)),
 						tcom(
-							funcs["FuncD"].Type(),
+							types.Typ[types.String],
 							tident("FuncB", funcs["FuncB"].Type()),
 							tnum(1),
 						),
@@ -522,8 +522,8 @@ var analyseTestCases = []analyseTestCase{
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(42)),
-			tcom(funcs["FuncD"].Type(), tident("FuncD", funcs["FuncD"].Type())),
-			tcom(funcs["FuncA"].Type(), tident("FuncA", funcs["FuncA"].Type())),
+			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
+			tcom(types.Typ[types.Int], tident("FuncA", funcs["FuncA"].Type())),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -576,7 +576,7 @@ var analyseTestCases = []analyseTestCase{
 		resTree: ttree("test", tlist(mockDotType, trangeN(
 			tpipe(
 				types.NewSlice(types.Typ[types.String]),
-				tdecls(tvarn("$i", types.Typ[types.Uint]), tvarn("$v", types.Typ[types.String])),
+				tdecls(tvarn("$i", types.Typ[types.Int]), tvarn("$v", types.Typ[types.String])),
 				tcoms(
 					tcom(
 						types.NewSlice(types.Typ[types.String]),
@@ -697,7 +697,7 @@ var analyseTestCases = []analyseTestCase{
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(2)),
-			tcom(funcBCurried1, tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
+			tcom(types.Typ[types.String], tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -714,8 +714,8 @@ var analyseTestCases = []analyseTestCase{
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(5)),
-			tcom(funcBCurried1, tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
-			tcom(funcs["FuncA"].Type(), tident("FuncA", funcs["FuncA"].Type())),
+			tcom(types.Typ[types.String], tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
+			tcom(types.Typ[types.Int], tident("FuncA", funcs["FuncA"].Type())),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -787,7 +787,7 @@ var analyseTestCases = []analyseTestCase{
 						tpipe(mockInnerType, nil, tcoms(
 							tcom(mockDotType, &DotNode{typ: mockDotType}),
 							tcom(
-								funcs["GetInner"].Type(),
+								mockInnerType,
 								tident("GetInner", funcs["GetInner"].Type()),
 							),
 						)),

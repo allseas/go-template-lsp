@@ -469,13 +469,17 @@ func walkFieldChain(
 				ctx.errorf(
 					errNode,
 					ErrorTypeInvalidField,
-					"method %q on type %s returns more than 2 parameters",
+					"method %q on type %s returns more than 2 results",
 					name,
 					currentType.String(),
 				)
 			}
 			// At(1) can be an error
-			currentType = sig.Results().At(0).Type()
+			if sig.Params().Len() == 0 {
+				currentType = sig.Results().At(0).Type()
+			} else {
+				currentType = sig.Results()
+			}
 		default:
 			ctx.errorf(
 				errNode,
@@ -539,7 +543,11 @@ func walkFieldChainWithMethodInfo(
 					currentType.String(),
 				)
 			}
-			currentType = sig.Results().At(0).Type()
+			if sig.Params().Len() == 0 {
+				currentType = sig.Results().At(0).Type()
+			} else {
+				currentType = sig
+			}
 			isMethod[i] = true
 		default:
 			ctx.errorf(
@@ -695,31 +703,7 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 		t = typePipe.Cmds[i].typ
 		next = true
 	}
-
-	// The type of the pipe is literal
-	if len(typePipe.Cmds) == 1 {
-		typePipe.typ = getNodeType(typePipe.Cmds[0])
-	} else {
-
-		// f :: int -> string
-		// g :: string -> bool
-		// h :: bool -> String
-		// {{ . | | h }}
-
-		// TODO: type checking between pipe segments
-		resType := getNodeType(typePipe.Cmds[len(typePipe.Cmds)-1])
-		if resType == nil {
-			typePipe.typ = nil
-		} else {
-			switch resType.Underlying().(type) {
-			case *types.Signature:
-				typePipe.typ = resType.Underlying().(*types.Signature).Results().At(0).Type()
-			default:
-				// not sure how to handle this, should be impossible, do we return nil or invalid?
-				typePipe.typ = types.Typ[types.Invalid]
-			}
-		}
-	}
+	typePipe.typ = getNodeType(typePipe.Cmds[len(typePipe.Cmds)-1])
 
 	// Convert declarations
 	for i, decl := range pipeNode.Decl {
@@ -746,7 +730,7 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 		if len(typePipe.Decl) == 2 {
 			typePipe.Decl[1].typ = typePipe.typ
 			ctx.vars = append(ctx.vars, typePipe.Decl[0])
-			typePipe.Decl[0].typ = types.Typ[types.Uint] // unsigned int for index
+			typePipe.Decl[0].typ = types.Typ[types.Int] // unsigned int for index
 			ctx.vars = append(ctx.vars, typePipe.Decl[1])
 		}
 
@@ -806,8 +790,21 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx, n
 	}
 
 	args := []types.Type{}
+
 	for _, arg := range typeCmd.Args[1:] {
 		args = append(args, arg.ValueType())
+	}
+	if fst, ok := cmdNode.Args[0].(*parse.IdentifierNode); ok && fst.Ident == "call" {
+		if len(args) == 0 {
+			ctx.errorf(
+				typeCmd,
+				ErrorTypeInvalidCommand,
+				"call: missing function argument",
+			)
+			return typeCmd
+		}
+		resultType = args[0]
+		args = args[1:]
 	}
 
 	if next {
