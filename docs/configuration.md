@@ -40,6 +40,7 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `unknownType`          | `"information"` | Type information is missing or could not be resolved    |
 | `hintLoadFailure`      | `"warning"`   | A `gotype` hint type could not be loaded or resolved      |
 | `unknownRangeType`     | `"warning"`   | Range over a value whose type could not be determined     |
+| `emptyDefineName`      | `"warning"`   | Define block has an empty name                            |
 
 ## Configuration Hierarchy
 
@@ -72,7 +73,8 @@ You can create a `gotmpl.config.json` file in your project root to configure the
     "invalidTemplateArg": "error",
     "unknownType": "information",
     "hintLoadFailure": "warning",
-    "unknownRangeType": "warning"
+    "unknownRangeType": "warning",
+    "emptyDefineName": "warning"
   },
   "enableAutocompletion": true,
   "trace": {
