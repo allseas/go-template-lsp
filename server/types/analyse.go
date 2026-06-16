@@ -905,6 +905,10 @@ func analyseCommand(
 	switch t := resultType.Underlying().(type) {
 	case *types.Signature:
 		if !t.Variadic() && t.Params().Len() != len(args) {
+			if ok, _, _ := isTemplateSeq(t); ok {
+				typeCmd.typ = t
+				return typeCmd
+			}
 			ctx.errorf(
 				typeCmd,
 				ErrorArgumentNumberMismatch,
@@ -912,6 +916,12 @@ func analyseCommand(
 				t.Params().Len(),
 				len(args),
 			)
+			if t.Results().Len() > 0 {
+				typeCmd.typ = t.Results().At(0).Type()
+			} else {
+				typeCmd.typ = t
+			}
+			return typeCmd
 		}
 
 		if t.Variadic() {

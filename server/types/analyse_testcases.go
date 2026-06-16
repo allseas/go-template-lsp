@@ -82,6 +82,49 @@ func init() {
 	mockDotType.AddMethod(mockDotGreet)
 }
 
+// mockSeqType models iter.Seq[string] -- func(yield func(string) bool).
+var mockSeqType = types.NewSignatureType(
+	nil, nil, nil,
+	types.NewTuple(types.NewVar(0, mockPkg, "yield",
+		types.NewSignatureType(nil, nil, nil,
+			types.NewTuple(types.NewVar(0, mockPkg, "", types.Typ[types.String])),
+			types.NewTuple(types.NewVar(0, mockPkg, "", types.Typ[types.Bool])),
+			false,
+		),
+	)),
+	types.NewTuple(),
+	false,
+)
+
+// mockSeq2Type models iter.Seq2[int, string] -- func(yield func(int, string) bool).
+var mockSeq2Type = types.NewSignatureType(
+	nil, nil, nil,
+	types.NewTuple(types.NewVar(0, mockPkg, "yield",
+		types.NewSignatureType(nil, nil, nil,
+			types.NewTuple(
+				types.NewVar(0, mockPkg, "", types.Typ[types.Int]),
+				types.NewVar(0, mockPkg, "", types.Typ[types.String]),
+			),
+			types.NewTuple(types.NewVar(0, mockPkg, "", types.Typ[types.Bool])),
+			false,
+		),
+	)),
+	types.NewTuple(),
+	false,
+)
+
+// mockSeqDotType is a dot type exposing iter.Seq and iter.Seq2 valued fields
+// so range-over-seq behaviour can be exercised without touching mockDotType.
+var mockSeqDotType = func() *types.Named {
+	fields := []*types.Var{
+		types.NewVar(0, mockPkg, "Seq", mockSeqType),
+		types.NewVar(0, mockPkg, "Seq2", mockSeq2Type),
+	}
+	structType := types.NewStruct(fields, nil)
+	typeName := types.NewTypeName(0, mockPkg, "MockSeqDot", nil)
+	return types.NewNamed(typeName, structType, nil)
+}()
+
 var funcs = map[string]*types.Func{
 	"FuncA": types.NewFunc(
 		0,
@@ -1127,5 +1170,94 @@ var analyseTestCases = []analyseTestCase{
 		expectedErrors: []TError{
 			{typ: ErrorArgumentNumberMismatch},
 		},
+	},
+	{
+		// {{ range .Seq }}{{ . }}{{ end }}
+		// .Seq is iter.Seq[string]; ranging yields a string-typed dot
+		// inside the body. No declared vars.
+		name: "range over iter.Seq",
+		parseTree: tree("test", list(rangeN(
+			pipe(nil, coms(com(field("Seq")))),
+			list(actpipe(nil, coms(com(&parse.DotNode{})))),
+		))),
+		resTree: ttree("test", tlist(mockSeqDotType, trangeN(
+			tpipe(
+				mockSeqType,
+				nil,
+				tcoms(tcom(mockSeqType, tfield(mockSeqType, "Seq"))),
+			),
+			tlist(
+				types.Typ[types.String],
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], &DotNode{typ: types.Typ[types.String]})),
+				),
+			),
+		))),
+		funcs:          funcs,
+		dotType:        mockSeqDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ range $v := .Seq }}{{ $v }}{{ end }}
+		// Single declared var binds the iter.Seq value type (string).
+		name: "range over iter.Seq with value var",
+		parseTree: tree("test", list(rangeN(
+			pipe(decls(varn("$v")), coms(com(field("Seq")))),
+			list(actpipe(nil, coms(com(varn("$v"))))),
+		))),
+		resTree: ttree("test", tlist(mockSeqDotType, trangeN(
+			tpipe(
+				mockSeqType,
+				tdecls(tvarn("$v", types.Typ[types.String])),
+				tcoms(tcom(mockSeqType, tfield(mockSeqType, "Seq"))),
+			),
+			tlist(
+				types.Typ[types.String],
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], tvarn("$v", types.Typ[types.String]))),
+				),
+			),
+		))),
+		funcs:          funcs,
+		dotType:        mockSeqDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ range $k, $v := .Seq2 }}{{ $v }}{{ end }}
+		// iter.Seq2[int, string]: $k -> int, $v -> string; dot in body
+		// becomes the value type (string).
+		name: "range over iter.Seq2 with key and value vars",
+		parseTree: tree("test", list(rangeN(
+			pipe(decls(varn("$k"), varn("$v")), coms(com(field("Seq2")))),
+			list(actpipe(nil, coms(com(varn("$v"))))),
+		))),
+		resTree: ttree("test", tlist(mockSeqDotType, trangeN(
+			tpipe(
+				mockSeq2Type,
+				tdecls(
+					tvarn("$k", types.Typ[types.Int]),
+					tvarn("$v", types.Typ[types.String]),
+				),
+				tcoms(tcom(mockSeq2Type, tfield(mockSeq2Type, "Seq2"))),
+			),
+			tlist(
+				types.Typ[types.String],
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], tvarn("$v", types.Typ[types.String]))),
+				),
+			),
+		))),
+		funcs:          funcs,
+		dotType:        mockSeqDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
 	},
 }
