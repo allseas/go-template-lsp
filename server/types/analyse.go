@@ -163,8 +163,10 @@ func NewTreeWithType(
 	pkg *types.Package,
 	templateInputTypes map[string]types.Type,
 ) Tree {
-	typeTree := NewTree(parseTree, funcs, dotType, pkg, templateInputTypes)
-	return typeTree
+	if dotType == nil {
+		return NewTree(parseTree, funcs, nil, pkg, templateInputTypes)
+	}
+	return NewTree(parseTree, funcs, dotType, pkg, templateInputTypes)
 }
 
 // analyseList converts a parse ListNode to a typed ListNode.
@@ -1041,7 +1043,7 @@ func validateCommandArguments(
 	if t.Results().Len() > 0 {
 		typeCmd.typ = t.Results().At(0).Type()
 	}
-	return nil, false
+	return typeCmd, false
 }
 
 // isEmptyInterface reports whether t is the empty interface (i.e. `any` / `interface{}`).
