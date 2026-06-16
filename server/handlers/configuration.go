@@ -96,6 +96,7 @@ var (
 			types.ErrorSyntaxError:            DiagnosticSeverityError,
 			types.ErrorHintLoadFailure:        DiagnosticSeverityWarning,
 			types.ErrorTypeUnknownRangeType:   DiagnosticSeverityWarning,
+			types.ErrorTypeEmptyDefineName:    DiagnosticSeverityWarning,
 		},
 		EnableAutocompletion: true,
 	}

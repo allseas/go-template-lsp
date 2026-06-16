@@ -12,6 +12,7 @@ The definition provider enables jump-to-definition (Ctrl+Click) for nodes. It is
 | `.` inside `{{ with .Obj }}...{{ . }}...end`    | Jumps to the `with` pipe that redefines the dot context               |
 | `.FieldName` (field access)                     | Jumps to the field or method declaration in the Go source file        |
 | `.Nested.Field` (nested field access)           | Jumps to whichever identifier the cursor is on                        |
+| `kebabCase` (user defined global function)      | Jumps to the function declaration in the Go source file               |
 
 ## Supported node types
 
@@ -25,6 +26,11 @@ When the cursor is on any `VariableNode`, the handler walks the entire AST and c
 {{ $test := 1 }}   {{-/* definition 2 */-}}
 {{ $test }}        {{-/* ctrl+click here shows both definitions */-}}
 ```
+
+> **Client behaviour difference:** The language server always returns all declaration sites for a
+> redeclared variable. VS Code surfaces all of them in the *Go to Definition* result list. JetBrains
+> (via LSP4IJ) currently only navigates to the **first** result returned by the server - subsequent
+> declaration sites are silently ignored. This is a limitation of the LSP4IJ client, not the server.
 
 ### Dot (`.`)
 
@@ -52,3 +58,11 @@ If no `gotype` hint is present, or the type cannot be loaded, the handler return
 {{ .DisplayName }}    {{-/* ctrl+click jumps to DisplayName method in model.go */-}}
 {{ .Address.City }}   {{-/* ctrl+click on Address -> Address field; on City -> City field */-}}
 ```
+
+### User-defined global functions (`functionName`)
+
+When the cursor is on a custom global function, the handler knows the functions introduced by the function maps (funcmaps) with the `//tmpl:func "global"` from the global functions store in `types`. Then it returns a `Location` pointing to the exact line in the Go source file where that function was defined.
+
+If it was an inline function, it will jump to the line in the funcmap where it was defined.
+
+It does not work for builtin global functions, or those that were not imported via the `//tmpl:func` comment.

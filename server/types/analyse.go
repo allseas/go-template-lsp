@@ -58,6 +58,8 @@ const (
 	ErrorHintLoadFailure
 	// ErrorTypeUnknownRangeType Range over a value whose type could not be determined
 	ErrorTypeUnknownRangeType
+	// ErrorTypeEmptyDefineName Define block has an empty name
+	ErrorTypeEmptyDefineName
 	// Add more error types as needed
 )
 
@@ -75,6 +77,7 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorSyntaxError:            "syntaxError",
 	ErrorHintLoadFailure:        "hintLoadFailure",
 	ErrorTypeUnknownRangeType:   "unknownRangeType",
+	ErrorTypeEmptyDefineName:    "emptyDefineName",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
