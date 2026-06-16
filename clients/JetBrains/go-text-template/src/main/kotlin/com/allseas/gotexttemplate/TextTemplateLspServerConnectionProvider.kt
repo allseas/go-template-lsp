@@ -16,7 +16,8 @@ class TextTemplateLspServerConnectionProvider(
     init {
         val binary = getBinary()
         commands = listOf(binary.absolutePath, "--stdio")
-        workingDirectory = project.basePath
+        val testWorkingDir = System.getProperty("lsp.working.directory")
+        workingDirectory = testWorkingDir ?: project.basePath
     }
 
     private fun getBinary(): File {
