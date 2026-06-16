@@ -37,6 +37,7 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `undeclaredVariable`   | `"error"`     | Variable used without declaration                         |
 | `doubleDeclaredVariable` | `"warning"` | Variable declared more than once in the same scope        |
 | `invalidTemplateArg`   | `"error"`     | Template called with an argument of the wrong type        |
+| `argumentNumberMismatch` | `"error"`   | Function called with the wrong number of arguments        |
 | `unknownType`          | `"information"` | Type information is missing or could not be resolved    |
 | `hintLoadFailure`      | `"warning"`   | A `gotype` hint type could not be loaded or resolved      |
 | `unknownRangeType`     | `"warning"`   | Range over a value whose type could not be determined     |
@@ -71,6 +72,7 @@ You can create a `gotmpl.config.json` file in your project root to configure the
     "undeclaredVariable": "error",
     "doubleDeclaredVariable": "warning",
     "invalidTemplateArg": "error",
+    "argumentNumberMismatch": "error",
     "unknownType": "information",
     "hintLoadFailure": "warning",
     "unknownRangeType": "warning",

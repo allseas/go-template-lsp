@@ -22,7 +22,7 @@ func analyseNode(node parse.Node, parent Node, ctx *analysisCtx) Node {
 		return analyseAction(n, parent, ctx)
 
 	case *parse.CommandNode:
-		return analyseCommand(n, parent, ctx)
+		return analyseCommand(n, parent, ctx, false, nil)
 
 	case *parse.FieldNode:
 		return analyseField(n, parent, ctx)

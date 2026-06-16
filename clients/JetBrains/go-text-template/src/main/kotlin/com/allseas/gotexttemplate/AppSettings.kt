@@ -24,6 +24,7 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
                 "undeclaredVariable" to "error",
                 "doubleDeclaredVariable" to "warning",
                 "invalidTemplateArg" to "error",
+                "argumentNumberMismatch" to "error",
                 "unknownType" to "information",
                 "syntaxError" to "error",
                 "hintLoadFailure" to "warning",
