@@ -313,6 +313,9 @@ go test ./handlers -v
 
 The VS Code extension and JetBrains plugin both include integration tests that exercise the server end-to-end. See [vscode-testing.md](vscode/vscode-testing.md) and [jetbrains-testing.md](jetbrains/jetbrains-testing.md).
 
+### Extending the language
+It is possible to supplement own version of the parser, which handles additional syntax, beyond base text/template. This is handled by `//go:build` tags. If the extended language implements any new NodeTypes in the AST, a new copy of the `ext_dispatch.go` is needed. This file serves as the interface between main operation, and the extension which handles operation on these new node types.
+
 ## Resources
 
 - [LSP Specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.16/specification/)

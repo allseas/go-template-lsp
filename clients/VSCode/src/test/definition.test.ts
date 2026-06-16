@@ -5,12 +5,8 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
-const testResourcesDir = path.join(__dirname, "../../test/resources");
-const definitionTestsSourceDir = path.join(
-    __dirname,
-    "../../../../test/resources/definition-tests-client",
-);
 const testCasesDir = path.join(__dirname, "../../../../test/testcases");
+const RESOURCE_DIR = "DefinitionTestResources";
 
 interface DefinitionTestCase {
     name: string;
@@ -44,16 +40,8 @@ function extractCursor(content: string): {
 }
 
 suite("Definition Test Suite", () => {
-    before(() => {
-        fs.mkdirSync(path.join(testResourcesDir, "model"), { recursive: true });
-        fs.copyFileSync(
-            path.join(definitionTestsSourceDir, "go.mod"),
-            path.join(testResourcesDir, "go.mod"),
-        );
-        fs.copyFileSync(
-            path.join(definitionTestsSourceDir, "model", "model.go"),
-            path.join(testResourcesDir, "model", "model.go"),
-        );
+    before(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
     });
 
     after(() => {
@@ -113,20 +101,11 @@ suite("Definition Test Suite", () => {
 
     test("Go to definition on field jumps to struct field declaration", async () => {
         const { tmplUri } = await createDocument(
-            "definition-field-test.tmpl",
+            `${RESOURCE_DIR}/definition-field-test.tmpl`,
             "{{/*gotype: cg/model.Order*/}}\n{{ .CustomerName }}",
         );
 
         try {
-            assert.ok(
-                fs.existsSync(path.join(testResourcesDir, "go.mod")),
-                "go.mod file should exist",
-            );
-            assert.ok(
-                fs.existsSync(path.join(testResourcesDir, "model")),
-                "model directory should exist",
-            );
-
             // char 5 is inside "CustomerName" (after "{{ .")
             const definitions = await pollDefinitions(
                 tmplUri,
@@ -144,17 +123,17 @@ suite("Definition Test Suite", () => {
             );
             assert.strictEqual(
                 definitions[0].range.start.line,
-                70,
-                "CustomerName should be on line 71 (0-indexed: 70)",
+                89,
+                "CustomerName should be on line 90 (0-indexed: 89)",
             );
         } finally {
-            cleanupDocument(tmplUri);
+            await cleanupDocument(tmplUri);
         }
     });
 
     test("Go to definition on method jumps to method declaration", async () => {
         const { tmplUri } = await createDocument(
-            "definition-method-test.tmpl",
+            `${RESOURCE_DIR}/definition-method-test.tmpl`,
             "{{/*gotype: cg/model.Order*/}}\n{{ .DisplayName }}",
         );
 
@@ -175,17 +154,17 @@ suite("Definition Test Suite", () => {
             );
             assert.strictEqual(
                 definitions[0].range.start.line,
-                79,
-                "DisplayName should be on line 80 (0-indexed: 79)",
+                98,
+                "DisplayName should be on line 99 (0-indexed: 98)",
             );
         } finally {
-            cleanupDocument(tmplUri);
+            await cleanupDocument(tmplUri);
         }
     });
 
     test("Go to definition on nested field first identifier jumps to field", async () => {
         const { tmplUri } = await createDocument(
-            "definition-nested-first-test.tmpl",
+            `${RESOURCE_DIR}/definition-nested-first-test.tmpl`,
             "{{/*gotype: cg/model.Order*/}}\n{{ .Address.City }}",
         );
 
@@ -207,17 +186,17 @@ suite("Definition Test Suite", () => {
             );
             assert.strictEqual(
                 definitions[0].range.start.line,
-                72,
-                "Address field should be on line 73 (0-indexed: 72)",
+                91,
+                "Address field should be on line 92 (0-indexed: 91)",
             );
         } finally {
-            cleanupDocument(tmplUri);
+            await cleanupDocument(tmplUri);
         }
     });
 
     test("Go to definition on nested field second identifier jumps to nested field", async () => {
         const { tmplUri } = await createDocument(
-            "definition-nested-second-test.tmpl",
+            `${RESOURCE_DIR}/definition-nested-second-test.tmpl`,
             "{{/*gotype: cg/model.Order*/}}\n{{ .Address.City }}",
         );
 
@@ -243,13 +222,13 @@ suite("Definition Test Suite", () => {
                 "City field in Address should be on line 8 (0-indexed: 7)",
             );
         } finally {
-            cleanupDocument(tmplUri);
+            await cleanupDocument(tmplUri);
         }
     });
 
     test("Go to definition on unknown field returns no results", async () => {
         const { tmplUri } = await createDocument(
-            "definition-unknown-field-test.tmpl",
+            `${RESOURCE_DIR}/definition-unknown-field-test.tmpl`,
             "{{/*gotype: cg/model.Order*/}}\n{{ .NonExistent }}",
         );
 
@@ -264,10 +243,11 @@ suite("Definition Test Suite", () => {
                 `Expected no definitions for unknown field, got ${definitions?.length}`,
             );
         } finally {
-            cleanupDocument(tmplUri);
+            await cleanupDocument(tmplUri);
         }
     });
 });
+
 async function getDefinitions(tmplUri: vscode.Uri, pos: vscode.Position) {
     return await vscode.commands.executeCommand<vscode.Location[]>(
         "vscode.executeDefinitionProvider",

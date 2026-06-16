@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"strings"
-	parse "text-template-parser"
 	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
@@ -72,16 +71,19 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 
 // collectDiagnostics returns diagnostics from AST analysis using the improved parser.
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
-	var trees map[string]*parse.Tree
+	var trees map[string]*types.Tree
 
-	if doc, ok := store.Get(uri); ok && len(doc.trees) > 0 {
-		trees = doc.trees
+	if doc, ok := store.Get(uri); ok && len(doc.typedTrees) > 0 {
+		trees = doc.typedTrees
 	} else {
 		_, parsed, err := tryParse(text)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to parse template")
 		}
-		trees = parsed
+		trees = make(map[string]*types.Tree, len(parsed))
+		for name, tr := range parsed {
+			trees[name] = buildTypedTree(tr, nil, nil)
+		}
 	}
 
 	if len(trees) == 0 {
@@ -93,11 +95,10 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 		if tree == nil || tree.Root == nil {
 			continue
 		}
-		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-		diagnostics = append(
-			diagnostics,
-			walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)...,
-		)
+		types.Inspect(tree.Root, func(n types.Node) bool {
+			diagnostics = append(diagnostics, analyzeNode(n, text)...)
+			return true
+		})
 	}
 
 	// Surface template argument type errors and hint load failures from the stored document.
@@ -215,17 +216,17 @@ func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []pro
 	return diagnostics
 }
 
-// analyzeNode is the visitor passed to walkAndAnalyze; it declares variables then validates the node.
-func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
-	if ctx == nil || node == nil {
+// analyzeNode validates a single typed node and returns any diagnostics
+// raised against it. Scope (visible variables, enclosing pipe) is derived
+// from the node's parent chain rather than threaded through a context.
+func analyzeNode(node types.Node, text string) (diagnostics []protocol.Diagnostic) {
+	if node == nil {
 		return nil
 	}
-	diagnostics = append(diagnostics, declareNode(node, text, ctx)...)
-
 	config := GetConfig()
 
 	switch n := node.(type) {
-	case *parse.UndefinedNode:
+	case *types.UndefinedNode:
 		if !config.Diagnostics.SyntaxError {
 			break
 		}
@@ -244,32 +245,35 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 			createDiagnostic(msg, expandToFullBracketsFromOffset(int(n.Position()), text), true),
 		)
 
-	case *parse.ActionNode:
+	case *types.ActionNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *parse.RangeNode:
+	case *types.RangeNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *parse.IfNode:
+	case *types.IfNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *parse.WithNode:
+	case *types.WithNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *parse.CommandNode:
+	case *types.CommandNode:
 		if !config.Diagnostics.IncorrectFunction {
 			break
 		}
 		if len(n.Args) > 0 {
-			if identNode, ok := n.Args[0].(*parse.IdentifierNode); ok {
+			if identNode, ok := n.Args[0].(*types.IdentifierNode); ok {
 				funcName := identNode.Ident
 				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
 				offset := int(identNode.Position())
@@ -279,7 +283,7 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
 					)
 				} else {
-					currentKind := pipeOutputKind(ctx, false)
+					currentKind := pipeOutputKind(types.EnclosingPipe(n), false)
 					if currentKind != outputAny && currentKind != outputUntyped {
 						if !funcAcceptsKind(funcName, currentKind) {
 							msg := msgTypeMismatch(text, offset, funcName)
@@ -297,40 +301,19 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 	return diagnostics
 }
 
-// declareNode registers variable declarations into ctx.Vars before validation runs.
-func declareNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
-	if ctx == nil || node == nil {
-		return nil
-	}
-	switch n := node.(type) {
-	case *parse.ActionNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	case *parse.RangeNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	case *parse.IfNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	}
-	return diagnostics
-}
-
-// collectDeclarations registers variables into ctx.Vars and flags duplicate := declarations.
+// collectDeclarations flags duplicate := declarations in pipe by comparing its
+// decls against the variables already visible at the pipe's position. Names
+// that pipe itself introduces are not registered separately: each call works
+// with on-demand scope derived from the typed tree's parent chain.
 func collectDeclarations(
-	pipe *parse.PipeNode,
+	pipe *types.PipeNode,
 	text string,
-	ctx *Context,
 ) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil || ctx == nil {
+	if pipe == nil || pipe.IsAssign {
 		return nil
 	}
-	if ctx.Vars == nil {
-		ctx.Vars = make(map[string]parse.Node)
-	}
+	visible := visibleVarNames(pipe)
+	seen := map[string]bool{}
 	for _, decl := range pipe.Decl {
 		if decl == nil {
 			continue
@@ -339,61 +322,86 @@ func collectDeclarations(
 			if name := strings.TrimPrefix(ident, "$"); name == "" {
 				continue
 			}
-			if ctx.Vars[ident] != nil && !pipe.IsAssign {
-				if GetConfig().Diagnostics.VariableRedeclaration {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(
-							msgDuplicateDeclaration(text, int(decl.Position()), ident),
-							nodeToRange(decl, text),
-							false,
-						),
-					)
-				}
+			isDup := visible[ident] || seen[ident]
+			seen[ident] = true
+			if !isDup {
 				continue
 			}
-			if pipe.IsAssign {
-				ctx.Vars[ident] = pipe
-			} else {
-				ctx.Vars[ident] = decl
+			if GetConfig().Diagnostics.VariableRedeclaration {
+				diagnostics = append(
+					diagnostics,
+					createDiagnostic(
+						msgDuplicateDeclaration(text, int(decl.Position()), ident),
+						nodeRange(decl, text),
+						false,
+					),
+				)
 			}
 		}
 	}
 	return diagnostics
 }
 
-// checkPipeUsage flags any variable references in the pipe that were not previously declared.
+// checkPipeUsage flags any variable references in the pipe that are not
+// declared in any visible scope. The pipe's own decls count as visible (to
+// preserve historical behaviour where {{$x := $x}} did not flag the RHS).
 func checkPipeUsage(
-	pipe *parse.PipeNode,
+	pipe *types.PipeNode,
 	text string,
-	ctx *Context,
 ) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil || ctx == nil {
+	if pipe == nil {
 		return nil
 	}
-	if ctx.Vars == nil {
-		ctx.Vars = make(map[string]parse.Node)
+	visible := visibleVarNames(pipe)
+	// $ is always implicitly available.
+	visible["$"] = true
+	// Merge the pipe's own decls so the RHS can reference them.
+	for _, decl := range pipe.Decl {
+		if decl == nil {
+			continue
+		}
+		for _, ident := range decl.Ident {
+			visible[ident] = true
+		}
 	}
 	for _, cmd := range pipe.Cmds {
 		if cmd == nil {
 			continue
 		}
 		for _, arg := range cmd.Args {
-			if vnode, ok := arg.(*parse.VariableNode); ok && len(vnode.Ident) > 0 {
-				if name := vnode.Ident[0]; name != "" && name != "$" && ctx.Vars[name] == nil {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(
-							msgUndeclaredVariable(text, int(vnode.Position()), name),
-							nodeToRange(vnode, text),
-							true,
-						),
-					)
+			if vnode, ok := arg.(*types.VariableNode); ok && len(vnode.Ident) > 0 {
+				name := vnode.Ident[0]
+				if name == "" || visible[name] {
+					continue
 				}
+				diagnostics = append(
+					diagnostics,
+					createDiagnostic(
+						msgUndeclaredVariable(text, int(vnode.Position()), name),
+						nodeRange(vnode, text),
+						true,
+					),
+				)
 			}
 		}
 	}
 	return diagnostics
+}
+
+// visibleVarNames returns the set of variable identifiers (with leading "$")
+// in scope at n, derived from types.VisibleVarsAt.
+func visibleVarNames(n types.Node) map[string]bool {
+	vars := types.VisibleVarsAt(n)
+	out := make(map[string]bool, len(vars))
+	for _, v := range vars {
+		if v == nil {
+			continue
+		}
+		for _, ident := range v.Ident {
+			out[ident] = true
+		}
+	}
+	return out
 }
 
 // expandToFullBracketsFromOffset returns a Range that includes the surrounding {{ and }}.
@@ -417,19 +425,5 @@ func expandToFullBracketsFromOffset(pos int, text string) protocol.Range {
 	return protocol.Range{
 		Start: offsetToPosition(text, startOffset),
 		End:   offsetToPosition(text, endOffset),
-	}
-}
-
-// extractBranchNodes returns the pipe, list, and else-list for if/range/with nodes.
-func extractBranchNodes(node parse.Node) (*parse.PipeNode, *parse.ListNode, *parse.ListNode) {
-	switch n := node.(type) {
-	case *parse.IfNode:
-		return n.Pipe, n.List, n.ElseList
-	case *parse.RangeNode:
-		return n.Pipe, n.List, n.ElseList
-	case *parse.WithNode:
-		return n.Pipe, n.List, n.ElseList
-	default:
-		return nil, nil, nil
 	}
 }
