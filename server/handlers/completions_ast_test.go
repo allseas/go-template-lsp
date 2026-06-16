@@ -20,7 +20,7 @@ func suggestAt(t *testing.T, src string, offset int) []string {
 	tt := serverTypes.NewTree(*trees["test"], nil, nil, nil, nil)
 	cur := serverTypes.NodeFind(tt.Root, serverTypes.Pos(offset))
 	require.NotNil(t, cur)
-	items := suggest(cur, src[offset], false, protocol.Range{})
+	items := suggest(cur, src[offset], false, serverTypes.Pos(offset), src, protocol.Range{})
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Label
@@ -47,14 +47,17 @@ func suggestAtWithType(
 		dotType = lt.DotType
 		pkg = lt.Pkg
 	}
-	tt := serverTypes.NewTree(*typ, nil, dotType, pkg, nil)
+	// Pass GlobalFuncs() so IdentifierNodes carry their function signatures.
+	// This ensures cmd.ValueType() is set for function commands in pipes,
+	// allowing pipeOutputInfo to rely solely on the typed tree.
+	tt := serverTypes.NewTree(*typ, serverTypes.GlobalFuncs(), dotType, pkg, nil)
 	if lt != nil {
 		tt.DotType = lt.DotType
 		tt.Pkg = lt.Pkg
 	}
 	cur := serverTypes.NodeFind(tt.Root, serverTypes.Pos(offset))
 	require.NotNil(t, cur)
-	items := suggest(cur, src[offset], isInvoked, protocol.Range{})
+	items := suggest(cur, src[offset], isInvoked, serverTypes.Pos(offset), src, protocol.Range{})
 	labels := make([]string, len(items))
 	for i, item := range items {
 		labels[i] = item.Label
@@ -284,7 +287,7 @@ func TestFieldChainItemsT(t *testing.T) {
 			} else if tc.useOrder {
 				typ = lt.DotType
 			}
-			items := fieldChainItemsT(typ, wr)
+			items := fieldChainItemsT(typ, outputAny, wr)
 			if tc.wantEmpty {
 				assert.Empty(t, items)
 				return
@@ -315,7 +318,7 @@ func TestDotItemsT(t *testing.T) {
 			if tc.inputIsString {
 				inputType = types.Typ[types.String]
 			}
-			items := dotItemsT(cur, tc.delSign, inputType, tc.pipeKind, wr)
+			items := dotItemsT(cur, tc.delSign, inputType, tc.pipeKind, outputAny, wr)
 			if tc.wantEmpty {
 				assert.Empty(t, items)
 				return
@@ -341,45 +344,13 @@ func TestPipeFilteredItemsT(t *testing.T) {
 			if tc.inputIsString {
 				inputType = types.Typ[types.String]
 			}
-			labels := labelsOf(pipeFilteredItemsT(cur, tc.kind, inputType, nil, wr))
+			labels := labelsOf(pipeFilteredItemsT(cur, tc.kind, inputType, nil, outputAny, wr))
 			for _, want := range tc.contains {
 				assert.Contains(t, labels, want)
 			}
 			for _, notWant := range tc.notContains {
 				assert.NotContains(t, labels, notWant)
 			}
-		})
-	}
-}
-
-// firstActionPipe parses src and returns the first ActionNode's PipeNode.
-// Uses partial parsing so unknown identifiers (e.g. "foo", "x") do not fail.
-func firstActionPipe(t *testing.T, src string) *serverTypes.PipeNode {
-	t.Helper()
-	typ := parse.New("test")
-	typ.Mode = parse.ParsePartial | parse.SkipFuncCheck
-	_, err := typ.Parse(src, "{{", "}}", map[string]*parse.Tree{}, builtins())
-	require.NoError(t, err)
-	tt := buildTypedTree(typ, nil, nil)
-	require.NotNil(t, tt)
-	for _, n := range tt.Root.Nodes {
-		if a, ok := n.(*serverTypes.ActionNode); ok {
-			return a.Pipe
-		}
-	}
-	t.Fatalf("no ActionNode found in %q", src)
-	return nil
-}
-
-func TestPipeOutputKind(t *testing.T) {
-	for _, tc := range pipeOutputKindTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var pipe *serverTypes.PipeNode
-			if !tc.nilPipe {
-				pipe = firstActionPipe(t, tc.src)
-			}
-			got := pipeOutputKind(pipe, tc.isInvoked)
-			assert.Equal(t, tc.want, got)
 		})
 	}
 }
