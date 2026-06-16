@@ -223,29 +223,57 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	return w
 }
 
-func getRangeableType(typ types.Type) types.Type {
+// IsTemplateSeq reports whether t is rangeable by text/template as an iter.Seq.
+// Returns (true, V, nil) for iter.Seq[V] and (true, K, V) for iter.Seq2[K,V].
+func isTemplateSeq(t types.Type) (ok bool, key, val types.Type) {
+	sig, ok := t.Underlying().(*types.Signature)
+	if !ok || sig.Params().Len() != 1 || sig.Results().Len() != 0 {
+		return false, nil, nil
+	}
+
+	yield, ok := sig.Params().At(0).Type().Underlying().(*types.Signature)
+	if !ok || yield.Results().Len() != 1 {
+		return false, nil, nil
+	}
+	if b, ok := yield.Results().At(0).Type().(*types.Basic); !ok || b.Kind() != types.Bool {
+		return false, nil, nil
+	}
+
+	switch yield.Params().Len() {
+	case 1: // iter.Seq[V]
+		return true, nil, yield.Params().At(0).Type()
+	case 2: // iter.Seq2[K, V]
+		return true, yield.Params().At(0).Type(), yield.Params().At(1).Type()
+	}
+	return false, nil, nil
+}
+
+func getRangeableType(typ types.Type) (types.Type, types.Type) {
 	if typ == nil {
-		return nil
+		return nil, nil
 	}
 	switch t := typ.Underlying().(type) {
 	case *types.Pointer:
 		return getRangeableType(types.Unalias(t.Elem()))
 	case *types.Array:
-		return t.Elem()
+		return types.Typ[types.Int], t.Elem()
 	case *types.Slice:
-		return t.Elem()
+		return types.Typ[types.Int], t.Elem()
 	case *types.Map:
-		return t.Elem()
+		return t.Key(), t.Elem()
 	case *types.Chan:
-		return t.Elem()
+		return types.Typ[types.Int], t.Elem()
 	case *types.Basic:
 		if t.Info()&types.IsInteger != 0 {
-			return t
+			return types.Typ[types.Int], t
 		}
-		return nil
+		return nil, nil
 	default:
 		// TODO: handle Seq
-		return nil
+		if ok, key, val := isTemplateSeq(t); ok {
+			return key, val
+		}
+		return nil, nil
 	}
 }
 
@@ -272,19 +300,20 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 	keepDot := ctx.dotType
 	keepVars := len(ctx.vars)
 	r.Pipe = analysePipe(n.Pipe, r, ctx)
-	typ := getRangeableType(r.Pipe.typ)
+	k, v := getRangeableType(r.Pipe.typ)
 	if r.Pipe.typ == nil {
 		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over untyped value")
-	} else if typ == nil {
+	} else if v == nil {
 		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over type %v", r.Pipe.typ)
 		ctx.dotType = nil
 	} else {
-		ctx.dotType = typ
+		ctx.dotType = v
 		// override the range var if it was set
 		if len(r.Pipe.Decl) == 1 {
-			r.Pipe.Decl[0].typ = typ
+			r.Pipe.Decl[0].typ = v
 		} else if len(r.Pipe.Decl) == 2 {
-			r.Pipe.Decl[1].typ = typ
+			r.Pipe.Decl[0].typ = k
+			r.Pipe.Decl[1].typ = v
 		}
 	}
 	r.List = analyseList(n.List, r, ctx)
