@@ -938,8 +938,12 @@ func analyseCommand(
 					len(args),
 				)
 			}
-			for i := 0; i < t.Params().Len()-1; i++ {
-				if !types.Identical(args[i], t.Params().At(i).Type()) {
+			nonVariadicCount := t.Params().Len() - 1
+			if nonVariadicCount > len(args) {
+				nonVariadicCount = len(args)
+			}
+			for i := 0; i < nonVariadicCount; i++ {
+				if !typesCompatible(t.Params().At(i).Type(), args[i]) {
 					tstring := "nil"
 					if args[i] != nil {
 						tstring = args[i].String()
@@ -952,11 +956,19 @@ func analyseCommand(
 						t.Params().At(i).Type().String(),
 						tstring,
 					)
+				} else if isEmptyInterface(args[i]) && !isEmptyInterface(t.Params().At(i).Type()) {
+					ctx.errorf(
+						typeCmd,
+						ErrorUnknownType,
+						"argument %d: any value passed to %s parameter, may fail at runtime",
+						i+1,
+						t.Params().At(i).Type().String(),
+					)
 				}
 			}
 			variadicType := t.Params().At(t.Params().Len() - 1).Type().(*types.Slice).Elem()
 			for i := t.Params().Len() - 1; i < len(args); i++ {
-				if !types.Identical(args[i], variadicType) {
+				if !typesCompatible(variadicType, args[i]) {
 					tstring := "nil"
 					if args[i] != nil {
 						tstring = args[i].String()
@@ -969,6 +981,14 @@ func analyseCommand(
 						variadicType.String(),
 						tstring,
 					)
+				} else if isEmptyInterface(args[i]) && !isEmptyInterface(variadicType) {
+					ctx.errorf(
+						typeCmd,
+						ErrorUnknownType,
+						"variadic argument %d: any value passed to %s parameter, may fail at runtime",
+						i+1,
+						variadicType.String(),
+					)
 				}
 			}
 			if t.Results().Len() > 0 {
@@ -978,7 +998,7 @@ func analyseCommand(
 		}
 
 		for i := 0; i < t.Params().Len(); i++ {
-			if !types.Identical(args[i], t.Params().At(i).Type()) {
+			if !typesCompatible(t.Params().At(i).Type(), args[i]) {
 				tstring := "nil"
 				if args[i] != nil {
 					tstring = args[i].String()
@@ -991,6 +1011,14 @@ func analyseCommand(
 					t.Params().At(i).Type().String(),
 					tstring,
 				)
+			} else if isEmptyInterface(args[i]) && !isEmptyInterface(t.Params().At(i).Type()) {
+				ctx.errorf(
+					typeCmd,
+					ErrorUnknownType,
+					"argument %d: any value passed to %s parameter, may fail at runtime",
+					i+1,
+					t.Params().At(i).Type().String(),
+				)
 			}
 		}
 		if t.Results().Len() > 0 {
@@ -1001,6 +1029,24 @@ func analyseCommand(
 	}
 
 	return typeCmd
+}
+
+// isEmptyInterface reports whether t is the empty interface (i.e. `any` / `interface{}`).
+func isEmptyInterface(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	iface, ok := t.Underlying().(*types.Interface)
+	return ok && iface.NumMethods() == 0
+}
+
+// typesCompatible reports whether a value of type got is assignable to a parameter
+// of type want. When either side is the empty interface (any), we always accept.
+func typesCompatible(want, got types.Type) bool {
+	if isEmptyInterface(want) || isEmptyInterface(got) {
+		return true
+	}
+	return types.Identical(want, got)
 }
 
 // getNodeType returns the type of a node without modifying it.
