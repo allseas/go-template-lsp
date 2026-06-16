@@ -1,0 +1,17 @@
+{{- /*gotype: cg/model.Model*/ -}}
+
+{{# $taglist := "" }}
+
+{{- if .LoggerInfo.EnablePing }}
+  {{/* ... */}}
+{{- end }}
+
+{{- block "code" .IdentifyingSelection }}
+  {{ . }}
+
+  {{/* ... */}}
+
+  {{- range .Machine.Inputs }}
+      {{/* ... */}}
+  {{- end }}
+{{- end }}

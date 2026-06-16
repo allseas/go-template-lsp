@@ -1,0 +1,50 @@
+{{- /*gotype: demo/models.Order*/ -}}
+
+{{- /*
+  TYPE HINTS DEMO
+
+  - how gotype hint is structured
+  - defines can have other types
+*/ -}}
+
+=== ORDER CONFIRMATION ===
+Order ID:  {{ .ID }}
+Customer:  {{ .CustomerName }}
+Email:     {{ .Email }}
+Paid:      {{ .Paid }}
+Amount:    {{ .TotalAmount }}
+
+Shipping address:
+{{ template "address-block" .Address }}
+
+Items:
+{{ range .Items -}}
+{{ template "item-row" . }}
+{{- end }}
+
+Total: {{ .TotalAmount }}
+{{ if .IsLargeOrder }}** Large order - priority handling **{{ end }}
+
+
+{{- define "item-row" -}}
+{{- /*gotype: demo/models.Item*/ -}}
+  - {{ .Name }} ({{ .SKU }})
+      qty:   {{ .Qty }}
+      price: {{ .UnitPrice }}
+      total: {{ .Total }}
+      {{- if .IsExpensive }} [premium]{{- end }}
+{{- end -}}
+
+
+{{- define "address-block" -}}
+{{- /*gotype: demo/models.Address*/ -}}
+  {{ .Street }}
+  {{ .City }}, {{ .Zip }}
+  {{- if .IsLocal }} (domestic){{- else }} (international){{- end }}
+{{- end -}}
+
+
+{{- define "no-hint" -}}
+{{- /* No gotype here - dot is (unknown), no field completions */ -}}
+dot value: {{ . }}
+{{- end -}}

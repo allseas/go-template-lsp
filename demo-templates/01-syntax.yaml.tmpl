@@ -1,0 +1,51 @@
+{{- /*gotype: demo/models.Order*/ -}}
+{{- /*
+
+  SYNTAX HIGHLIGHTING DEMO
+
+  - Keywords (if / range / with / end) - one colour
+  - Variables ($order, $item) - another colour
+  - Field access (.ID, .CustomerName) - third colour
+  - Pipe operator and built-in functions (len, not, printf) - distinct
+  - Comments (this block) - dimmed
+
+  This is a Kubernetes-style deployment config generated from an Order.
+
+  - switch theme
+*/ -}}
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: order-{{ .ID | lower }}
+  labels:
+    customer: {{ .CustomerName | lower }}
+    paid: "{{ .Paid }}"
+spec:
+  template:
+    spec:
+      containers:
+        {{- range $item := .Items }}
+        - name: process-{{ $item.SKU | lower }}
+          image: processor:latest
+          env:
+            - name: ITEM_SKU
+              value: "{{ $item.SKU }}"
+            - name: ITEM_QTY
+              value: "{{ $item.Qty }}"
+            - name: ITEM_PRICE
+              value: "{{ $item.UnitPrice }}"
+            {{- if $item.IsExpensive }}
+            - name: PRIORITY
+              value: "high"
+            {{- end }}
+        {{- end }}
+      {{- with .Address }}
+      nodeSelector:
+        {{- if .IsLocal }}
+        region: eu-west
+        {{- else }}
+        region: global
+        {{- end }}
+      {{- end }}
+  backoffLimit: {{ if .IsLargeOrder }}5{{ else }}3{{ end }}

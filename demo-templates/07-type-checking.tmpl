@@ -1,0 +1,31 @@
+{{- /*gotype: demo/models.Order*/ -}}
+
+{{- /*
+  TEMPLATE ARG TYPE-CHECKING DEMO
+*/ -}}
+
+
+=== SHIPPING CONFIRMATION ===
+Order: {{ .ID }}
+
+{{- /* [OK] .Address is of type models.Address */}}
+{{ template "address-line" .Address }}
+
+{{- /* [ERR] Passing the whole Order where Address is expected */}}
+{{ template "address-line" . }}
+
+{{- /* [OK] $item inside range is of type models.Item */}}
+{{ range .Items }}
+{{ template "item-summary" . }}
+{{ end }}
+
+{{- define "address-line" -}}
+{{- /*gotype: demo/models.Address*/ -}}
+  {{ .Street }}, {{ .City }} {{ .Zip }}, {{ .Country }}
+{{- end -}}
+
+
+{{- define "item-summary" -}}
+{{- /*gotype: demo/models.Item*/ -}}
+  • {{ .Label }} - {{ .UnitPrice }} each
+{{- end -}}

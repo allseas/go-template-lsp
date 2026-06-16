@@ -1,0 +1,33 @@
+{{- /*gotype: demo/models.ReportData*/ -}}
+{{- /*
+  CUSTOM FUNCMAP DEMO
+
+  - show funcs.go
+
+  - custom functions are recommended
+
+  - change funcs.go - add a new function
+
+  - go to definition
+*/ -}}
+
+MONTHLY REPORT - {{ .Month | upper }}
+{{ repeat "=" 40 }}
+
+Summary
+-------
+Orders:   {{ .OrderCount }}
+Revenue:  {{ formatCurrency .Revenue .Currency }}
+
+Order Details
+-------------
+{{ range $i, $o := .Orders -}}
+{{ $i | printf "%2d" }}. {{ $o.DisplayName | upper }}
+     Items:   {{ $o.ItemCount }}
+     Total:   {{ formatCurrency $o.TotalAmount $.Currency }}
+     Paid:    {{ $o.Paid | yesNo }}
+     Address: {{ $o.Address.Line | indent 14 }}
+{{ end }}
+
+{{ repeat "-" 40 }}
+TOTAL REVENUE: {{ formatCurrency .Revenue .Currency }}
