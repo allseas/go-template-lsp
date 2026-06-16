@@ -146,6 +146,7 @@ func initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error)
 
 func initialized(context *glsp.Context, _ *protocol.InitializedParams) error {
 	log.Debug().Msg("initialized")
+	log.Debug().Msg(handlers.WelcomeMessage())
 
 	// so we don't block the initialized request handler.
 	go func(ctx *glsp.Context) {

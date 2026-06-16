@@ -1,6 +1,9 @@
 package types
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestNodeFind(t *testing.T) {
 	for _, tc := range nodeFindTestCases {
@@ -50,6 +53,39 @@ func TestEnclosingCommand(t *testing.T) {
 			got := EnclosingCommand(tc.node)
 			if got != tc.wantCmd {
 				t.Fatalf("expected %v, got %v", tc.wantCmd, got)
+			}
+		})
+	}
+}
+
+func TestInspect(t *testing.T) {
+	for _, tc := range inspectTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var visited []Node
+			Inspect(tc.root, func(n Node) bool {
+				visited = append(visited, n)
+				return !tc.stopAt(n)
+			})
+			if len(visited) != len(tc.wantVisited) {
+				t.Fatalf("visited %d nodes, want %d: got %v, want %v",
+					len(visited), len(tc.wantVisited), visited, tc.wantVisited)
+			}
+			for i, n := range visited {
+				if n != tc.wantVisited[i] {
+					t.Fatalf("visit %d: got %T at pos %d, want %T at pos %d",
+						i, n, n.Position(), tc.wantVisited[i], tc.wantVisited[i].Position())
+				}
+			}
+		})
+	}
+}
+
+func TestVisibleVarsAt(t *testing.T) {
+	for _, tc := range visibleVarsAtTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := VisibleVarsAt(tc.cur)
+			if !reflect.DeepEqual(got, tc.wantVars) {
+				t.Fatalf("expected %v, got %v", tc.wantVars, got)
 			}
 		})
 	}

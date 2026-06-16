@@ -1,6 +1,11 @@
 {
-  "enableServer": true,
-  "trace": {
-    "server": "messages"
-  }
+  "enableHover": true,
+  "enableDefinition": true,
+  "enableDiagnostics": true,
+  "diagnostics": {
+    "syntaxError": true,
+    "variableRedeclaration": true,
+    "incorrectFunction": true
+  },
+  "enableAutocompletion": true
 }
