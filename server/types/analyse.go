@@ -479,7 +479,7 @@ func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
 		return cn
 	}
 
-	if typ, ok := walkFieldChain(ctx, cn, baseType, n.Field); ok {
+	if typ, _ := walkFieldChain(ctx, cn, baseType, n.Field); typ != nil {
 		cn.typ = typ
 	}
 	return cn
@@ -518,7 +518,7 @@ func walkFieldChain(
 				currentType.String(),
 				name,
 			)
-			return nil, false
+			return types.NewInterfaceType(nil, nil).Complete(), false
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -533,7 +533,7 @@ func walkFieldChain(
 					name,
 					currentType.String(),
 				)
-				return nil, false
+				return types.NewInterfaceType(nil, nil).Complete(), false
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -558,7 +558,7 @@ func walkFieldChain(
 				name,
 				currentType.String(),
 			)
-			return nil, false
+			return types.NewInterfaceType(nil, nil).Complete(), false
 		}
 	}
 	return currentType, true
@@ -598,7 +598,7 @@ func walkFieldChainWithMethodInfo(
 				currentType.String(),
 				name,
 			)
-			return nil, nil, false
+			return types.NewInterfaceType(nil, nil).Complete(), isMethod, false
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -614,7 +614,7 @@ func walkFieldChainWithMethodInfo(
 					name,
 					currentType.String(),
 				)
-				return nil, nil, false
+				return types.NewInterfaceType(nil, nil).Complete(), isMethod, false
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -639,7 +639,7 @@ func walkFieldChainWithMethodInfo(
 				name,
 				currentType.String(),
 			)
-			return nil, nil, false
+			return types.NewInterfaceType(nil, nil).Complete(), isMethod, false
 		}
 	}
 	return currentType, isMethod, true
@@ -715,7 +715,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if baseType == nil {
 		return v
 	}
-	if typ, isMethod, ok := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); ok {
+	if typ, isMethod, _ := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); typ != nil {
 		v.typ = typ
 		v.isMethod = isMethod
 	}
@@ -730,11 +730,16 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		parent:   parent,
 	}
 
-	if ctx.dotType == nil || len(n.Ident) == 0 {
+	if len(n.Ident) == 0 {
 		return fn
 	}
 
-	if typ, isMethod, ok := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); ok {
+	if ctx.dotType == nil {
+		fn.typ = types.NewInterfaceType(nil, nil).Complete()
+		return fn
+	}
+
+	if typ, isMethod, _ := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); typ != nil {
 		fn.typ = typ
 		fn.isMethod = isMethod
 	}
