@@ -45,10 +45,19 @@ func TestLoadGlobalFuncs(t *testing.T) {
 			fn.Type().(*types.Signature).Params().At(1).Type().String(),
 		)
 	}
-	// inline literal function - no identifier to resolve, stored as nil.
-	shout, present := funcs["shout"]
-	assert.True(t, present)
-	assert.Nil(t, shout)
+	// inline literal function - resolved to a synthetic *types.Func keyed by the FuncMap name.
+	if fn := funcs["shout"]; assert.NotNil(
+		t,
+		fn,
+		"shout should resolve to a synthetic *types.Func",
+	) {
+		assert.Equal(t, "shout", fn.Name())
+		sig := fn.Type().(*types.Signature)
+		assert.Equal(t, 1, sig.Params().Len())
+		assert.Equal(t, "string", sig.Params().At(0).Type().String())
+		assert.Equal(t, 1, sig.Results().Len())
+		assert.Equal(t, "string", sig.Results().At(0).Type().String())
+	}
 }
 
 func TestGlobalFuncsCacheRoundTrip(t *testing.T) {

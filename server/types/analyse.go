@@ -859,19 +859,28 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx) *
 	if resultType != nil {
 		switch t := resultType.Underlying().(type) {
 		case *types.Signature:
-			// If it's a function with all params provided, use the return type
-			// If one param is missing, use one step curried function type
-			// TODO: may be variadic ??
-			if t.Params().Len() == len(typeCmd.Args)-1 {
-				typeCmd.typ = t.Results().At(0).Type()
-			} else if t.Params().Len() == len(typeCmd.Args) {
+			// (Args[0] is the function identifier itself).
+			provided := len(typeCmd.Args) - 1
+			params := t.Params()
+			switch {
+			case provided >= params.Len():
+				if t.Results().Len() > 0 {
+					typeCmd.typ = t.Results().At(0).Type()
+				}
+			default:
+				// Partially applied -> a curried signature carrying every
+				// remaining (not-yet-supplied) parameter, preserving order.
+				remaining := make([]*types.Var, 0, params.Len()-provided)
+				for i := provided; i < params.Len(); i++ {
+					remaining = append(remaining, params.At(i))
+				}
 				typeCmd.typ = types.NewSignatureType(
 					nil,
 					nil,
 					nil,
-					types.NewTuple(t.Params().At(t.Params().Len()-1)),
+					types.NewTuple(remaining...),
 					t.Results(),
-					false,
+					t.Variadic(),
 				)
 			}
 		default:
