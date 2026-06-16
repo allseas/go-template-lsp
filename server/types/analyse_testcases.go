@@ -121,16 +121,6 @@ var funcs = map[string]*types.Func{
 	), // MockDot -> Inner
 }
 
-// funcBCurried1 is the type analyseCommand produces for `FuncB 1` when one of
-// FuncB's two parameters is supplied as a literal -- a signature taking just
-// the remaining (last) parameter and returning FuncB's result tuple.
-var funcBCurried1 = types.NewSignatureType(
-	nil, nil, nil,
-	types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.Int])),
-	types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.String])),
-	false,
-)
-
 func varn(name string) *parse.VariableNode {
 	return &parse.VariableNode{
 		NodeType: parse.NodeVariable,

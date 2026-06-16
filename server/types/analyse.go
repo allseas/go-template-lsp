@@ -846,7 +846,13 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 }
 
 // analyseCommand converts a parse CommandNode to a typed CommandNode.
-func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx, next bool, pipedT types.Type) *CommandNode {
+func analyseCommand(
+	cmdNode *parse.CommandNode,
+	parent Node,
+	ctx *analysisCtx,
+	next bool,
+	pipedT types.Type,
+) *CommandNode {
 	if cmdNode == nil {
 		return nil
 	}
@@ -899,12 +905,24 @@ func analyseCommand(cmdNode *parse.CommandNode, parent Node, ctx *analysisCtx, n
 	switch t := resultType.Underlying().(type) {
 	case *types.Signature:
 		if !t.Variadic() && t.Params().Len() != len(args) {
-			ctx.errorf(typeCmd, ErrorArgumentNumberMismatch, "Expected %d arguments but got %d", t.Params().Len(), len(args))
+			ctx.errorf(
+				typeCmd,
+				ErrorArgumentNumberMismatch,
+				"Expected %d arguments but got %d",
+				t.Params().Len(),
+				len(args),
+			)
 		}
 
 		if t.Variadic() {
 			if len(args) < t.Params().Len()-1 {
-				ctx.errorf(typeCmd, ErrorArgumentNumberMismatch, "Expected at least %d arguments but got %d", t.Params().Len()-1, len(args))
+				ctx.errorf(
+					typeCmd,
+					ErrorArgumentNumberMismatch,
+					"Expected at least %d arguments but got %d",
+					t.Params().Len()-1,
+					len(args),
+				)
 			}
 			for i := 0; i < t.Params().Len()-1; i++ {
 				if !types.Identical(args[i], t.Params().At(i).Type()) {
