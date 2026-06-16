@@ -94,6 +94,7 @@ var (
 			types.ErrorTypeInvalidTemplateArg: DiagnosticSeverityError,
 			types.ErrorUnknownType:            DiagnosticSeverityInformation,
 			types.ErrorSyntaxError:            DiagnosticSeverityError,
+			types.ErrorHintLoadFailure:        DiagnosticSeverityWarning,
 		},
 		EnableAutocompletion: true,
 	}

@@ -54,6 +54,8 @@ const (
 	ErrorUnknownType
 	// ErrorSyntaxError Syntax error in the template, for diagnostics that come from the parser rather than type checking
 	ErrorSyntaxError
+	// ErrorHintLoadFailure A gotype hint type could not be loaded/resolved
+	ErrorHintLoadFailure
 	// Add more error types as needed
 )
 
@@ -69,6 +71,7 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeInvalidTemplateArg: "invalidTemplateArg",
 	ErrorUnknownType:            "unknownType",
 	ErrorSyntaxError:            "syntaxError",
+	ErrorHintLoadFailure:        "hintLoadFailure",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).

@@ -82,13 +82,6 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 // collectDiagnostics returns diagnostics from AST analysis using the improved parser.
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	var trees map[string]*parse.Tree
-	// Surface template argument type errors from the typed trees.
-	if doc, ok := store.Get(uri); ok {
-		for _, tt := range doc.typedTrees {
-			diagnostics = append(diagnostics, collectTemplateDiagnostics(tt, text)...)
-		}
-	}
-
 	if doc, ok := store.Get(uri); ok && len(doc.trees) > 0 {
 		trees = doc.trees
 	} else {
@@ -118,7 +111,7 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 	// Surface template argument type errors and hint load failures from the stored document.
 	if doc, ok := store.Get(uri); ok {
 		for _, tt := range doc.typedTrees {
-			diagnostics = append(diagnostics, collectTemplateArgTypeDiagnostics(tt, text)...)
+			diagnostics = append(diagnostics, collectTemplateDiagnostics(tt, text)...)
 		}
 		diagnostics = append(diagnostics, collectHintLoadFailureDiagnostics(doc, text)...)
 	}
@@ -130,83 +123,8 @@ func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Di
 	if doc == nil || len(doc.failedHints) == 0 {
 		return nil
 	}
-	var diagnostics []protocol.Diagnostic
-	for treeName, errMsg := range doc.failedHints {
-		isRoot := doc.tree != nil && doc.tree.Name == treeName
-		offset := gotypeHintOffset(text, treeName, isRoot)
-		if offset < 0 {
-			continue
-		}
-		rng := expandToFullBracketsFromOffset(offset, text)
-		diagnostics = append(diagnostics, createDiagnostic(
-			"gotype: could not load type: "+errMsg,
-			rng,
-			false,
-		))
-	}
-	return diagnostics
-}
-
-// gotypeHintOffset returns the byte offset of the start of the "gotype:" token
-func gotypeHintOffset(text, treeName string, isRoot bool) int {
-	var searchIn string
-	var searchStart int
-	if isRoot {
-		// Hint is on the first line of the file.
-		nl := strings.IndexByte(text, '\n')
-		if nl < 0 {
-			searchIn = text
-		} else {
-			searchIn = text[:nl]
-		}
-		searchStart = 0
-	} else {
-		// Hint is on the line immediately after {{define "treeName"}}.
-		defineLine := findDefineLine(text, treeName)
-		if defineLine <= 0 {
-			return -1
-		}
-		lineStart := lineStartOffset(text, defineLine+1)
-		if lineStart < 0 {
-			return -1
-		}
-		searchStart = lineStart
-		nl := strings.IndexByte(text[lineStart:], '\n')
-		if nl < 0 {
-			searchIn = text[lineStart:]
-		} else {
-			searchIn = text[lineStart : lineStart+nl]
-		}
-	}
-	rel := strings.Index(searchIn, "gotype:")
-	if rel < 0 {
-		return -1
-	}
-	return searchStart + rel
-}
-
-// lineStartOffset returns the byte offset of the start of the given 1-based line.
-func lineStartOffset(text string, line int) int {
-	if line <= 1 {
-		if line == 1 {
-			return 0
-		}
-		return -1
-	}
-	current := 1
-	for i := 0; i < len(text); i++ {
-		if text[i] == '\n' {
-			current++
-			if current == line {
-				return i + 1
-			}
-		}
-	}
-	return -1
-}
-
-func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Diagnostic {
-	if doc == nil || len(doc.failedHints) == 0 {
+	severity := GetConfig().Diagnostics[types.ErrorHintLoadFailure]
+	if severity == DiagnosticSeverityDisabled {
 		return nil
 	}
 	var diagnostics []protocol.Diagnostic
@@ -220,7 +138,7 @@ func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Di
 		diagnostics = append(diagnostics, createDiagnostic(
 			"gotype: could not load type: "+errMsg,
 			rng,
-			false,
+			severity,
 		))
 	}
 	return diagnostics
