@@ -2,8 +2,8 @@ package handlers
 
 import (
 	gotypes "go/types"
-	"path/filepath"
 	"text-template-server/types"
+	"text-template-server/utils"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -83,6 +83,8 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		return nil, nil
 	case *types.FieldNode:
 		return fieldNodeDefinition(loadedType, dotTypeAt(target), target, offset)
+	case *types.IdentifierNode:
+		return definitionIdentifier(target)
 	}
 
 	log.Debug().
@@ -148,13 +150,8 @@ func fieldNodeDefinition(
 			} else {
 				log.Debug().Any("fpos", fpos).Msg("Definition: fpos is not > 0")
 			}
-			filePath := filepath.ToSlash(fpos.Filename)
-			if len(filePath) > 0 && filePath[0] != '/' {
-				filePath = "/" + filePath
-			}
-
 			return protocol.Location{
-				URI: "file://" + filePath,
+				URI: utils.FilePathToURI(fpos.Filename),
 				Range: protocol.Range{
 					Start: protocol.Position{Line: line, Character: char},
 					End:   protocol.Position{Line: line, Character: char},
@@ -175,6 +172,45 @@ func fieldNodeDefinition(
 		}
 	}
 	return nil, nil
+}
+
+func definitionIdentifier(target *types.IdentifierNode) (any, error) {
+	log.Debug().
+		Str("handler", "definition").
+		Any("identifier", target.Ident).
+		Msg("definitionIdentifier")
+
+	entry, ok := types.GetGlobalFuncEntry(target.Ident)
+	if !ok {
+		return nil, nil
+	}
+	if entry.Fset == nil {
+		return nil, nil
+	}
+
+	pos := entry.DefinitionPos()
+	if !pos.IsValid() {
+		return nil, nil
+	}
+
+	fpos := entry.Fset.Position(pos)
+	var line uint32
+	var char uint32
+
+	if fpos.Line > 0 && fpos.Column > 0 {
+		line = uint32(fpos.Line - 1)   //nolint:gosec // disable G115
+		char = uint32(fpos.Column - 1) //nolint:gosec // disable G115
+	} else {
+		log.Debug().Any("fpos", fpos).Msg("Definition: fpos is not > 0")
+	}
+
+	return protocol.Location{
+		URI: utils.FilePathToURI(fpos.Filename),
+		Range: protocol.Range{
+			Start: protocol.Position{Line: line, Character: char},
+			End:   protocol.Position{Line: line, Character: char},
+		},
+	}, nil
 }
 
 func getFieldIdentIdx(target *types.FieldNode, offset int) int {

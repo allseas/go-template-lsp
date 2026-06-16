@@ -12,6 +12,7 @@ The definition provider enables jump-to-definition (Ctrl+Click) for nodes. It is
 | `.` inside `{{ with .Obj }}...{{ . }}...end`    | Jumps to the `with` pipe that redefines the dot context               |
 | `.FieldName` (field access)                     | Jumps to the field or method declaration in the Go source file        |
 | `.Nested.Field` (nested field access)           | Jumps to whichever identifier the cursor is on                        |
+| `kebabCase` (user defined global function)      | Jumps to the function declaration in the Go source file               |
 
 ## Supported node types
 
@@ -52,3 +53,11 @@ If no `gotype` hint is present, or the type cannot be loaded, the handler return
 {{ .DisplayName }}    {{-/* ctrl+click jumps to DisplayName method in model.go */-}}
 {{ .Address.City }}   {{-/* ctrl+click on Address -> Address field; on City -> City field */-}}
 ```
+
+### User-defined global functions (`functionName`)
+
+When the cursor is on a custom global function, the handler knows the functions introduced by the function maps (funcmaps) with the `//tmpl:func "global"` from the global functions store in `types`. Then it returns a `Location` pointing to the exact line in the Go source file where that function was defined.
+
+If it was an inline function, it will jump to the line in the funcmap where it was defined.
+
+It does not work for builtin global functions, or those that were not imported via the `//tmpl:func` comment.
