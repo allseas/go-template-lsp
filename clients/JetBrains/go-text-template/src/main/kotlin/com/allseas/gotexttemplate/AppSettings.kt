@@ -28,6 +28,7 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
                 "syntaxError" to "error",
                 "hintLoadFailure" to "warning",
                 "unknownRangeType" to "warning",
+                "emptyDefineName" to "warning",
             ),
         var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
