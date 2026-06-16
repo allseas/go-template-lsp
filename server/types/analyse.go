@@ -971,7 +971,9 @@ func analyseCommand(
 					)
 				}
 			}
-			typeCmd.typ = t.Results().At(0).Type()
+			if t.Results().Len() > 0 {
+				typeCmd.typ = t.Results().At(0).Type()
+			}
 			return typeCmd
 		}
 
@@ -991,7 +993,9 @@ func analyseCommand(
 				)
 			}
 		}
-		typeCmd.typ = t.Results().At(0).Type()
+		if t.Results().Len() > 0 {
+			typeCmd.typ = t.Results().At(0).Type()
+		}
 	default:
 		typeCmd.typ = resultType
 	}
