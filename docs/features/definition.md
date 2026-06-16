@@ -27,6 +27,11 @@ When the cursor is on any `VariableNode`, the handler walks the entire AST and c
 {{ $test }}        {{-/* ctrl+click here shows both definitions */-}}
 ```
 
+> **Client behaviour difference:** The language server always returns all declaration sites for a
+> redeclared variable. VS Code surfaces all of them in the *Go to Definition* result list. JetBrains
+> (via LSP4IJ) currently only navigates to the **first** result returned by the server - subsequent
+> declaration sites are silently ignored. This is a limitation of the LSP4IJ client, not the server.
+
 ### Dot (`.`)
 
 When the cursor is on a `DotNode`, the handler uses `buildPath` to reconstruct the path from the tree root to the node, then walks the path backwards looking for the nearest `RangeNode` or `WithNode`. The pipe of that branch node is returned as the definition - since `range` and `with` are the constructs that redefine the dot context.

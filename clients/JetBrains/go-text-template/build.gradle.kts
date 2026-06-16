@@ -91,6 +91,9 @@ tasks.test {
 
 tasks.processTestResources {
     from(sourceSets.main.get().resources)
+    from(rootProject.file("../../../test/testcases")) {
+        into("testcases")
+    }
     dependsOn("copyServerBin")
 }
 

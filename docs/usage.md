@@ -91,12 +91,12 @@ Hovering over any node in a template file shows a tooltip. Examples:
 
 <kbd>Ctrl</kbd>+Click (or <kbd>F12</kbd>) on a symbol jumps to its definition:
 
-| Symbol                       | Behaviour                                                                                            |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `$x` (variable)              | Jumps to all `:=` declarations of `$x` in the file                                                   |
-| `.` inside `range` or `with` | Jumps to the `range`/`with` pipe that redefines dot                                                  |
-| `.FieldName`                 | Jumps to the field or method declaration in the Go source file (requires a [type hint](#type-hints)) |
-| `.Address.City`              | Jumps to whichever identifier the cursor is on                                                       |
+| Symbol                       | Behaviour                                                                                                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$x` (variable)              | Jumps to all `:=` declarations of `$x` in the file (VS Code shows all; JetBrains navigates to the first - see [client differences](features/definition.md#variables-x)) |
+| `.` inside `range` or `with` | Jumps to the `range`/`with` pipe that redefines dot                                                                                                                     |
+| `.FieldName`                 | Jumps to the field or method declaration in the Go source file (requires a [type hint](#type-hints))                                                                    |
+| `.Address.City`              | Jumps to whichever identifier the cursor is on                                                                                                                          |
 
 ### Find References
 
