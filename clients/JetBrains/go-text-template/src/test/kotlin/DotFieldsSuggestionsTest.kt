@@ -223,22 +223,26 @@ class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
         assertDoesntContain(suggestions, ".CustomerName", ".Items", ".TotalAmount")
     }
 
-//    Currently Broken, see Issue 102
-//    fun testPartialFieldNameFiltering() {
-//        myFixture.configureByText(
-//            "test_partial.txt.tmpl",
-//            """
-//            {{/*gotype: cg/model.Order*/}}
-//            {{.Cus<caret>}}
-//            """.trimIndent(),
-//        )
-//
-//        myFixture.complete(CompletionType.BASIC)
-//        val suggestions = myFixture.lookupElementStrings
-//        assertNotNull(suggestions)
-//        assertContainsElements(suggestions!!, "CustomerName")
-//        assertDoesntContain(suggestions, "Address", "Items", "Paid")
-//    }
+    fun testPartialFieldNameFiltering() {
+        myFixture.configureByText(
+            "test_partial.txt.tmpl",
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{.Cus<caret>}}
+            """.trimIndent(),
+        )
+
+        myFixture.complete(CompletionType.BASIC)
+        val suggestions = myFixture.lookupElementStrings
+        // Only one suggestion, so returns null and autocompletes
+        assertNull(suggestions)
+        myFixture.checkResult(
+            """
+            {{/*gotype: cg/model.Order*/}}
+            {{.CustomerName}}
+            """.trimIndent(),
+        )
+    }
 
     fun testNoBuiltinsInDotCompletions() {
         myFixture.configureByText(
