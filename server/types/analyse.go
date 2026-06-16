@@ -572,11 +572,11 @@ func walkFieldChainWithMethodInfo(
 	errNode Node,
 	base types.Type,
 	path []string,
-) (types.Type, []bool, bool) {
+) (types.Type, []bool) {
 	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
 	if base != nil {
 		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
-			return types.NewInterfaceType(nil, nil).Complete(), make([]bool, len(path)), true
+			return types.NewInterfaceType(nil, nil).Complete(), make([]bool, len(path))
 		}
 	}
 
@@ -593,7 +593,7 @@ func walkFieldChainWithMethodInfo(
 				currentType.String(),
 				name,
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), isMethod, false
+			return types.NewInterfaceType(nil, nil).Complete(), isMethod
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -609,7 +609,7 @@ func walkFieldChainWithMethodInfo(
 					name,
 					currentType.String(),
 				)
-				return types.NewInterfaceType(nil, nil).Complete(), isMethod, false
+				return types.NewInterfaceType(nil, nil).Complete(), isMethod
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -634,10 +634,10 @@ func walkFieldChainWithMethodInfo(
 				name,
 				currentType.String(),
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), isMethod, false
+			return types.NewInterfaceType(nil, nil).Complete(), isMethod
 		}
 	}
-	return currentType, isMethod, true
+	return currentType, isMethod
 }
 
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
@@ -710,7 +710,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if baseType == nil {
 		return v
 	}
-	if typ, isMethod, _ := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); typ != nil {
+	if typ, isMethod := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); typ != nil {
 		v.typ = typ
 		v.isMethod = isMethod
 	}
@@ -734,7 +734,7 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		return fn
 	}
 
-	if typ, isMethod, _ := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); typ != nil {
+	if typ, isMethod := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); typ != nil {
 		fn.typ = typ
 		fn.isMethod = isMethod
 	}
@@ -908,96 +908,58 @@ func analyseCommand(
 
 	switch t := resultType.Underlying().(type) {
 	case *types.Signature:
-		if !t.Variadic() && t.Params().Len() != len(args) {
-			if ok, _, _ := isTemplateSeq(t); ok {
-				typeCmd.typ = t
-				return typeCmd
-			}
+		result, shouldReturn := validateCommandArguments(t, args, typeCmd, ctx)
+		if shouldReturn {
+			return result
+		}
+	default:
+		typeCmd.typ = resultType
+	}
+
+	return typeCmd
+}
+
+func validateCommandArguments(
+	t *types.Signature,
+	args []types.Type,
+	typeCmd *CommandNode,
+	ctx *analysisCtx,
+) (*CommandNode, bool) {
+	if !t.Variadic() && t.Params().Len() != len(args) {
+		if ok, _, _ := isTemplateSeq(t); ok {
+			typeCmd.typ = t
+			return typeCmd, true
+		}
+		ctx.errorf(
+			typeCmd,
+			ErrorArgumentNumberMismatch,
+			"Expected %d arguments but got %d",
+			t.Params().Len(),
+			len(args),
+		)
+		if t.Results().Len() > 0 {
+			typeCmd.typ = t.Results().At(0).Type()
+		} else {
+			typeCmd.typ = t
+		}
+		return typeCmd, true
+	}
+
+	if t.Variadic() {
+		if len(args) < t.Params().Len()-1 {
 			ctx.errorf(
 				typeCmd,
 				ErrorArgumentNumberMismatch,
-				"Expected %d arguments but got %d",
-				t.Params().Len(),
+				"Expected at least %d arguments but got %d",
+				t.Params().Len()-1,
 				len(args),
 			)
-			if t.Results().Len() > 0 {
-				typeCmd.typ = t.Results().At(0).Type()
-			} else {
-				typeCmd.typ = t
-			}
-			return typeCmd
 		}
-
-		if t.Variadic() {
-			if len(args) < t.Params().Len()-1 {
-				ctx.errorf(
-					typeCmd,
-					ErrorArgumentNumberMismatch,
-					"Expected at least %d arguments but got %d",
-					t.Params().Len()-1,
-					len(args),
-				)
-			}
-			nonVariadicCount := t.Params().Len() - 1
-			if nonVariadicCount > len(args) {
-				nonVariadicCount = len(args)
-			}
-			for i := 0; i < nonVariadicCount; i++ {
-				if !typesCompatible(t.Params().At(i).Type(), args[i]) {
-					tstring := "nil"
-					if args[i] != nil {
-						tstring = args[i].String()
-					}
-					ctx.errorf(
-						typeCmd,
-						ErrorTypeInvalidCommand,
-						"argument %d: expected type %s but got %s",
-						i+1,
-						t.Params().At(i).Type().String(),
-						tstring,
-					)
-				} else if isEmptyInterface(args[i]) && !isEmptyInterface(t.Params().At(i).Type()) {
-					ctx.errorf(
-						typeCmd,
-						ErrorUnknownType,
-						"argument %d: any value passed to %s parameter, may fail at runtime",
-						i+1,
-						t.Params().At(i).Type().String(),
-					)
-				}
-			}
-			variadicType := t.Params().At(t.Params().Len() - 1).Type().(*types.Slice).Elem()
-			for i := t.Params().Len() - 1; i < len(args); i++ {
-				if !typesCompatible(variadicType, args[i]) {
-					tstring := "nil"
-					if args[i] != nil {
-						tstring = args[i].String()
-					}
-					ctx.errorf(
-						typeCmd,
-						ErrorTypeInvalidCommand,
-						"variadic argument %d: expected type %s but got %s",
-						i+1,
-						variadicType.String(),
-						tstring,
-					)
-				} else if isEmptyInterface(args[i]) && !isEmptyInterface(variadicType) {
-					ctx.errorf(
-						typeCmd,
-						ErrorUnknownType,
-						"variadic argument %d: any value passed to %s parameter, may fail at runtime",
-						i+1,
-						variadicType.String(),
-					)
-				}
-			}
-			if t.Results().Len() > 0 {
-				typeCmd.typ = t.Results().At(0).Type()
-			}
-			return typeCmd
+		nonVariadicCount := t.Params().Len() - 1
+		if nonVariadicCount > len(args) {
+			nonVariadicCount = len(args)
 		}
-
-		for i := 0; i < t.Params().Len(); i++ {
+		for i := 0; i < nonVariadicCount; i++ {
 			if !typesCompatible(t.Params().At(i).Type(), args[i]) {
 				tstring := "nil"
 				if args[i] != nil {
@@ -1021,14 +983,65 @@ func analyseCommand(
 				)
 			}
 		}
+		variadicType := t.Params().At(t.Params().Len() - 1).Type().(*types.Slice).Elem()
+		for i := t.Params().Len() - 1; i < len(args); i++ {
+			if !typesCompatible(variadicType, args[i]) {
+				tstring := "nil"
+				if args[i] != nil {
+					tstring = args[i].String()
+				}
+				ctx.errorf(
+					typeCmd,
+					ErrorTypeInvalidCommand,
+					"variadic argument %d: expected type %s but got %s",
+					i+1,
+					variadicType.String(),
+					tstring,
+				)
+			} else if isEmptyInterface(args[i]) && !isEmptyInterface(variadicType) {
+				ctx.errorf(
+					typeCmd,
+					ErrorUnknownType,
+					"variadic argument %d: any value passed to %s parameter, may fail at runtime",
+					i+1,
+					variadicType.String(),
+				)
+			}
+		}
 		if t.Results().Len() > 0 {
 			typeCmd.typ = t.Results().At(0).Type()
 		}
-	default:
-		typeCmd.typ = resultType
+		return typeCmd, true
 	}
 
-	return typeCmd
+	for i := 0; i < t.Params().Len(); i++ {
+		if !typesCompatible(t.Params().At(i).Type(), args[i]) {
+			tstring := "nil"
+			if args[i] != nil {
+				tstring = args[i].String()
+			}
+			ctx.errorf(
+				typeCmd,
+				ErrorTypeInvalidCommand,
+				"argument %d: expected type %s but got %s",
+				i+1,
+				t.Params().At(i).Type().String(),
+				tstring,
+			)
+		} else if isEmptyInterface(args[i]) && !isEmptyInterface(t.Params().At(i).Type()) {
+			ctx.errorf(
+				typeCmd,
+				ErrorUnknownType,
+				"argument %d: any value passed to %s parameter, may fail at runtime",
+				i+1,
+				t.Params().At(i).Type().String(),
+			)
+		}
+	}
+	if t.Results().Len() > 0 {
+		typeCmd.typ = t.Results().At(0).Type()
+	}
+	return nil, false
 }
 
 // isEmptyInterface reports whether t is the empty interface (i.e. `any` / `interface{}`).
