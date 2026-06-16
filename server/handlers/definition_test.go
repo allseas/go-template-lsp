@@ -631,3 +631,93 @@ func TestDefinitionMultiDefines(t *testing.T) {
 		})
 	}
 }
+
+// TestDefinitionVariableChainBaseIdent verifies that clicking on the base variable
+// ($item) in a chained expression like {{ $item.IsExpensive }} jumps to the
+// variable's declaration (the range pipe), not to the Go source file.
+func TestDefinitionVariableChainBaseIdent(t *testing.T) {
+	src := "{{ range $item := .Items }}\n{{ $item.IsExpensive }}\n{{ end }}"
+	uri := "file:///def-var-chain-base.tmpl"
+	lt := definitionOrderType(t)
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 4),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	locations, ok := result.([]protocol.Location)
+	require.True(t, ok, "expected []protocol.Location for base variable, got %T", result)
+	require.NotEmpty(t, locations)
+	assert.Equal(t, uri, locations[0].URI)
+	assert.Equal(t, uint32(0), locations[0].Range.Start.Line)
+}
+
+func TestDefinitionVariableChainMethodIdent(t *testing.T) {
+	src := "{{ range $item := .Items }}\n{{ $item.IsExpensive }}\n{{ end }}"
+	uri := "file:///def-var-chain-method.tmpl"
+	lt := definitionOrderType(t)
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 9),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location for chained method, got %T", result)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	// Item.IsExpensive is defined at line 57 in model.go (0-indexed: 56)
+	assert.Equal(t, uint32(56), loc.Range.Start.Line)
+}
+
+// TestDefinitionVariableChainFieldIdent verifies that clicking on a chained struct
+// field (.SKU) in {{ $item.SKU }} jumps to the Go source definition.
+func TestDefinitionVariableChainFieldIdent(t *testing.T) {
+	src := "{{ range $item := .Items }}\n{{ $item.SKU }}\n{{ end }}"
+	uri := "file:///def-var-chain-field.tmpl"
+	lt := definitionOrderType(t)
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 9),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location for chained field, got %T", result)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	// Item.SKU is defined at line 40 in model.go (0-indexed: 39)
+	assert.Equal(t, uint32(39), loc.Range.Start.Line)
+}

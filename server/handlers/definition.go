@@ -53,7 +53,12 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 			decls := FindVarDeclarationsTyped(tree.Root, varName)
 			for _, decl := range decls {
 				if decl.ValueType() != nil {
-					return resolveFieldChainDefinition(loadedType, decl.ValueType(), target.Ident[1:], identIdx-1)
+					return resolveFieldChainDefinition(
+						loadedType,
+						decl.ValueType(),
+						target.Ident[1:],
+						identIdx-1,
+					)
 				}
 			}
 			return nil, nil
