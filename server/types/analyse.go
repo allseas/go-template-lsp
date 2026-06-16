@@ -659,16 +659,6 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 		return ident
 	}
 
-	// if no function with that name -> resolve a method on the current dot type
-	if named := dotAsNamed(ctx.dotType); named != nil {
-		for _, m := range NamedMethods(named) {
-			if m.Name == name && m.Func != nil {
-				ident.typ = m.Func.Type()
-				return ident
-			}
-		}
-	}
-
 	ctx.errorf(ident, ErrorTypeInvalidFunction, "undefined function: %s", name)
 	return ident
 }
