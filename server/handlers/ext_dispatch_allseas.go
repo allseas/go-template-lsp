@@ -23,6 +23,7 @@ func extDefinitionDotScope(n types.Node, uri, text string) (protocol.Location, b
 	return protocol.Location{}, false
 }
 
+// WelcomeMessage informs which version of the extension the user is runnning
 func WelcomeMessage() string {
 	return "ALLSEAS"
 }

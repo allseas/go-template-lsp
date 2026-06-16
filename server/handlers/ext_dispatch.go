@@ -14,7 +14,7 @@ import (
 func extDefinitionDotScope(_ types.Node, _, _ string) (protocol.Location, bool) {
 	return protocol.Location{}, false
 }
-
+// WelcomeMessage informs which version of the extension the user is runnning
 func WelcomeMessage() string {
 	return "NOT ALLSEAS"
 }
