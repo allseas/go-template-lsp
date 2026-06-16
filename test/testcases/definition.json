@@ -29,5 +29,52 @@
       "targetLine": 0,
       "minCount": 1
     }
+  },
+  {
+    "name": "Field jumps to struct field declaration",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .C<cursor>ustomerName }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 89
+    }
+  },
+  {
+    "name": "Method jumps to method declaration",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .D<cursor>isplayName }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 98
+    }
+  },
+  {
+    "name": "Nested field first identifier jumps to field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .A<cursor>ddress.City }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 91
+    }
+  },
+  {
+    "name": "Nested field second identifier jumps to nested field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .Address.C<cursor>ity }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 7
+    }
+  },
+  {
+    "name": "Unknown field returns no results",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .N<cursor>onExistent }}",
+    "expected": {
+      "noResult": true
+    }
   }
 ]
