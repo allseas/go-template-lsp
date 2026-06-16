@@ -1,0 +1,254 @@
+[
+  {
+    "name": "Dollar sign always suggested",
+    "content": "{{<cursor>}}",
+    "expectedIncludes": ["$"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Dot always suggested",
+    "content": "{{<cursor>}}",
+    "expectedIncludes": ["."],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Multiple variables suggested",
+    "content": "{{$a := a}}\n{{$b := b}}\n{{$c := c}}\n{{$d := d}}\n{{$e := e}}\n{{<cursor>}}",
+    "expectedIncludes": ["$a", "$b", "$c", "$d", "$e"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variables suggested in range scope",
+    "content": "{{range $a, $b := .}}\n{{<cursor>}}\n{{end}}",
+    "expectedIncludes": ["$a", "$b"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variables not suggested outside range scope",
+    "content": "\n{{range $a, $b := .}}\n{{end}}\n{{<cursor>}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["$a", "$b"]
+  },
+  {
+    "name": "Variable suggested on partial match with dollar sign",
+    "content": "{{$variable := 123}}\n{{$b := b}}\n{{$va<cursor>}}",
+    "expectedIncludes": ["variable"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variable suggested on partial match without dollar sign",
+    "content": "{{$variable := 123}}\n{{$b := b}}\n{{va<cursor>}}",
+    "expectedIncludes": ["$variable"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variables suggested in with scope",
+    "content": "{{with $x := .Field}}\n    {{<cursor>}}\n{{end}}",
+    "expectedIncludes": ["$x"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variables suggested in if scope",
+    "content": "{{if $y := .Field}}\n    {{<cursor>}}\n{{end}}",
+    "expectedIncludes": ["$y"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variables not suggested outside with scope",
+    "content": "{{with $x := .Field}}{{end}}\n{{<cursor>}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["$x"]
+  },
+  {
+    "name": "Variables not suggested outside if scope",
+    "content": "{{if $y := .Field}}{{end}}\n{{<cursor>}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["$y"]
+  },
+  {
+    "name": "Variables not available in else block of with",
+    "content": "{{with $x := .Field}}\n{{else}}\n    {{<cursor>}}\n{{end}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["$x"]
+  },
+  {
+    "name": "Variables available in else block of if",
+    "content": "{{if $y := .Field}}\n{{else}}\n    {{<cursor>}}\n{{end}}",
+    "expectedIncludes": ["$y"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variables not available in else block of range",
+    "content": "{{range $k, $v := .Field}}\n{{else}}\n    {{<cursor>}}\n{{end}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["$k", "$v"]
+  },
+  {
+    "name": "Multi-assignment variables suggested",
+    "content": "{{$a, $b := myFunc}}\n{{<cursor>}}",
+    "expectedIncludes": ["$a", "$b"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variables not suggested inside comments",
+    "content": "{{$va := 1}}\n{{/* {{$v<cursor>}} */}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["$va"]
+  },
+  {
+    "name": "Nested scope variable deduplicated",
+    "content": "{{$a := 1}}\n{{range .}}\n    {{$a := 2}}\n    {{<cursor>}}\n{{end}}",
+    "expectedIncludes": ["$a"],
+    "expectedExcludes": [],
+    "expectedIncludesExactlyOnce": ["$a"]
+  },
+  {
+    "name": "Variable suggested in pipeline function argument",
+    "content": "{{$myVar := 123}}\n{{ \"foo\" | myFunc $<cursor> }}",
+    "expectedIncludes": ["myVar"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variable suggested in positional function argument",
+    "content": "{{$myVar := 123}}\n{{ myFunc 123 \"test\" $<cursor> }}",
+    "expectedIncludes": ["myVar"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Variables not suggested after dot field access",
+    "content": "{{$user := .}}\n{{$user.<cursor>}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["$user"]
+  },
+  {
+    "name": "Variables isolated between define blocks",
+    "content": "{{define \"foo\"}}\n   {{$fooVar := 1}}\n{{end}}\n\n{{define \"bar\"}}\n   {{<cursor>}}\n{{end}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["$fooVar"]
+  },
+  {
+    "name": "All dot fields and methods recommended",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{<cursor>}}",
+    "poll": true,
+    "expectedIncludes": [
+      ".Address",
+      ".CustomerName",
+      ".DisplayName",
+      ".Items",
+      ".Paid",
+      ".TotalAmount"
+    ],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Nested field completions on struct field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.Address.<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["Street", "City", "Country", "Zip"],
+    "expectedExcludes": ["CustomerName", "Items"]
+  },
+  {
+    "name": "Nested method completions on struct field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.Address.<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["Line", "IsLocal", "ZipCode"],
+    "expectedExcludes": ["DisplayName", "ItemCount"]
+  },
+  {
+    "name": "Methods recommended on top-level dot",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{<cursor>}}",
+    "poll": true,
+    "expectedIncludes": [
+      ".DisplayName",
+      ".Summary",
+      ".ItemCount",
+      ".IsLargeOrder",
+      ".Format"
+    ],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Invalid methods excluded",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{<cursor>}}",
+    "poll": true,
+    "expectedIncludes": [".CustomerName"],
+    "expectedExcludes": [".badReturn", ".wrongSecond"]
+  },
+  {
+    "name": "No completions on primitive field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.CustomerName.<cursor>}}",
+    "vscodeOnly": true,
+    "expectedIncludes": [],
+    "expectedExcludes": ["ID", "CustomerName", "Street"]
+  },
+  {
+    "name": "Dot field completions inside if block",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{if .Paid}}\n{{<cursor>}}\n{{end}}",
+    "poll": true,
+    "expectedIncludes": [".Address", ".CustomerName", ".Items"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Dot field completions inside range block Item type",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{range .Items}}\n{{<cursor>}}\n{{end}}",
+    "poll": true,
+    "expectedIncludes": [".SKU", ".Name", ".Qty", ".UnitPrice"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Dot field completions inside range block Item methods",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{range .Items}}\n{{<cursor>}}\n{{end}}",
+    "poll": true,
+    "expectedIncludes": [".Label", ".Total", ".IsExpensive", ".Describe"],
+    "expectedExcludes": [".DisplayName", ".ItemCount"]
+  },
+  {
+    "name": "Dot field completions inside with block Address type",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{with .Address}}\n{{<cursor>}}\n{{end}}",
+    "poll": true,
+    "expectedIncludes": [".Street", ".City", ".Country", ".Zip"],
+    "expectedExcludes": [".CustomerName", ".Items"]
+  },
+  {
+    "name": "No builtins in dot completions",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["CustomerName"],
+    "expectedExcludes": ["len", "eq", "html", "print"]
+  },
+  {
+    "name": "Dot field completions in pipe expression",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{<cursor> | len}}",
+    "poll": true,
+    "expectedIncludes": [".Address", ".CustomerName", ".Items"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "No struct field completions without gotype",
+    "content": "{{.<cursor>}}",
+    "expectedIncludes": [],
+    "expectedExcludes": ["Address", "CustomerName", "Items"]
+  },
+  {
+    "name": "Dot field completions with Address gotype",
+    "content": "{{/*gotype: cg/model.Address*/}}\n{{<cursor>}}",
+    "poll": true,
+    "expectedIncludes": [".Street", ".City", ".Country", ".Zip"],
+    "expectedExcludes": [".CustomerName", ".Items"]
+  },
+  {
+    "name": "Multiple chained dots on recursive type",
+    "content": "{{/*gotype: cg/model.Tree*/}}\n{{.Left.Left.Left.Left.Left.<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["Left", "Right"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Partial field name auto-inserts single match",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{.Cus<cursor>}}",
+    "poll": true,
+    "expectedIncludes": ["CustomerName"],
+    "expectedExcludes": [],
+    "expectedResult": "{{/*gotype: cg/model.Order*/}}\n{{.CustomerName}}"
+  }
+]

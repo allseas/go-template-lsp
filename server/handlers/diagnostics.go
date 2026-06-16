@@ -116,6 +116,7 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 			diagnostics = append(diagnostics, collectTemplateDiagnostics(tt, text)...)
 		}
 		diagnostics = append(diagnostics, collectHintLoadFailureDiagnostics(doc, text)...)
+		diagnostics = append(diagnostics, collectEmptyDefineNameDiagnostics(doc, text)...)
 	}
 
 	return diagnostics
@@ -139,6 +140,41 @@ func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Di
 		rng := expandToFullBracketsFromOffset(offset, text)
 		diagnostics = append(diagnostics, createDiagnostic(
 			"gotype: could not load type: "+errMsg,
+			rng,
+			severity,
+		))
+	}
+	return diagnostics
+}
+
+// collectEmptyDefineNameDiagnostics returns diagnostics for define blocks with empty names.
+func collectEmptyDefineNameDiagnostics(doc *document, text string) []protocol.Diagnostic {
+	if doc == nil || len(doc.typedTrees) == 0 {
+		return nil
+	}
+	severity := GetConfig().Diagnostics[types.ErrorTypeEmptyDefineName]
+	if severity == DiagnosticSeverityDisabled {
+		return nil
+	}
+
+	var diagnostics []protocol.Diagnostic
+	for name, t := range doc.typedTrees {
+		if t == nil || t.Root == nil || name == "t" || name != "" {
+			continue
+		}
+
+		bodyStart := int(t.Root.Position())
+		blockEnd := int(t.End)
+
+		// Search backward from the body start to find the nearest {{define.
+		blockStart := bodyStart
+		if ms := reDefine.FindAllStringIndex(text[:bodyStart], -1); ms != nil {
+			blockStart = ms[len(ms)-1][0]
+		}
+
+		rng := bytesToRange(text, blockStart, blockEnd)
+		diagnostics = append(diagnostics, createDiagnostic(
+			"define block has an empty name",
 			rng,
 			severity,
 		))

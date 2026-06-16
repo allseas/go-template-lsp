@@ -111,10 +111,12 @@
                         "undeclaredVariable": "error",
                         "doubleDeclaredVariable": "warning",
                         "invalidTemplateArg": "error",
+                        "argumentNumberMismatch": "error",
                         "unknownType": "information",
                         "syntaxError": "error",
                         "hintLoadFailure": "warning",
-                        "unknownRangeType": "warning"
+                        "unknownRangeType": "warning",
+                        "emptyDefineName": "warning"
                     },
                     "additionalProperties": {
                         "type": "string",

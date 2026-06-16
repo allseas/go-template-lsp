@@ -1,0 +1,81 @@
+[
+  {
+    "name": "Variable definition jumps to declaration",
+    "content": "{{ $test := 0 }}\n{{ $te<cursor>st }}",
+    "expected": {
+      "targetLine": 0,
+      "minCount": 1
+    }
+  },
+  {
+    "name": "Redeclared variable shows at least one definition",
+    "content": "{{ $test := 0 }}\n{{ $test }}\n{{ $test := 1 }}\n{{ $te<cursor>st }}",
+    "expected": {
+      "minCount": 1
+    }
+  },
+  {
+    "name": "Redeclared variable shows multiple definitions",
+    "content": "{{ $test := 0 }}\n{{ $test }}\n{{ $test := 1 }}\n{{ $te<cursor>st }}",
+    "vscodeOnly": true,
+    "expected": {
+      "count": 2
+    }
+  },
+  {
+    "name": "Dot in range jumps to range pipe",
+    "content": "{{- range .Join }}\n{{ <cursor>. }}\n{{- end }}",
+    "expected": {
+      "targetLine": 0,
+      "minCount": 1
+    }
+  },
+  {
+    "name": "Field jumps to struct field declaration",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .C<cursor>ustomerName }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 89
+    }
+  },
+  {
+    "name": "Method jumps to method declaration",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .D<cursor>isplayName }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 98
+    }
+  },
+  {
+    "name": "Nested field first identifier jumps to field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .A<cursor>ddress.City }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 91
+    }
+  },
+  {
+    "name": "Nested field second identifier jumps to nested field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .Address.C<cursor>ity }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 7
+    }
+  },
+  {
+    "name": "Unknown field returns no results",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ .N<cursor>onExistent }}",
+    "vscodeOnly": true,
+    "expected": {
+      "noResult": true
+    }
+  }
+]

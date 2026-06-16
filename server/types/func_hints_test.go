@@ -101,8 +101,8 @@ func O() template.FuncMap {
 	file, err := parser.ParseFile(fset, "x.go", src, parser.ParseComments)
 	require.NoError(t, err)
 
-	out := map[string]*types.Func{}
-	collectGlobalFuncs(file, nil, out)
+	out := map[string]GlobalFuncEntry{}
+	collectGlobalFuncs(file, nil, fset, out)
 
 	assert.Contains(t, out, "a")
 	assert.Contains(t, out, "b")
