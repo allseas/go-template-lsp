@@ -254,23 +254,21 @@ func TestExtractBranchNodes(t *testing.T) {
 
 func TestCollectDeclarations(t *testing.T) {
 	ctx := &Context{Vars: map[string]parse.Node{}}
-	assert.Nil(t, collectDeclarations(nil, "", ctx))
+	collectDeclarations(nil, ctx)
 
 	pipeWithNil := &parse.PipeNode{Decl: []*parse.VariableNode{nil}}
-	assert.Empty(t, collectDeclarations(pipeWithNil, "", ctx))
+	collectDeclarations(pipeWithNil, ctx)
 
-	text := "{{ $newVar := . }}"
 	declVar := &parse.VariableNode{Ident: []string{"$newVar"}}
 	pipe := &parse.PipeNode{Decl: []*parse.VariableNode{declVar}}
 
-	diags := collectDeclarations(pipe, text, ctx)
-	assert.Empty(t, diags)
+	collectDeclarations(pipe, ctx)
 	assert.NotNil(t, ctx.Vars["$newVar"])
 
-	diags = collectDeclarations(pipe, text, ctx)
-	require.Len(t, diags, 1)
-	assert.Contains(t, diags[0].Message, "duplicate variable declaration: $newVar")
-	assert.Equal(t, protocol.DiagnosticSeverityWarning, *diags[0].Severity)
+	// Duplicate declarations are reported by the type analysis, not here, so a
+	// second declaration registers the variable without emitting diagnostics.
+	collectDeclarations(pipe, ctx)
+	assert.NotNil(t, ctx.Vars["$newVar"])
 }
 
 func TestCheckPipeUsage(t *testing.T) {
@@ -332,8 +330,7 @@ func TestDeclareNode(t *testing.T) {
 
 	for _, tc := range tests {
 		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-		diags := declareNode(tc.node, tc.text, ctx)
-		assert.Empty(t, diags, tc.name)
+		declareNode(tc.node, tc.text, ctx)
 		assert.NotNil(t, ctx.Vars[tc.varName], tc.name)
 	}
 }
@@ -438,8 +435,9 @@ func TestCollectDeclarations_RootIdent(t *testing.T) {
 	declVar := &parse.VariableNode{Ident: []string{"$"}}
 	pipe := &parse.PipeNode{Decl: []*parse.VariableNode{declVar}}
 
-	diags := collectDeclarations(pipe, "{{ $ := . }}", ctx)
-	assert.Empty(t, diags)
+	collectDeclarations(pipe, ctx)
+	// "$" has no name after trimming the prefix, so it is not registered.
+	assert.Nil(t, ctx.Vars["$"])
 }
 
 func TestCollectDeclarations_Assignment(t *testing.T) {
@@ -449,8 +447,7 @@ func TestCollectDeclarations_Assignment(t *testing.T) {
 		Decl:     []*parse.VariableNode{declVar},
 		IsAssign: true,
 	}
-	diags := collectDeclarations(pipe, "{{ $x = . }}", ctx)
-	assert.Empty(t, diags)
+	collectDeclarations(pipe, ctx)
 	assert.Equal(t, pipe, ctx.Vars["$x"])
 }
 

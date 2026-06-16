@@ -10,10 +10,6 @@ func msgUndeclaredVariable(text string, offset int, name string) string {
 	return withPos(text, offset, "undeclared variable: "+name)
 }
 
-func msgDuplicateDeclaration(text string, offset int, name string) string {
-	return withPos(text, offset, "duplicate variable declaration: "+name)
-}
-
 func msgParseError(text string, offset int, str string) string {
 	return withPos(text, offset, "parse error: "+str)
 }

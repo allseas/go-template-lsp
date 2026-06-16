@@ -231,7 +231,7 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 	if ctx == nil || node == nil {
 		return nil
 	}
-	diagnostics = append(diagnostics, declareNode(node, text, ctx)...)
+	declareNode(node, text, ctx)
 
 	config := GetConfig()
 
@@ -304,35 +304,32 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 }
 
 // declareNode registers variable declarations into ctx.Vars before validation runs.
-func declareNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
+func declareNode(node parse.Node, text string, ctx *Context) {
 	if ctx == nil || node == nil {
-		return nil
+		return
 	}
 	switch n := node.(type) {
 	case *parse.ActionNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
+			collectDeclarations(n.Pipe, ctx)
 		}
 	case *parse.RangeNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
+			collectDeclarations(n.Pipe, ctx)
 		}
 	case *parse.IfNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
+			collectDeclarations(n.Pipe, ctx)
 		}
 	}
-	return diagnostics
 }
 
-// collectDeclarations registers variables into ctx.Vars and flags duplicate := declarations.
-func collectDeclarations(
-	pipe *parse.PipeNode,
-	text string,
-	ctx *Context,
-) (diagnostics []protocol.Diagnostic) {
+// collectDeclarations registers variables into ctx.Vars so checkPipeUsage can
+// detect undeclared variable usage. Duplicate declaration detection is handled
+// by the type analysis (ErrorDoubleDeclaredVariable in types.analyse).
+func collectDeclarations(pipe *parse.PipeNode, ctx *Context) {
 	if pipe == nil || ctx == nil {
-		return nil
+		return
 	}
 	if ctx.Vars == nil {
 		ctx.Vars = make(map[string]parse.Node)
@@ -345,19 +342,6 @@ func collectDeclarations(
 			if name := strings.TrimPrefix(ident, "$"); name == "" {
 				continue
 			}
-			if ctx.Vars[ident] != nil && !pipe.IsAssign {
-				if GetConfig().Diagnostics[types.ErrorDoubleDeclaredVariable] != DiagnosticSeverityDisabled {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(
-							msgDuplicateDeclaration(text, int(decl.Position()), ident),
-							nodeToRange(decl, text),
-							GetConfig().Diagnostics[types.ErrorDoubleDeclaredVariable],
-						),
-					)
-				}
-				continue
-			}
 			if pipe.IsAssign {
 				ctx.Vars[ident] = pipe
 			} else {
@@ -365,7 +349,6 @@ func collectDeclarations(
 			}
 		}
 	}
-	return diagnostics
 }
 
 // checkPipeUsage flags any variable references in the pipe that were not previously declared.

@@ -99,7 +99,7 @@ suite("Diagnostics Test Suite", () => {
         assertWarning(diags[0], "First diagnostic");
         assert.strictEqual(
             diags[0].message,
-            "2:4: duplicate variable declaration: $variable",
+            "2:4: variable $variable already declared in this scope",
             "Diagnostic message should indicate variable redeclaration",
         );
     });
