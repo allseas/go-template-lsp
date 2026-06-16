@@ -113,7 +113,8 @@
                         "invalidTemplateArg": "error",
                         "unknownType": "information",
                         "syntaxError": "error",
-                        "hintLoadFailure": "warning"
+                        "hintLoadFailure": "warning",
+                        "unknownRangeType": "warning"
                     },
                     "additionalProperties": {
                         "type": "string",

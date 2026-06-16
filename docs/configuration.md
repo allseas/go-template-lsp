@@ -39,6 +39,7 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `invalidTemplateArg`   | `"error"`     | Template called with an argument of the wrong type        |
 | `unknownType`          | `"information"` | Type information is missing or could not be resolved    |
 | `hintLoadFailure`      | `"warning"`   | A `gotype` hint type could not be loaded or resolved      |
+| `unknownRangeType`     | `"warning"`   | Range over a value whose type could not be determined     |
 
 ## Configuration Hierarchy
 
@@ -70,7 +71,8 @@ You can create a `gotmpl.config.json` file in your project root to configure the
     "doubleDeclaredVariable": "warning",
     "invalidTemplateArg": "error",
     "unknownType": "information",
-    "hintLoadFailure": "warning"
+    "hintLoadFailure": "warning",
+    "unknownRangeType": "warning"
   },
   "enableAutocompletion": true,
   "trace": {

@@ -276,6 +276,7 @@ Go to *Settings -> Tools -> Go Text Template*. Application-level settings apply 
 | `diagnostics.syntaxError`           | string  | `"error"`    | Severity for syntax errors                             |
 | `diagnostics.doubleDeclaredVariable`| string  | `"warning"`  | Severity for duplicate variable declarations           |
 | `diagnostics.invalidFunction`       | string  | `"warning"`  | Severity for unknown functions                         |
+| `diagnostics.unknownRangeType`      | string  | `"warning"`  | Severity for ranging over a value of undetermined type |
 | `enableAutocompletion`              | boolean | `true`       | Enable completions                                     |
 | `trace.server`                      | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"` |
 

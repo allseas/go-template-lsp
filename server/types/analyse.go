@@ -56,6 +56,8 @@ const (
 	ErrorSyntaxError
 	// ErrorHintLoadFailure A gotype hint type could not be loaded/resolved
 	ErrorHintLoadFailure
+	// ErrorTypeUnknownRangeType Range over a value whose type could not be determined
+	ErrorTypeUnknownRangeType
 	// Add more error types as needed
 )
 
@@ -72,6 +74,7 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorUnknownType:            "unknownType",
 	ErrorSyntaxError:            "syntaxError",
 	ErrorHintLoadFailure:        "hintLoadFailure",
+	ErrorTypeUnknownRangeType:   "unknownRangeType",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
@@ -325,7 +328,7 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 	r.Pipe = analysePipe(n.Pipe, r, ctx)
 	typ := getRangeableType(r.Pipe.typ, ctx)
 	if r.Pipe.typ == nil {
-		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over untyped value")
+		ctx.errorf(r.Pipe, ErrorTypeUnknownRangeType, "cannot range over untyped value")
 	} else if typ == nil {
 		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over type %v", r.Pipe.typ)
 		ctx.dotType = nil
