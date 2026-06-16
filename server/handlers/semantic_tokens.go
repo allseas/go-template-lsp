@@ -193,7 +193,7 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 		walkCommandNode(n, tokens, text)
 
 	case *serverTypes.VariableNode:
-		emitToken(tokens, int(n.Position()), len(n.String()), ttVariable, 0)
+		walkVariableNode(n, tokens)
 
 	case *serverTypes.IdentifierNode:
 		// reached outside CommandNode first-arg - emit as function
@@ -259,6 +259,31 @@ func walkTemplateNode(n *serverTypes.TemplateNode, text string, tokens *[]rawTok
 	}
 	if n.Pipe != nil {
 		walkSemanticNode(n.Pipe, text, tokens)
+	}
+}
+
+// walkVariableNode emits semantic tokens for a VariableNode.
+// The base variable (Ident[0], e.g. "$item") is emitted as ttVariable.
+// Each chained segment (Ident[1:], e.g. ".IsExpensive") is emitted as
+// ttFunction when it resolves to a method, or ttProperty for struct fields.
+// When type information is not available the chained segments fall back to ttProperty.
+func walkVariableNode(n *serverTypes.VariableNode, tokens *[]rawToken) {
+	if len(n.Ident) == 0 {
+		return
+	}
+	pos := int(n.Position())
+	// Base variable: "$item"
+	emitToken(tokens, pos, len(n.Ident[0]), ttVariable, 0)
+	pos += len(n.Ident[0])
+	// Chained fields/methods: ".IsExpensive", ".Addr", etc.
+	for i := 1; i < len(n.Ident); i++ {
+		segLen := 1 + len(n.Ident[i]) // "." + ident
+		tt := ttProperty
+		if n.IdentIsMethod(i) {
+			tt = ttFunction
+		}
+		emitToken(tokens, pos, segLen, tt, 0)
+		pos += segLen
 	}
 }
 

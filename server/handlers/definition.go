@@ -45,9 +45,27 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 	switch target := node.(type) {
 	case *types.VariableNode:
 		varName := target.Ident[0]
+		identIdx := getVariableIdentIdx(target, offset)
 
+		// Cursor is on a chained field/method (e.g. ".IsExpensive" in "$item.IsExpensive"):
+		// resolve through the variable's type and navigate to the Go source.
+		if identIdx > 0 {
+			decls := FindVarDeclarationsTyped(tree.Root, varName)
+			for _, decl := range decls {
+				if decl.ValueType() != nil {
+					return resolveFieldChainDefinition(
+						loadedType,
+						decl.ValueType(),
+						target.Ident[1:],
+						identIdx-1,
+					)
+				}
+			}
+			return nil, nil
+		}
+
+		// Cursor is on the base variable: jump to its declaration.
 		var results []protocol.Location
-
 		decls := FindVarDeclarationsTyped(tree.Root, varName)
 		for _, decl := range decls {
 			results = append(results, protocol.Location{
@@ -114,22 +132,28 @@ func fieldNodeDefinition(
 	}
 
 	targetIdx := getFieldIdentIdx(target, offset)
+	return resolveFieldChainDefinition(loadedType, dotType, target.Ident, targetIdx)
+}
 
-	// log.Debug().
-	// 	Any("dotType", dotType).
-	// 	Any("Ident", target.Ident).
-	// 	Any("target", targetIdx).
-	// 	Any("cursorPosition", offset).
-	// 	Any("fieldNodePos", target.Pos).
-	// 	Msg("definition NodeField")
+// resolveFieldChainDefinition walks idents from baseType up to and including targetIdx,
+// then returns the LSP Location pointing at that field or method in the Go source.
+func resolveFieldChainDefinition(
+	loadedType *types.Tree,
+	baseType gotypes.Type,
+	idents []string,
+	targetIdx int,
+) (any, error) {
+	if loadedType == nil || loadedType.Fset == nil || baseType == nil || len(idents) == 0 {
+		return nil, nil
+	}
 
-	currentType := dotType
+	currentType := baseType
 	for i := 0; i <= targetIdx; i++ {
 		obj, _, _ := gotypes.LookupFieldOrMethod(
 			currentType,
 			true,
 			loadedType.Pkg,
-			target.Ident[i],
+			idents[i],
 		)
 		if obj == nil {
 			return nil, nil
@@ -227,4 +251,19 @@ func getFieldIdentIdx(target *types.FieldNode, offset int) int {
 		fieldOffset += len(ident)
 	}
 	return targetIdx
+}
+
+// getVariableIdentIdx returns the index into target.Ident that the cursor (offset) falls on.
+// Ident[0] is the base variable (e.g. "$item"); Ident[1:] are chained fields/methods.
+// Returns 0 when the cursor is on the base variable or the position is ambiguous.
+func getVariableIdentIdx(target *types.VariableNode, offset int) int {
+	pos := int(target.Pos)
+	for i, ident := range target.Ident {
+		end := pos + len(ident)
+		if offset >= pos && offset < end {
+			return i
+		}
+		pos = end + 1 // +1 for the '.' separator
+	}
+	return 0
 }

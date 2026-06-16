@@ -759,3 +759,58 @@ func TestDocumentSymbolsBlockStartRegression(t *testing.T) {
 	}
 	assert.Len(t, lines, 3, "all three symbols must start on distinct lines")
 }
+
+// TestVariableNodeTokenTypes verifies that chained variable expressions like
+// $item.IsExpensive split into a ttVariable token for $item and a ttFunction
+// (or ttProperty) token for the chained segment.
+func TestVariableNodeTokenTypes(t *testing.T) {
+	lt := semanticOrderType(t)
+
+	tests := []struct {
+		name           string
+		src            string
+		wantTokenCount int
+		wantTypes      []uint32
+	}{
+		{
+			// Plain variable with no chain: 4 tokens (range, $item decl, .Items, $item usage)
+			name:           "bare variable emits variable token",
+			src:            `{{ range $item := .Items }}{{ $item }}{{ end }}`,
+			wantTokenCount: 4,
+			wantTypes:      []uint32{ttKeyword, ttVariable, ttProperty, ttVariable},
+		},
+		{
+			// $item.SKU - SKU is a struct field -> ttProperty
+			// 5 tokens: range, $item decl, .Items, $item, .SKU
+			name:           "variable.field emits variable then property token",
+			src:            `{{ range $item := .Items }}{{ $item.SKU }}{{ end }}`,
+			wantTokenCount: 5,
+			wantTypes:      []uint32{ttKeyword, ttVariable, ttProperty, ttVariable, ttProperty},
+		},
+		{
+			// $item.IsExpensive - IsExpensive is a method -> ttFunction
+			// 5 tokens: range, $item decl, .Items, $item, .IsExpensive
+			name:           "variable.method emits variable then function token",
+			src:            `{{ range $item := .Items }}{{ $item.IsExpensive }}{{ end }}`,
+			wantTokenCount: 5,
+			wantTypes:      []uint32{ttKeyword, ttVariable, ttProperty, ttVariable, ttFunction},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uri := "file:///varchain-tok-" + tt.name + ".tmpl"
+			setDocWithTypedTree(t, uri, tt.src, lt)
+			defer store.Delete(uri)
+
+			result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Len(t, result.Data, tt.wantTokenCount*5, "unexpected token count")
+
+			for i, wantType := range tt.wantTypes {
+				assert.Equal(t, wantType, result.Data[i*5+3], "token[%d] tokenType", i)
+			}
+		})
+	}
+}

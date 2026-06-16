@@ -675,8 +675,9 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if baseType == nil {
 		return v
 	}
-	if typ, ok := walkFieldChain(ctx, v, baseType, n.Ident[1:]); ok {
+	if typ, isMethod, ok := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); ok {
 		v.typ = typ
+		v.isMethod = isMethod
 	}
 	return v
 }
