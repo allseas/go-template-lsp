@@ -21,54 +21,6 @@ const (
 	outputUntyped            // call, index, slice - dynamic, don't restrict
 )
 
-// funcAcceptsKind reports whether funcName can receive a piped value of kind.
-//
-// For functions with at least one concrete (non-interface{}) parameter the
-// check is performed by type: the function accepts the kind iff at least one
-// concrete param matches. For functions whose every parameter is interface{}
-// (all current builtins) the check falls back to the curated functionsAccepting
-// table, preserving the existing semantic filtering.
-func funcAcceptsKind(funcName string, kind outputKind) bool {
-	if kind == outputAny || kind == outputUntyped {
-		return true
-	}
-	fn := serverTypes.GlobalFuncs()[funcName]
-	if fn == nil {
-		return true // unknown signature - don't flag
-	}
-	sig, ok := fn.Type().(*types.Signature)
-	if !ok {
-		return true
-	}
-	params := sig.Params()
-	hasConcreteParam := false
-	for i := range params.Len() {
-		t := params.At(i).Type()
-		// Unwrap variadic slice wrapper.
-		if sl, isSl := t.Underlying().(*types.Slice); isSl {
-			t = sl.Elem()
-		}
-		if _, isIface := t.Underlying().(*types.Interface); isIface {
-			continue
-		}
-		hasConcreteParam = true
-		if basicTypeMatchesKind(t, kind) {
-			return true
-		}
-	}
-	if hasConcreteParam {
-		return false // concrete params present but none matched
-	}
-	// All params are interface{} - use the curated semantic list.
-	allowed := functionsAccepting[kind]
-	for _, name := range allowed {
-		if name == funcName {
-			return true
-		}
-	}
-	return false
-}
-
 // builtinOutput maps each Go text/template builtin to the outputKind its
 // result produces. It's used as a fallback by pipeOutputKind/pipeOutputInfo
 // when the analyser couldn't propagate a result type — which currently
