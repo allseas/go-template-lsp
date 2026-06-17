@@ -15,6 +15,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [1.0.0] - 2026-06-17
+
+### Added
+
+- Diagnostics on incorrect gotype hint.
+- Iterating over a struct diagnostic.
+- Go to definition of a user defined global function.
+- Type checking for functions.
+- Diagnostic of variable redeclaration in a range block.
+
+### Changed
+
+- Configuration for diagnostics can now change their severity and not only disable them.
+
+### Fixed
+
+- Funcmaps were not loaded when nested too much.
+- Go to definition and hover inside an if/with block.
+- Semantic tokens generation with multiple define blocks.
+- DocumentSymbols failing with define with empty name.
+- Field access on a variable node highlights and goes to definition correctly.
+- Field hover definition gave incorrect dot context type.
+- Incorrect comments are handled correctly by parser.
+
 ## [0.2.0] - 2026-06-12
 
 ### Added

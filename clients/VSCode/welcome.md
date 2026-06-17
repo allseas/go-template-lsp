@@ -1,13 +1,13 @@
 # Go Text Template Support
 
-You are running version **0.2.0**!
+You are running version **1.0.0**!
 
 - Semantic syntax highlighting
 - Auto completions (variables, built-in functions, user-defined functions, chained field accesses)
 - Go to Definition (`Ctrl+Click` or `F12`)
 - Find references (`Shift+Alt+F12`)
 - Hover information
-- Diagnostics (syntax errors, duplicate variables, type errors)
+- Diagnostics (syntax errors, duplicate variables, type errors, etc.)
 - Type checking on `{{ template }}` blocks
 - Wrap selection in a comment (`Ctrl+/`)
 - Wrap selection in a tag block (via snippets)
