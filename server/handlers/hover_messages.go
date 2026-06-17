@@ -4,7 +4,6 @@ package handlers
 import (
 	"fmt"
 	"go/types"
-	"strings"
 	serverTypes "text-template-server/types"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -103,35 +102,21 @@ func MessageDot(_ *serverTypes.DotNode, typ types.Type) string {
 // MessageField generates a hover message for a FieldNode, including the field
 // name and (when known) the resolved Go type of the full field chain.
 func MessageField(n *serverTypes.FieldNode, typ types.Type) string {
-	const fieldMessage = "```go\nfield %s\n```\nAccesses the `%s` field of the `.%s` context."
-	const fieldMessageTyped = "```go\nfield %s %s\n```\nAccesses the `%s` field of the `.%s` context."
-	const fieldMessageCtx = "```go\nfield %s\n```\nAccesses the `%s` field of the `%s` dot context."
-	const fieldMessageTypedCtx = "```go\nfield %s %s\n```\nAccesses the `%s` field of the `%s` dot context."
+	const fieldMessageCtx = "```go\nfield %s\n```\nAccesses a field from the `%s` dot context."
+	const fieldMessageTypedCtx = "```go\nfield %s %s\n```\nAccesses a field from the `%s` dot context."
 
-	ctx := ""
-	if len(n.Ident) > 1 {
-		ctx = strings.Join(n.Ident[1:], ".")
-	}
-	field := ""
-	if len(n.Ident) > 0 {
-		field = n.Ident[0]
-	}
-
-	ctxTypeName := formatType(n.ValueType())
+	ctxTypeName := formatType(n.DotType())
 	fieldTypeName := formatType(typ)
 
 	if ctxTypeName != "" {
 		if fieldTypeName != "" {
 			return withLink(
-				fmt.Sprintf(fieldMessageTypedCtx, n.String(), fieldTypeName, field, ctxTypeName),
+				fmt.Sprintf(fieldMessageTypedCtx, n.String(), fieldTypeName, ctxTypeName),
 			)
 		}
-		return withLink(fmt.Sprintf(fieldMessageCtx, n.String(), field, ctxTypeName))
+		return withLink(fmt.Sprintf(fieldMessageCtx, n.String(), ctxTypeName))
 	}
-	if fieldTypeName != "" {
-		return withLink(fmt.Sprintf(fieldMessageTyped, n.String(), fieldTypeName, field, ctx))
-	}
-	return withLink(fmt.Sprintf(fieldMessage, n.String(), field, ctx))
+	return ""
 }
 
 // MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name.

@@ -452,16 +452,22 @@ type hoverMultiDefineCase struct {
 
 var hoverMultiDefineCases = []hoverMultiDefineCase{
 	{
-		name:           "field inside Order define resolves against Order type",
-		posSubStr:      "CustomerName",
-		posOccurrence:  0,
-		wantSubstrings: []string{"CustomerName", "field"},
+		name:          "field inside Order define resolves against Order type",
+		posSubStr:     "CustomerName",
+		posOccurrence: 0,
+		wantSubstrings: []string{
+			"field .CustomerName",
+			"Accesses a field from the `model.Order` dot context",
+		},
 	},
 	{
-		name:           "field inside Address define resolves against Address type",
-		posSubStr:      "Street",
-		posOccurrence:  0,
-		wantSubstrings: []string{"Street", "field"},
+		name:          "field inside Address define resolves against Address type",
+		posSubStr:     "Street",
+		posOccurrence: 0,
+		wantSubstrings: []string{
+			"field .Street",
+			"Accesses a field from the `model.Address` dot context",
+		},
 	},
 	{
 		name:           "variable inside no-hint define still hovers",
@@ -470,9 +476,12 @@ var hoverMultiDefineCases = []hoverMultiDefineCase{
 		wantSubstrings: []string{"$local"},
 	},
 	{
-		name:           "field in root template resolves against root Address type",
-		posSubStr:      ".Country",
-		posOccurrence:  0,
-		wantSubstrings: []string{"Country", "field"},
+		name:          "field in root template resolves against root Address type",
+		posSubStr:     ".Country",
+		posOccurrence: 0,
+		wantSubstrings: []string{
+			"field .Country",
+			"Accesses a field from the `model.Address` dot context",
+		},
 	},
 }
