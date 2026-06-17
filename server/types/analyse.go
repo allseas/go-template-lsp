@@ -238,7 +238,16 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if argType != nil && argType.String() != expectedType.String() {
+			if isEmptyInterface(argType) {
+				ctx.errorf(
+					t,
+					ErrorUnknownType,
+					"template %q expects argument of type %s, it's impossible to determine the type of the argument provided",
+					n.Name,
+					expectedType.String(),
+				)
+			}
+			if argType != nil && !types.AssignableTo(argType, expectedType) {
 				ctx.errorf(
 					t,
 					ErrorTypeInvalidTemplateArg,
