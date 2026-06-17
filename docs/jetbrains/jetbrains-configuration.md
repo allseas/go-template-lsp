@@ -35,6 +35,7 @@ data class State(
     ),
     var enableAutocompletion: Boolean = true,
     var traceServer: TraceLevel = TraceLevel.MESSAGES,
+    var pipeChainCompletion: ChainLevel = ChainLevel.FULL,
     var myNewOption: String = "default",  // <-- add here
 )
 ```
@@ -51,6 +52,7 @@ data class State(
     var diagnosticsOverride: MutableMap<String, String> = mutableMapOf(),
     var enableAutocompletionOverride: Boolean? = null,
     var traceServerOverride: AppSettings.TraceLevel? = null,
+    var chainServerOverride: AppSettings.ChainLevel? = null,
     var myNewOptionOverride: String? = null,  // <-- add here
 )
 ```
