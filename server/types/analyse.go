@@ -130,7 +130,17 @@ func NewTree(
 		funcs:     funcs,
 		Pkg:       pkg,
 	}
-
+	rootVar := VariableNode{
+		Pos:      0,
+		NodeType: NodeVariable,
+		Ident:    []string{"$"},
+		typ:      dotType,
+	}
+	if dotType == nil {
+		rootVar.typ = types.NewInterfaceType(nil, nil).
+			Complete()
+		// empty interface if no dot type is provided
+	}
 	if parseTree.Root != nil {
 		typeTree.Root = analyseList(parseTree.Root, nil, &analysisCtx{
 			funcs:              funcs,
