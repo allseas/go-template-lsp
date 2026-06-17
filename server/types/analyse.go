@@ -660,17 +660,6 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 	return ident
 }
 
-func dotAsNamed(t types.Type) *types.Named {
-	if t == nil {
-		return nil
-	}
-	if ptr, ok := t.(*types.Pointer); ok {
-		t = ptr.Elem()
-	}
-	n, _ := t.(*types.Named)
-	return n
-}
-
 func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *VariableNode {
 	v := &VariableNode{
 		NodeType: NodeVariable,
