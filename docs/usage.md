@@ -240,6 +240,7 @@ Create a `gotmpl.config.json` file in the root of your project to configure the 
     "invalidFunction": "warning"
   },
   "enableAutocompletion": true,
+  "pipeChainCompletion": "full",
   "trace": {
     "server": "messages"
   }
@@ -268,16 +269,19 @@ Go to *Settings -> Tools -> Go Text Template*. Application-level settings apply 
 
 ### Configuration Options Reference
 
-| Option                              | Type    | Default      | Description                                            |
-| ----------------------------------- | ------- | ------------ | ------------------------------------------------------ |
-| `enableHover`                       | boolean | `true`       | Show hover tooltips                                    |
-| `enableDefinition`                  | boolean | `true`       | Enable go-to-definition                                |
-| `enableDiagnostics`                 | boolean | `true`       | Enable all diagnostics                                 |
-| `diagnostics.syntaxError`           | string  | `"error"`    | Severity for syntax errors                             |
-| `diagnostics.doubleDeclaredVariable`| string  | `"warning"`  | Severity for duplicate variable declarations           |
-| `diagnostics.invalidFunction`       | string  | `"warning"`  | Severity for unknown functions                         |
-| `diagnostics.unknownRangeType`      | string  | `"warning"`  | Severity for ranging over a value of undetermined type |
-| `enableAutocompletion`              | boolean | `true`       | Enable completions                                     |
-| `trace.server`                      | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"` |
+| Option                              | Type    | Default      | Description                                              |
+| ----------------------------------- | ------- |--------------|----------------------------------------------------------|
+| `enableHover`                       | boolean | `true`       | Show hover tooltips                                      |
+| `enableDefinition`                  | boolean | `true`       | Enable go-to-definition                                  |
+| `enableDiagnostics`                 | boolean | `true`       | Enable all diagnostics                                   |
+| `diagnostics.syntaxError`           | string  | `"error"`    | Severity for syntax errors                               |
+| `diagnostics.doubleDeclaredVariable`| string  | `"warning"`  | Severity for duplicate variable declarations             |
+| `diagnostics.invalidFunction`       | string  | `"warning"`  | Severity for unknown functions                           |
+| `diagnostics.unknownRangeType`      | string  | `"warning"`  | Severity for ranging over a value of undetermined type   |
+| `enableAutocompletion`              | boolean | `true`       | Enable completions                                       |
+| `pipeChainCompletion`                      | string  | `"full"`     | Nested field completions: `"off"`, `"full"`, or `"step"` |
+| `trace.server`                      | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"`   |
 
 Setting `trace.server` to `"verbose"` logs the full LSP traffic and is useful when debugging why a feature isn't working. The output appears in the *Output* panel (VS Code) or the LSP4IJ console (JetBrains).
+
+When a specific type in the template should be provided, `pipeChainCompletion` allows users to see valid fields/methods differently. For example, if a `string` should be provided, when `pipeChainCompletion` is set to `full`, we see all the available children fields/methods like `.Address.City` or `.Address.Info.Desc.Info1` up to the depth of 8. If it is set to `step`, only immediate fields are suggested in case they or their children match the type. When it is `off`, nested fields are not suggested.
