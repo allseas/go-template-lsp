@@ -725,6 +725,7 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		Pos:      Pos(n.Position()),
 		Ident:    n.Ident,
 		parent:   parent,
+		dotType:  ctx.dotType,
 	}
 
 	if len(n.Ident) == 0 {
