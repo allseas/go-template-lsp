@@ -829,6 +829,14 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 			ctx.vars = append(ctx.vars, typePipe.Decl[0])
 			typePipe.Decl[0].typ = types.Typ[types.Int] // unsigned int for index
 			ctx.vars = append(ctx.vars, typePipe.Decl[1])
+
+			if typePipe.Decl[0].Ident[0] == typePipe.Decl[1].Ident[0] {
+				ctx.errorf(
+					typePipe,
+					ErrorDoubleDeclaredVariable,
+					"assignment to multiple variables with the same name is not supported",
+				)
+			}
 		}
 
 	} else {
@@ -856,6 +864,12 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 				ErrorUndeclaredVariable,
 				"undeclared variable: %s is assigned to",
 				typePipe.Decl[0].Ident[0],
+			)
+		} else {
+			ctx.errorf(
+				typePipe,
+				ErrorTypeInvalidCommand,
+				"assignment to multiple variables is not supported",
 			)
 		}
 	}
