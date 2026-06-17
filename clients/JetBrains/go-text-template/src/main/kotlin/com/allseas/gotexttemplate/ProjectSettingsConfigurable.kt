@@ -74,17 +74,17 @@ class ProjectSettingsConfigurable(
                     }
                 }
             }
-            group("Advanced") {
-                row("Trace level:") {
-                    comboBox(listOf(null) + AppSettings.TraceLevel.entries, NullableTraceLevelRenderer())
-                        .bindItem(settings.state::traceServerOverride)
-                        .comment("Leave empty to use the application-level default")
-                }
-            }
             group("Chain") {
                 row("Chain level:") {
                     comboBox(listOf(null) + AppSettings.ChainLevel.entries, NullableChainLevelRenderer())
                         .bindItem(settings.state::chainServerOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
+            }
+            group("Advanced") {
+                row("Trace level:") {
+                    comboBox(listOf(null) + AppSettings.TraceLevel.entries, NullableTraceLevelRenderer())
+                        .bindItem(settings.state::traceServerOverride)
                         .comment("Leave empty to use the application-level default")
                 }
             }

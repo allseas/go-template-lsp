@@ -33,7 +33,7 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
             ),
         var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
-        var chainServer: ChainLevel = ChainLevel.FULL
+        var chainServer: ChainLevel = ChainLevel.FULL,
     )
 
     enum class DiagnosticSeverity(

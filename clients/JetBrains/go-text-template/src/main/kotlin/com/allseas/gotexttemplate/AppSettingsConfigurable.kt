@@ -59,16 +59,16 @@ class AppSettingsConfigurable : BoundConfigurable("Go Text Template Support") {
                     }
                 }
             }
-            group("Advanced") {
-                row("Trace level:") {
-                    comboBox(AppSettings.TraceLevel.entries)
-                        .bindItem(settings.state::traceServer.toNullableProperty())
-                }
-            }
             group("Chain") {
                 row("Chain level:") {
                     comboBox(AppSettings.ChainLevel.entries)
                         .bindItem(settings.state::chainServer.toNullableProperty())
+                }
+            }
+            group("Advanced") {
+                row("Trace level:") {
+                    comboBox(AppSettings.TraceLevel.entries)
+                        .bindItem(settings.state::traceServer.toNullableProperty())
                 }
             }
         }
