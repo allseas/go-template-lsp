@@ -247,7 +247,9 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 					expectedType.String(),
 				)
 			}
-			if argType != nil && !types.AssignableTo(argType, expectedType) {
+			if argType != nil && argType != expectedType &&
+				!types.AssignableTo(argType, expectedType) &&
+				!types.ConvertibleTo(argType, expectedType) {
 				ctx.errorf(
 					t,
 					ErrorTypeInvalidTemplateArg,
@@ -1070,7 +1072,8 @@ func typesCompatible(want, got types.Type) bool {
 	if isEmptyInterface(want) || isEmptyInterface(got) {
 		return true
 	}
-	return types.Identical(want, got)
+	return types.Identical(want, got) ||
+		(want != nil && got != nil && types.AssignableTo(got, want))
 }
 
 // getNodeType returns the type of a node without modifying it.
