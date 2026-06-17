@@ -4,7 +4,6 @@ package handlers
 import (
 	"fmt"
 	"go/types"
-	"strings"
 	serverTypes "text-template-server/types"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -103,15 +102,8 @@ func MessageDot(_ *serverTypes.DotNode, typ types.Type) string {
 // MessageField generates a hover message for a FieldNode, including the field
 // name and (when known) the resolved Go type of the full field chain.
 func MessageField(n *serverTypes.FieldNode, typ types.Type) string {
-	const fieldMessage = "```go\nfield %s\n```\nAccesses a field from the `.%s` context."
-	const fieldMessageTyped = "```go\nfield %s %s\n```\nAccesses a field from the `.%s` context."
 	const fieldMessageCtx = "```go\nfield %s\n```\nAccesses a field from the `%s` dot context."
 	const fieldMessageTypedCtx = "```go\nfield %s %s\n```\nAccesses a field from the `%s` dot context."
-
-	ctx := ""
-	if len(n.Ident) > 1 {
-		ctx = strings.Join(n.Ident[1:], ".")
-	}
 
 	ctxTypeName := formatType(n.DotType())
 	fieldTypeName := formatType(typ)
@@ -124,10 +116,7 @@ func MessageField(n *serverTypes.FieldNode, typ types.Type) string {
 		}
 		return withLink(fmt.Sprintf(fieldMessageCtx, n.String(), ctxTypeName))
 	}
-	if fieldTypeName != "" {
-		return withLink(fmt.Sprintf(fieldMessageTyped, n.String(), fieldTypeName, ctx))
-	}
-	return withLink(fmt.Sprintf(fieldMessage, n.String(), ctx))
+	return ""
 }
 
 // MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name.
