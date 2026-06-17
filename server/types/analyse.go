@@ -163,8 +163,10 @@ func NewTreeWithType(
 	pkg *types.Package,
 	templateInputTypes map[string]types.Type,
 ) Tree {
-	typeTree := NewTree(parseTree, funcs, dotType, pkg, templateInputTypes)
-	return typeTree
+	if dotType == nil {
+		return NewTree(parseTree, funcs, nil, pkg, templateInputTypes)
+	}
+	return NewTree(parseTree, funcs, dotType, pkg, templateInputTypes)
 }
 
 // analyseList converts a parse ListNode to a typed ListNode.
@@ -479,7 +481,7 @@ func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
 		return cn
 	}
 
-	if typ, ok := walkFieldChain(ctx, cn, baseType, n.Field); ok {
+	if typ, _ := walkFieldChain(ctx, cn, baseType, n.Field); typ != nil {
 		cn.typ = typ
 	}
 	return cn
@@ -518,7 +520,7 @@ func walkFieldChain(
 				currentType.String(),
 				name,
 			)
-			return nil, false
+			return types.NewInterfaceType(nil, nil).Complete(), false
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -533,7 +535,7 @@ func walkFieldChain(
 					name,
 					currentType.String(),
 				)
-				return nil, false
+				return types.NewInterfaceType(nil, nil).Complete(), false
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -558,7 +560,7 @@ func walkFieldChain(
 				name,
 				currentType.String(),
 			)
-			return nil, false
+			return types.NewInterfaceType(nil, nil).Complete(), false
 		}
 	}
 	return currentType, true
@@ -572,16 +574,11 @@ func walkFieldChainWithMethodInfo(
 	errNode Node,
 	base types.Type,
 	path []string,
-) (types.Type, []bool, bool) {
+) (types.Type, []bool) {
 	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
 	if base != nil {
 		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
-			ctx.errorf(
-				errNode,
-				ErrorUnknownType,
-				"cannot determine fields of empty interface; assuming any",
-			)
-			return types.NewInterfaceType(nil, nil).Complete(), make([]bool, len(path)), true
+			return types.NewInterfaceType(nil, nil).Complete(), make([]bool, len(path))
 		}
 	}
 
@@ -598,7 +595,7 @@ func walkFieldChainWithMethodInfo(
 				currentType.String(),
 				name,
 			)
-			return nil, nil, false
+			return types.NewInterfaceType(nil, nil).Complete(), isMethod
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -614,7 +611,7 @@ func walkFieldChainWithMethodInfo(
 					name,
 					currentType.String(),
 				)
-				return nil, nil, false
+				return types.NewInterfaceType(nil, nil).Complete(), isMethod
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -639,10 +636,10 @@ func walkFieldChainWithMethodInfo(
 				name,
 				currentType.String(),
 			)
-			return nil, nil, false
+			return types.NewInterfaceType(nil, nil).Complete(), isMethod
 		}
 	}
-	return currentType, isMethod, true
+	return currentType, isMethod
 }
 
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
@@ -659,29 +656,8 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 		return ident
 	}
 
-	// if no function with that name -> resolve a method on the current dot type
-	if named := dotAsNamed(ctx.dotType); named != nil {
-		for _, m := range NamedMethods(named) {
-			if m.Name == name && m.Func != nil {
-				ident.typ = m.Func.Type()
-				return ident
-			}
-		}
-	}
-
 	ctx.errorf(ident, ErrorTypeInvalidFunction, "undefined function: %s", name)
 	return ident
-}
-
-func dotAsNamed(t types.Type) *types.Named {
-	if t == nil {
-		return nil
-	}
-	if ptr, ok := t.(*types.Pointer); ok {
-		t = ptr.Elem()
-	}
-	n, _ := t.(*types.Named)
-	return n
 }
 
 func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *VariableNode {
@@ -695,7 +671,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	var baseType types.Type
 	found := false
 	for i := len(ctx.vars) - 1; i >= 0; i-- {
-		if ctx.vars[i].Ident[0] == n.Ident[0] {
+		if len(ctx.vars[i].Ident) == 1 && ctx.vars[i].Ident[0] == n.Ident[0] {
 			baseType = ctx.vars[i].typ
 			found = true
 			break
@@ -704,6 +680,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if !found {
 		return v
 	}
+	v.Base = baseType
 
 	// $var with no field path -- type is the variable's type.
 	if len(n.Ident) == 1 {
@@ -715,7 +692,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if baseType == nil {
 		return v
 	}
-	if typ, isMethod, ok := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); ok {
+	if typ, isMethod := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); typ != nil {
 		v.typ = typ
 		v.isMethod = isMethod
 	}
@@ -730,11 +707,16 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		parent:   parent,
 	}
 
-	if ctx.dotType == nil || len(n.Ident) == 0 {
+	if len(n.Ident) == 0 {
 		return fn
 	}
 
-	if typ, isMethod, ok := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); ok {
+	if ctx.dotType == nil {
+		fn.typ = types.NewInterfaceType(nil, nil).Complete()
+		return fn
+	}
+
+	if typ, isMethod := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); typ != nil {
 		fn.typ = typ
 		fn.isMethod = isMethod
 	}
@@ -908,75 +890,59 @@ func analyseCommand(
 
 	switch t := resultType.Underlying().(type) {
 	case *types.Signature:
-		if !t.Variadic() && t.Params().Len() != len(args) {
-			if ok, _, _ := isTemplateSeq(t); ok {
-				typeCmd.typ = t
-				return typeCmd
-			}
+		result, shouldReturn := validateCommandArguments(t, args, typeCmd, ctx)
+		if shouldReturn {
+			return result
+		}
+	default:
+		typeCmd.typ = resultType
+	}
+
+	return typeCmd
+}
+
+func validateCommandArguments(
+	t *types.Signature,
+	args []types.Type,
+	typeCmd *CommandNode,
+	ctx *analysisCtx,
+) (*CommandNode, bool) {
+	if !t.Variadic() && t.Params().Len() != len(args) {
+		if ok, _, _ := isTemplateSeq(t); ok {
+			typeCmd.typ = t
+			return typeCmd, true
+		}
+		ctx.errorf(
+			typeCmd,
+			ErrorArgumentNumberMismatch,
+			"Expected %d arguments but got %d",
+			t.Params().Len(),
+			len(args),
+		)
+		if t.Results().Len() > 0 {
+			typeCmd.typ = t.Results().At(0).Type()
+		} else {
+			typeCmd.typ = t
+		}
+		return typeCmd, true
+	}
+
+	if t.Variadic() {
+		if len(args) < t.Params().Len()-1 {
 			ctx.errorf(
 				typeCmd,
 				ErrorArgumentNumberMismatch,
-				"Expected %d arguments but got %d",
-				t.Params().Len(),
+				"Expected at least %d arguments but got %d",
+				t.Params().Len()-1,
 				len(args),
 			)
-			if t.Results().Len() > 0 {
-				typeCmd.typ = t.Results().At(0).Type()
-			} else {
-				typeCmd.typ = t
-			}
-			return typeCmd
 		}
-
-		if t.Variadic() {
-			if len(args) < t.Params().Len()-1 {
-				ctx.errorf(
-					typeCmd,
-					ErrorArgumentNumberMismatch,
-					"Expected at least %d arguments but got %d",
-					t.Params().Len()-1,
-					len(args),
-				)
-			}
-			for i := 0; i < t.Params().Len()-1; i++ {
-				if !types.Identical(args[i], t.Params().At(i).Type()) {
-					tstring := "nil"
-					if args[i] != nil {
-						tstring = args[i].String()
-					}
-					ctx.errorf(
-						typeCmd,
-						ErrorTypeInvalidCommand,
-						"argument %d: expected type %s but got %s",
-						i+1,
-						t.Params().At(i).Type().String(),
-						tstring,
-					)
-				}
-			}
-			variadicType := t.Params().At(t.Params().Len() - 1).Type().(*types.Slice).Elem()
-			for i := t.Params().Len() - 1; i < len(args); i++ {
-				if !types.Identical(args[i], variadicType) {
-					tstring := "nil"
-					if args[i] != nil {
-						tstring = args[i].String()
-					}
-					ctx.errorf(
-						typeCmd,
-						ErrorTypeInvalidCommand,
-						"variadic argument %d: expected type %s but got %s",
-						i+1,
-						variadicType.String(),
-						tstring,
-					)
-				}
-			}
-			typeCmd.typ = t.Results().At(0).Type()
-			return typeCmd
+		nonVariadicCount := t.Params().Len() - 1
+		if nonVariadicCount > len(args) {
+			nonVariadicCount = len(args)
 		}
-
-		for i := 0; i < t.Params().Len(); i++ {
-			if !types.Identical(args[i], t.Params().At(i).Type()) {
+		for i := 0; i < nonVariadicCount; i++ {
+			if !typesCompatible(t.Params().At(i).Type(), args[i]) {
 				tstring := "nil"
 				if args[i] != nil {
 					tstring = args[i].String()
@@ -989,14 +955,96 @@ func analyseCommand(
 					t.Params().At(i).Type().String(),
 					tstring,
 				)
+			} else if isEmptyInterface(args[i]) && !isEmptyInterface(t.Params().At(i).Type()) {
+				ctx.errorf(
+					typeCmd,
+					ErrorUnknownType,
+					"argument %d: any value passed to %s parameter, may fail at runtime",
+					i+1,
+					t.Params().At(i).Type().String(),
+				)
 			}
 		}
-		typeCmd.typ = t.Results().At(0).Type()
-	default:
-		typeCmd.typ = resultType
+		variadicType := t.Params().At(t.Params().Len() - 1).Type().(*types.Slice).Elem()
+		for i := t.Params().Len() - 1; i < len(args); i++ {
+			if !typesCompatible(variadicType, args[i]) {
+				tstring := "nil"
+				if args[i] != nil {
+					tstring = args[i].String()
+				}
+				ctx.errorf(
+					typeCmd,
+					ErrorTypeInvalidCommand,
+					"variadic argument %d: expected type %s but got %s",
+					i+1,
+					variadicType.String(),
+					tstring,
+				)
+			} else if isEmptyInterface(args[i]) && !isEmptyInterface(variadicType) {
+				ctx.errorf(
+					typeCmd,
+					ErrorUnknownType,
+					"variadic argument %d: any value passed to %s parameter, may fail at runtime",
+					i+1,
+					variadicType.String(),
+				)
+			}
+		}
+		if t.Results().Len() > 0 {
+			typeCmd.typ = t.Results().At(0).Type()
+		}
+		return typeCmd, true
 	}
 
-	return typeCmd
+	for i := 0; i < t.Params().Len(); i++ {
+		if !typesCompatible(t.Params().At(i).Type(), args[i]) {
+			tstring := "nil"
+			if args[i] != nil {
+				tstring = args[i].String()
+			}
+			ctx.errorf(
+				typeCmd,
+				ErrorTypeInvalidCommand,
+				"argument %d: expected type %s but got %s",
+				i+1,
+				t.Params().At(i).Type().String(),
+				tstring,
+			)
+		} else if isEmptyInterface(args[i]) && !isEmptyInterface(t.Params().At(i).Type()) {
+			ctx.errorf(
+				typeCmd,
+				ErrorUnknownType,
+				"argument %d: any value passed to %s parameter, may fail at runtime",
+				i+1,
+				t.Params().At(i).Type().String(),
+			)
+		}
+	}
+	if t.Results().Len() > 0 {
+		typeCmd.typ = t.Results().At(0).Type()
+	}
+	return typeCmd, false
+}
+
+// isEmptyInterface reports whether t is the empty interface (i.e. `any` / `interface{}`).
+func isEmptyInterface(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	iface, ok := t.Underlying().(*types.Interface)
+	return ok && iface.NumMethods() == 0
+}
+
+// typesCompatible reports whether a value of type got is assignable to a parameter
+// of type want. When either side is the empty interface (any), we always accept.
+func typesCompatible(want, got types.Type) bool {
+	if isEmptyInterface(want) || isEmptyInterface(got) {
+		return true
+	}
+	if want == nil || got == nil {
+		return false
+	}
+	return types.AssignableTo(got, want)
 }
 
 // getNodeType returns the type of a node without modifying it.

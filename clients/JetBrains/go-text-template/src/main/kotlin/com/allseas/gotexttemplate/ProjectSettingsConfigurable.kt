@@ -81,6 +81,13 @@ class ProjectSettingsConfigurable(
                         .comment("Leave empty to use the application-level default")
                 }
             }
+            group("Chain") {
+                row("Chain level:") {
+                    comboBox(listOf(null) + AppSettings.ChainLevel.entries, NullableChainLevelRenderer())
+                        .bindItem(settings.state::chainServerOverride)
+                        .comment("Leave empty to use the application-level default")
+                }
+            }
         }
 }
 
@@ -98,6 +105,18 @@ private class NullableBooleanRenderer : SimpleListCellRenderer<Boolean?>() {
                 true -> "Enabled"
                 false -> "Disabled"
             }
+    }
+}
+
+private class NullableChainLevelRenderer : SimpleListCellRenderer<AppSettings.ChainLevel?>() {
+    override fun customize(
+        list: JList<out AppSettings.ChainLevel?>,
+        value: AppSettings.ChainLevel?,
+        index: Int,
+        selected: Boolean,
+        hasFocus: Boolean,
+    ) {
+        text = value?.value ?: "(use default)"
     }
 }
 

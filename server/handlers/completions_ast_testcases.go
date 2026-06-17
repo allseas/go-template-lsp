@@ -593,7 +593,7 @@ var completionTestCases = []completionTestCase{
 	},
 	{
 		name:        "inside with pipe - Address methods excluded, none accept string",
-		src:         `{{with .Address}}{{Line | }}{{end}}`,
+		src:         `{{with .Address}}{{ .Line | }}{{end}}`,
 		subStr:      "}}",
 		occurrence:  1,
 		offsetAdj:   -1,

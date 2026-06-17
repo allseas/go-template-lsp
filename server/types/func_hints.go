@@ -34,7 +34,7 @@ type GlobalFuncEntry struct {
 
 // DefinitionPos returns the best position to navigate to for go-to-definition.
 func (e GlobalFuncEntry) DefinitionPos() token.Pos {
-	if e.Func != nil {
+	if e.Func != nil && e.Func.Pos().IsValid() {
 		return e.Func.Pos()
 	}
 	return e.FuncMapKeyPos

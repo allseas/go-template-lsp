@@ -76,6 +76,14 @@ var nilTypeNodeTests = []nilTypeNodeTest{
 	{name: "non-nil BreakNode", node: &serverTypes.BreakNode{}, expected: false},
 	{name: "nil ContinueNode", node: (*serverTypes.ContinueNode)(nil), expected: true},
 	{name: "non-nil ContinueNode", node: &serverTypes.ContinueNode{}, expected: false},
+	{name: "nil UndefinedNode", node: (*serverTypes.UndefinedNode)(nil), expected: true},
+	{name: "non-nil UndefinedNode", node: &serverTypes.UndefinedNode{}, expected: false},
+	{name: "nil PipeNode", node: (*serverTypes.PipeNode)(nil), expected: true},
+	{name: "non-nil PipeNode", node: &serverTypes.PipeNode{}, expected: false},
+	{name: "nil CommandNode", node: (*serverTypes.CommandNode)(nil), expected: true},
+	{name: "non-nil CommandNode", node: &serverTypes.CommandNode{}, expected: false},
+	{name: "nil ChainNode", node: (*serverTypes.ChainNode)(nil), expected: true},
+	{name: "non-nil ChainNode", node: &serverTypes.ChainNode{}, expected: false},
 }
 
 func TestNilParseNode(t *testing.T) {

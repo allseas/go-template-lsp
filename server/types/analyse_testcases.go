@@ -6,6 +6,10 @@ import (
 	parse "text-template-parser"
 )
 
+// anyType is the empty interface type (i.e. `any` / `interface{}`), reused
+// across test cases as the expected type for unresolved nodes.
+var anyType = types.NewInterfaceType(nil, nil).Complete()
+
 type analyseNodePanicTestCase struct {
 	name      string
 	node      parse.Node
@@ -162,6 +166,39 @@ var funcs = map[string]*types.Func{
 		"GetInner",
 		signature([]types.Type{mockDotType}, []types.Type{mockInnerType}),
 	), // MockDot -> Inner
+	"VoidFn": types.NewFunc(
+		0,
+		nil,
+		"VoidFn",
+		signature([]types.Type{types.Typ[types.String]}, []types.Type{}),
+	), // string -> ()
+	"FuncAnyParam": types.NewFunc(
+		0,
+		nil,
+		"FuncAnyParam",
+		signature(
+			[]types.Type{types.NewInterfaceType(nil, nil).Complete()},
+			[]types.Type{types.Typ[types.String]},
+		),
+	), // any -> string
+	"FuncPrintf": types.NewFunc(
+		0,
+		nil,
+		"FuncPrintf",
+		types.NewSignatureType(nil, nil, nil,
+			types.NewTuple(
+				types.NewVar(0, nil, "format", types.Typ[types.String]),
+				types.NewVar(
+					0,
+					nil,
+					"args",
+					types.NewSlice(types.NewInterfaceType(nil, nil).Complete()),
+				),
+			),
+			types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.String])),
+			true,
+		),
+	), // (string, ...any) -> string
 }
 
 func varn(name string) *parse.VariableNode {
@@ -722,6 +759,38 @@ var analyseTestCases = []analyseTestCase{
 		expectedErrors: []TError{},
 	},
 	{
+		// ai
+		// {{ $i := .Inner }}{{ $i.Name }}  -- variable bound to a struct value,
+		// then a field is accessed on the variable.
+		name: "field access on variable bound to struct",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$i")), coms(com(field("Inner")))),
+			actpipe(nil, coms(com(varnf("$i", "Name")))),
+		)),
+		resTree: ttree("test", tlist(
+			mockDotType,
+			tactpipe(
+				mockInnerType,
+				tdecls(tvarn("$i", mockInnerType)),
+				tcoms(tcom(mockInnerType, tfield(mockInnerType, "Inner"))),
+			),
+			tactpipe(
+				types.Typ[types.String],
+				nil,
+				tcoms(
+					tcom(
+						types.Typ[types.String],
+						tvarnf(types.Typ[types.String], "$i", "Name"),
+					),
+				),
+			),
+		)),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
 		// {{ 2 | FuncB 1 }}  -- curried function in pipe: FuncB partially applied with 1, pipe supplies 2
 		name: "curried function in pipe",
 		parseTree: tree("test", list(actpipe(nil, coms(
@@ -1228,8 +1297,7 @@ var analyseTestCases = []analyseTestCase{
 		pkg:            mockPkg,
 		expectedErrors: []TError{},
 	},
-	{
-		// {{ range $k, $v := .Seq2 }}{{ $v }}{{ end }}
+	{ // {{ range $k, $v := .Seq2 }}{{ $v }}{{ end }}
 		// iter.Seq2[int, string]: $k -> int, $v -> string; dot in body
 		// becomes the value type (string).
 		name: "range over iter.Seq2 with key and value vars",
@@ -1259,5 +1327,111 @@ var analyseTestCases = []analyseTestCase{
 		dotType:        mockSeqDotType,
 		pkg:            mockPkg,
 		expectedErrors: []TError{},
+	},
+	{
+		// {{ VoidFn "x" }} -- VoidFn :: string -> (); should not panic;
+		// command and pipe type are nil.
+		name: "void function produces nil type",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("VoidFn"), str("x")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
+			tcom(nil, tident("VoidFn", funcs["VoidFn"].Type()), tstr("x")),
+		)))),
+		funcs:          funcs,
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ .Columns }} with no dotType -- field access on unknown dot;
+		// should produce any type with no error (type is simply unknown).
+		name: "field access with nil dot type produces any",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(field("Columns")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(anyType, nil, tcoms(
+			tcom(anyType, tfield(anyType, "Columns")),
+		)))),
+		funcs:          funcs,
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ .BadField }} on mockDotType -- field that doesn't exist;
+		// should produce any type and one ErrorTypeInvalidField.
+		name: "unknown field on known type produces any",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(field("BadField")),
+		)))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(anyType, nil, tcoms(
+			tcom(anyType, tfield(anyType, "BadField")),
+		)))),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+		},
+	},
+	{
+		// {{ FuncPrintf }} -- variadic func (string, ...any) -> string called
+		// with zero args; the required format arg is missing.
+		// Should not panic, and should emit ErrorArgumentNumberMismatch.
+		name: "variadic function missing required arg does not panic",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncPrintf")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tident("FuncPrintf", funcs["FuncPrintf"].Type())),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorArgumentNumberMismatch},
+		},
+	},
+	{
+		// {{ .Items | FuncAnyParam }} -- .Items is []string; FuncAnyParam takes
+		// any. Concrete type passed to any param: no warning.
+		name: "concrete arg to any param produces no warning",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(field("Items")),
+			com(ident("FuncAnyParam")),
+		)))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.NewSlice(types.Typ[types.String]),
+				tfield(types.NewSlice(types.Typ[types.String]), "Items"),
+			),
+			tcom(types.Typ[types.String], tident("FuncAnyParam", funcs["FuncAnyParam"].Type())),
+		)))),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ .BadField | FuncD }} -- .BadField is unknown (any); FuncD takes int.
+		// Passing any to a concrete param: ErrorTypeInvalidField (field) +
+		// ErrorUnknownType (any->int warning).
+		name: "any arg to concrete param produces warning",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(field("BadField")),
+			com(ident("FuncD")),
+		)))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(anyType, tfield(anyType, "BadField")),
+			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
+		)))),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+			{typ: ErrorUnknownType},
+		},
 	},
 }
