@@ -20,6 +20,10 @@ func formatType(t types.Type) string {
 	if b, ok := t.(*types.Basic); ok && b.Kind() == types.UntypedNil {
 		return "nil"
 	}
+	// Empty interface (any) means the type is unknown
+	if iface, ok := t.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
+		return ""
+	}
 	return types.TypeString(t, func(p *types.Package) string {
 		if p == nil {
 			return ""
