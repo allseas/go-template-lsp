@@ -279,7 +279,7 @@ func TestCollectDiagnostics_Comments(t *testing.T) {
 multi-line
 comment
 */}}`},
-		{"comment with trim left", `{{- /* comment */ }}`},
+		{"comment with trim left", `{{- /* comment */}}`},
 		{"comment with trim both", `{{- /* comment */ -}}`},
 		{"comment with template syntax", `{{/* {{ .Field }} */}}`},
 		{"comment in range", `{{range .Items}}{{/* iteration comment */}}{{end}}`},
@@ -296,6 +296,13 @@ comment
 			assert.Empty(t, diags)
 		})
 	}
+}
+
+func TestCollectDiagnostics_IncorrectCommentSyntax(t *testing.T) {
+	text := `{{/* unclosed comment */   dyguayudsgyaui   }}`
+	diags := collectDiagnostics(text, "file:///test.tmpl")
+	require.Len(t, diags, 1)
+	assert.Contains(t, diags[0].Message, "comment ends before closing delimiter")
 }
 
 // TestCollectDiagnostics_MultiDefines verifies that diagnostics are collected

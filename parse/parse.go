@@ -364,6 +364,14 @@ func (t *Tree) parse() {
 			t.Root.append(n)
 		}
 	}
+	if t.peek().typ == itemError {
+		if t.Mode&ParsePartial == 0 {
+			t.errorf("%s", t.peek().val)
+		} else {
+			err := t.recordError(t.peek().pos, "%s", t.peek().val)
+			t.Root.append(t.newUndefined(t.peek().pos, err, t.peek().val))
+		}
+	}
 	t.End = t.peek().pos
 }
 
