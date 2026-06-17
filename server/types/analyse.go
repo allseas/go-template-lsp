@@ -1052,7 +1052,7 @@ func typesCompatible(want, got types.Type) bool {
 	if isEmptyInterface(want) || isEmptyInterface(got) {
 		return true
 	}
-	return types.Identical(want, got)
+	return types.AssignableTo(got, want)
 }
 
 // getNodeType returns the type of a node without modifying it.
