@@ -19,6 +19,8 @@
     "watch:vscode:allseas": "(ts-node --esm scripts/watch-server-binaries_allseas.ts) | (npm run watch -w clients/VSCode)",
     "launch:vscode": "npm run package:vscode && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test",
     "launch:vscode:allseas": "npm run package:vscode:allseas && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test",
+    "benchmark": "npm run benchmark -w clients/VSCode",
+    "benchmark:allseas": "npm run benchmark:allseas -w clients/VSCode",
     "package:jetbrains": "npm run build:server && cd clients/JetBrains/go-text-template && ./gradlew clean buildPlugin --no-build-cache --no-configuration-cache && find ./build/distributions | grep '.zip' | xargs -i mv {} ../../../go-template-jetbrains.zip",
     "package:jetbrains:allseas": "npm run build:server:allseas && cd clients/JetBrains/go-text-template && ./gradlew clean buildPlugin --no-build-cache --no-configuration-cache && find ./build/distributions | grep '.zip' | xargs -i mv {} ../../../go-template-jetbrains.zip",
     "package:both": "npm run package:vscode & npm run package:jetbrains",
