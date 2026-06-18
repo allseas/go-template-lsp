@@ -116,3 +116,78 @@ Diagnostic: template "AuthorTpl" expects argument of type models.Author, but got
 ```
 
 See [template_checking.md](template_checking.md) for more details on how template type hints work.
+
+---
+
+## How to Add a New Diagnostic
+
+Follow these steps to add a new check end-to-end. The example adds a fictional `emptyRange` check.
+
+### 1. Add an `ErrorType` constant (`server/types/analyse.go`)
+
+```go
+const (
+    // … existing constants …
+    ErrorEmptyRange // range body has no statements
+)
+
+var errorTypeToConfigKey = map[ErrorType]string{
+    // … existing entries …
+    ErrorEmptyRange: "emptyRange",
+}
+```
+
+### 2. Emit the error in the appropriate `analyse*` function
+
+Pick the analysis function that visits the relevant node type and call `ctx.errorf`:
+
+```go
+func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
+    // … existing logic …
+    if r.List == nil || len(r.List.Nodes) == 0 {
+        ctx.errorf(r, ErrorEmptyRange, "range body is empty")
+    }
+    // …
+}
+```
+
+### 3. Register the default severity (`server/handlers/configuration.go`)
+
+```go
+var defaultDiagnosticSeverities = map[types.ErrorType]DiagnosticSeverity{
+    // … existing entries …
+    types.ErrorEmptyRange: DiagnosticSeverityWarning,
+}
+```
+
+### 4. Expose the config key (both clients)
+
+**VS Code** - add to `contributes.configuration.properties` in `clients/VSCode/package.json`:
+
+```json
+"goTmplSupport.diagnostics": {
+  "properties": {
+    "emptyRange": {
+      "type": "string",
+      "enum": ["disabled", "error", "warning", "information", "hint"],
+      "default": "warning",
+      "description": "Severity for empty range bodies."
+    }
+  }
+}
+```
+
+**JetBrains** - add the key and default config using the guide in [jetbrains-configuration.md](../jetbrains/jetbrains-configuration.md)
+
+### 5. Write a test (`server/handlers/diagnostics_test.go`)
+
+```go
+func TestCollectDiagnostics_EmptyRange(t *testing.T) {
+    text := `{{range .Items}}{{end}}`
+    diags := collectDiagnostics(text, "file:///test.tmpl")
+
+    diag, ok := findDiagnosticContaining(diags, "range body is empty")
+    require.True(t, ok, "expected emptyRange diagnostic, got: %v", diagMessages(diags))
+    _ = diag
+}
+```
