@@ -125,18 +125,14 @@ release-publish-allseas:
   needs:
     - job: release-build-allseas
       artifacts: true
+    - job: release-publish
   script:
     - VSIX_FILE=$(find . -maxdepth 1 -name '*-allseas.vsix' | head -1)
     - JETBRAINS_ZIP="go-template-jetbrains-allseas.zip"
     - export GLAB_ENABLE_CI_AUTOLOGIN=true
-    - ALLSEAS_TAG="${CI_COMMIT_TAG}-allseas"
     - |
-      glab release create "${ALLSEAS_TAG}" \
-        --name "Release ${ALLSEAS_TAG}" \
-        --notes "Release ${ALLSEAS_TAG}"
-    - |
-      glab release upload "${ALLSEAS_TAG}" "${VSIX_FILE}" \
+      glab release upload "${CI_COMMIT_TAG}" "${VSIX_FILE}" \
         --use-package-registry
     - |
-      glab release upload "${ALLSEAS_TAG}" "${JETBRAINS_ZIP}" \
+      glab release upload "${CI_COMMIT_TAG}" "${JETBRAINS_ZIP}" \
         --use-package-registry
