@@ -6,6 +6,9 @@ This guide is for developers using the GoTemplate Support extension. It covers w
 <!-- omit in toc -->
 ## Table of Contents
 
+- [Installation](#installation)
+  - [VS Code](#vs-code)
+  - [JetBrains](#jetbrains)
 - [File Association](#file-association)
 - [Features](#features)
   - [Syntax Highlighting](#syntax-highlighting)
@@ -25,6 +28,24 @@ This guide is for developers using the GoTemplate Support extension. It covers w
   - [VS Code Settings](#vs-code-settings)
   - [JetBrains Settings](#jetbrains-settings)
   - [Configuration Options Reference](#configuration-options-reference)
+
+---
+
+## Installation
+
+### VS Code
+
+1. Obtain the `.vsix` package from a project release (or build it yourself with `npm run package:vscode`).
+2. Open the *Extensions* sidebar (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>).
+3. Click the `…` menu in the top-right corner of the sidebar and choose **Install from VSIX…**
+4. Select the `.vsix` file and confirm. VS Code will activate the extension immediately.
+
+### JetBrains
+
+1. Obtain the `.zip` plugin archive from a project release (or build it yourself with `./gradlew build` inside `clients/JetBrains/go-text-template/`).
+2. Open *Settings* (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → **Plugins**.
+3. Click the gear icon ⚙ → **Install Plugin from Disk…**
+4. Select the `.zip` file and restart the IDE when prompted.
 
 ---
 
@@ -91,12 +112,13 @@ Hovering over any node in a template file shows a tooltip. Examples:
 
 <kbd>Ctrl</kbd>+Click (or <kbd>F12</kbd>) on a symbol jumps to its definition:
 
-| Symbol                       | Behaviour                                                                                                                                                               |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$x` (variable)              | Jumps to all `:=` declarations of `$x` in the file (VS Code shows all; JetBrains navigates to the first - see [client differences](features/definition.md#variables-x)) |
-| `.` inside `range` or `with` | Jumps to the `range`/`with` pipe that redefines dot                                                                                                                     |
-| `.FieldName`                 | Jumps to the field or method declaration in the Go source file (requires a [type hint](#type-hints))                                                                    |
-| `.Address.City`              | Jumps to whichever identifier the cursor is on                                                                                                                          |
+| Symbol                                              | Behaviour                                                                                                                                                               |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$x` (variable)                                     | Jumps to all `:=` declarations of `$x` in the file (VS Code shows all; JetBrains navigates to the first - see [client differences](features/definition.md#variables-x)) |
+| `.` inside `range` or `with`                        | Jumps to the `range`/`with` pipe that redefines dot                                                                                                                     |
+| `.FieldName`                                        | Jumps to the field or method declaration in the Go source file (requires a [type hint](#type-hints))                                                                    |
+| `.Address.City`                                     | Jumps to whichever identifier the cursor is on                                                                                                                          |
+| `upper`, `formatDate`, etc. (user-defined function) | Jumps to the function declaration in the Go source file (requires a [function hint](#function-hints))                                                                   |
 
 ### Find References
 
@@ -115,14 +137,17 @@ Field access nodes (`.FieldName`) are not supported by find references.
 
 Errors appear as squiggly underlines as you type. The extension reports:
 
-| Situation                       | Message                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------- |
-| Invalid character in a tag      | `undefined variable: bad character U+003F '?'`                            |
-| Empty action                    | `missing value for command`                                               |
-| Undeclared variable             | `undefined variable: $x`                                                  |
-| Unknown function                | `unsupported function or unregistered command: foo`                       |
-| Duplicate variable name         | `duplicate variable name: $x`                                             |
-| Template called with wrong type | `template "T" expects argument of type models.User, but got models.Order` |
+| Situation                                    | Message                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| Invalid character in a tag                   | `undefined variable: bad character U+003F '?'`                            |
+| Empty action                                 | `missing value for command`                                               |
+| Undeclared variable                          | `undefined variable: $x`                                                  |
+| Unknown function                             | `unsupported function or unregistered command: foo`                       |
+| Variable redeclared in the same scope        | `variable $x already declared in this scope`                              |
+| Variable redeclared inside a `range` body    | `variable $x already declared in this scope`                              |
+| `range` over a struct or other non-rangeable | `cannot range over value of type models.Order`                            |
+| Invalid `gotype` hint (type not found)       | `could not load type "pkg.NoSuchType": …`                                 |
+| Template called with wrong type              | `template "T" expects argument of type models.User, but got models.Order` |
 
 ### Snippets and Code Actions
 
@@ -268,16 +293,25 @@ Go to *Settings -> Tools -> Go Text Template*. Application-level settings apply 
 
 ### Configuration Options Reference
 
-| Option                              | Type    | Default      | Description                                            |
-| ----------------------------------- | ------- | ------------ | ------------------------------------------------------ |
-| `enableHover`                       | boolean | `true`       | Show hover tooltips                                    |
-| `enableDefinition`                  | boolean | `true`       | Enable go-to-definition                                |
-| `enableDiagnostics`                 | boolean | `true`       | Enable all diagnostics                                 |
-| `diagnostics.syntaxError`           | string  | `"error"`    | Severity for syntax errors                             |
-| `diagnostics.doubleDeclaredVariable`| string  | `"warning"`  | Severity for duplicate variable declarations           |
-| `diagnostics.invalidFunction`       | string  | `"warning"`  | Severity for unknown functions                         |
-| `diagnostics.unknownRangeType`      | string  | `"warning"`  | Severity for ranging over a value of undetermined type |
-| `enableAutocompletion`              | boolean | `true`       | Enable completions                                     |
-| `trace.server`                      | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"` |
+Common options:
+
+| Option                | Type    | Default      | Description                                             |
+| --------------------- | ------- | ------------ | ------------------------------------------------------- |
+| `enableHover`         | boolean | `true`       | Show hover tooltips                                     |
+| `enableDefinition`    | boolean | `true`       | Enable go-to-definition                                 |
+| `enableDiagnostics`   | boolean | `true`       | Enable all diagnostics                                  |
+| `enableAutocompletion`| boolean | `true`       | Enable completions                                      |
+| `trace.server`        | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"`  |
 
 Setting `trace.server` to `"verbose"` logs the full LSP traffic and is useful when debugging why a feature isn't working. The output appears in the *Output* panel (VS Code) or the LSP4IJ console (JetBrains).
+
+The `diagnostics` object controls severity per check. For example:
+
+```json
+"diagnostics": {
+  "invalidFunction": "warning",
+  "doubleDeclaredVariable": "disabled"
+}
+```
+
+For the full list of diagnostic keys and their defaults see [docs/configuration.md](configuration.md).

@@ -2,6 +2,58 @@
 
 The server is implemented in Go using [glsp](https://github.com/tliron/glsp). It communicates with IDE clients via stdio.
 
+## System Overview
+
+```mermaid
+graph TD
+    subgraph VSCode_Ecosystem["Visual Studio Code Ecosystem"]
+        VSExtension["VS Code Extension (TypeScript)"]
+        VS_lf["Local: Static Syntax, Snippets"] -- Directly Handled By --> VSExtension
+        VSExtension -- Launches --> VS_LSPClient["LSP Client"]
+    end
+
+    subgraph JetBrains_Ecosystem["JetBrains IDE Ecosystem"]
+        JB_lf["Local: Static Syntax, Snippets"] -- Directly Handled By --> JBPlugin
+        JBPlugin["JetBrains Plugin (Kotlin)"]
+        JBPlugin -- Uses --> LSP4IJ["LSP4IJ Client (RedHat)"]
+        JBPlugin -- Interfaces with --> IJPlatform["IntelliJ Platform"]
+    end
+
+    subgraph Shared_LanguageServer["Shared Language Server (Go)"]
+        GLSP_Interface["glsp (tliron/glsp)"]
+
+        subgraph Pkg_Handlers["handlers package"]
+            CompletionHandler["Completion"]
+            HoverHandler["Hover"]
+            ReferencesHandler["References"]
+            EventHandlers["Diagnostics / Definition / …"]
+        end
+
+        subgraph Pkg_Types["types package"]
+            TypeTree["Typed Tree"]
+            TypeAnalysis["Type Analysis"]
+        end
+
+        subgraph Pkg_Parser["parse package"]
+            Parser["AST Parser (ParsePartial mode)"]
+        end
+
+        GLSP_Interface <-- "Receives / Responds" --> Pkg_Handlers
+        Pkg_Handlers -- Uses --> Pkg_Types
+        Pkg_Handlers -- Uses --> Pkg_Parser
+    end
+
+    VS_LSPClient <-- "LSP over stdio" --> GLSP_Interface
+    LSP4IJ <-- "LSP over stdio" --> GLSP_Interface
+
+    style Shared_LanguageServer fill:#bbdee6,stroke:#333,stroke-width:2px
+    style Pkg_Handlers fill:#e1f5fe,stroke:#333,stroke-width:1px
+    style Pkg_Types fill:#e1f5fe,stroke:#333,stroke-width:1px
+    style Pkg_Parser fill:#e1f5fe,stroke:#333,stroke-width:1px
+    style VSExtension fill:#ccf,stroke:#333,stroke-width:1px
+    style JBPlugin fill:#cfc,stroke:#333,stroke-width:1px
+```
+
 ## Architecture
 
 ### Core Components
@@ -161,23 +213,20 @@ func formatMarkdown(symbol *Symbol) string {
 
 ### 2. Register Handler
 
-In `handlers/initialize.go`, add to the handler map:
+In `initialize.go`, add to `setupHandlers()`:
 
 ```go
-func setupHandlers(langServerName string, langServerVersion string) {
-    lsName = langServerName
-    version = langServerVersion
-
+func setupHandlers() {
     handler = protocol.Handler{
         Initialize:                      initialize,
         Initialized:                     initialized,
         Shutdown:                        shutdown,
-        TextDocumentCompletion:          completion,
-        TextDocumentDidOpen:             didOpen,
-        TextDocumentDidChange:           didChange,
-        TextDocumentDidClose:            didClose,
-        TextDocumentHover:               hover,              // <-- Add here
-        TextDocumentReferences:          references,
+        TextDocumentCompletion:          handlers.CompletionWithFallback,
+        TextDocumentDidOpen:             handlers.DidOpen,
+        TextDocumentDidChange:           handlers.DidChange,
+        TextDocumentDidClose:            handlers.DidClose,
+        TextDocumentHover:               handlers.Hover,  // <-- add here
+        TextDocumentReferences:          handlers.References, 
         // ... other handlers
     }
 }
@@ -200,45 +249,43 @@ func initialize(_ *glsp.Context, _ *protocol.InitializeParams) (any, error) {
 
 ### 4. Write Tests
 
-In `handlers/hover_test.go`:
+In `handlers/hover_test.go`. The test suite uses a shared `store` (the `documentStore`) and small helpers to configure the server for the duration of a test:
 
 ```go
 package handlers
 
 import (
     "testing"
+
+    "github.com/stretchr/testify/require"
     protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+// TestMain (in main_test.go) seeds global functions before any test runs:
+//
+//   func TestMain(m *testing.M) {
+//       types.SetGlobalFuncs(types.BuiltinFuncs())
+//       os.Exit(m.Run())
+//   }
+
 func TestHover(t *testing.T) {
-    // Setup
-    setupHandlers("test", "0.0.1")
-    
-    // Create test document
-    uri := "file:///test.tmpl"
-    doc := &Document{
-        URI:     uri,
-        Content: "{{ .Name }}",
-    }
-    documents[uri] = doc
-    
-    // Test hover at cursor position
+    enableHover(t) // sets EnableHover: true and restores original config after the test
+
+    uri := "file:///test/document.go"
+    store.Set(uri, "{{ .Name }}")
+    t.Cleanup(func() { store.Remove(uri) })
+
     params := &protocol.HoverParams{
         TextDocumentPositionParams: protocol.TextDocumentPositionParams{
             TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-            Position:     protocol.Position{Line: 0, Character: 3},
+            Position:     protocol.Position{Line: 0, Character: 4},
         },
     }
-    
-    result, err := hover(nil, params)
-    
-    // Verify result
-    if err != nil {
-        t.Fatalf("unexpected error: %v", err)
-    }
-    if result == nil {
-        t.Fatalf("expected hover result, got nil")
-    }
+
+    result, err := Hover(nil, params)
+
+    require.NoError(t, err)
+    require.NotNil(t, result)
 }
 ```
 

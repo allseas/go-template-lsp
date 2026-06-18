@@ -19,14 +19,14 @@ expression at this position?" without re-walking the source.
 
 Defined in [analyse.go](../server/types/analyse.go):
 
-| Symbol                                         | Purpose                                                                                                                                                                                                                                         |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Tree`                                         | Typed counterpart of `parse.Tree`. Holds `Root *ListNode`, the function map, the optional `DotType` / `Pkg`, and accumulated `TypeErrors`.                                                                                                      |
-| `NewTree(parseTree, funcs, dotType, pkg) Tree` | Main constructor. Walks the parse tree and returns a fully analysed `Tree`. `funcs` carries the template's known global functions (typically `types.GlobalFuncs()` - see [features/func_hints.md](features/func_hints.md)).                     |
-| `NewTreeWithType(...)`                         | Thin wrapper around `NewTree` for callers that have a `*types.Named` dot type.                                                                                                                                                                  |
-| `TError`                                       | A type error attached to a specific typed `Node`, categorised by `ErrorType`.                                                                                                                                                                   |
+| Symbol                                         | Purpose                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Tree`                                         | Typed counterpart of `parse.Tree`. Holds `Root *ListNode`, the function map, the optional `DotType` / `Pkg`, and accumulated `TypeErrors`.                                                                                                                                     |
+| `NewTree(parseTree, funcs, dotType, pkg) Tree` | Main constructor. Walks the parse tree and returns a fully analysed `Tree`. `funcs` carries the template's known global functions (typically `types.GlobalFuncs()` - see [features/func_hints.md](features/func_hints.md)).                                                    |
+| `NewTreeWithType(...)`                         | Thin wrapper around `NewTree` for callers that have a `*types.Named` dot type.                                                                                                                                                                                                 |
+| `TError`                                       | A type error attached to a specific typed `Node`, categorised by `ErrorType`.                                                                                                                                                                                                  |
 | `ErrorType` constants                          | `ErrorTypeInvalidField`, `ErrorTypeInvalidFunction`, `ErrorTypeInvalidCommand`, `ErrorTypeInvalidRange`, `ErrorTypeInvalidIf`, `ErrorTypeInvalidWith`, `ErrorUndeclaredVariable`, `ErrorDoubleDeclaredVariable`, `ErrorTypeInvalidTemplateArg`, `ErrorArgumentNumberMismatch`. |
-| `Node` interface                               | Common interface for typed nodes; adds `ValueType() types.Type` and `IsElseList() bool` on top of the usual parse-node API.                                                                                                                     |
+| `Node` interface                               | Common interface for typed nodes; adds `ValueType() types.Type` and `IsElseList() bool` on top of the usual parse-node API.                                                                                                                                                    |
 
 Concrete node types (in [node.go](../server/types/node.go)) mirror the parse
 package: `ListNode`, `ActionNode`, `PipeNode`, `CommandNode`, `IdentifierNode`,
@@ -67,6 +67,21 @@ pattern is used inside branch helpers:
 - **`range`** - like `with`, but `dotType` becomes the element type derived
   by `getRangeableType` (array / slice / map / chan element / integer / iter.Seq / iter.Seq2). The single-decl form binds `$v` to the element type;
   the two-decl form binds `$i` to key of map and `Seq2`, otherwise to `int` and `$v` to the element type.
+
+  `getRangeableType` resolves pointer indirection before switching on the underlying type:
+
+  | Ranged-over type           | `$i` (key) type          | `$v` (value / dot) type             |
+  | -------------------------- | ------------------------ | ----------------------------------- |
+  | `[]T`, `[N]T`              | `int`                    | `T`                                 |
+  | `map[K]V`                  | `K`                      | `V`                                 |
+  | `chan T`                   | `int`                    | `T`                                 |
+  | integer (`int`, `uint`, …) | `int`                    | integer type itself                 |
+  | `iter.Seq[V]`              | `nil` (single-decl only) | `V`                                 |
+  | `iter.Seq2[K, V]`          | `K`                      | `V`                                 |
+  | empty `interface{}`        | unknown                  | unknown (emits `ErrorUnknownType`)  |
+  | struct / non-rangeable     |                          | (emits `ErrorTypeInvalidRange`)     |
+  | `nil` / unresolved         |                          | (emits `ErrorTypeUnknownRangeType`) |
+
 - **`if`** - does *not* introduce a new dot scope. Both `List` and `ElseList`
   are analysed with the surrounding dot. Variables declared in the condition
   pipe are popped on exit.
