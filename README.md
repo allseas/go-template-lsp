@@ -7,6 +7,7 @@ This project was started as a 10-week student project at Allseas by a group of 5
 ## Table of Contents <!-- omit in toc -->
 
 - [Features](#features)
+- [User Testimonies](#user-testimonies)
 - [Repository Structure](#repository-structure)
 - [Development](#development)
   - [Requirements](#requirements)
@@ -47,6 +48,16 @@ This project was started as a 10-week student project at Allseas by a group of 5
 
 For the full feature roadmap, see [docs/features/README.md](docs/features/README.md).
 For an end-user guide, see [docs/usage.md](docs/usage.md).
+
+## User Testimonies
+
+The following quotes are from the users of our extension after seeing the demonstration.
+
+> 5/5. Looks comprehensive and addresses the major points of concern when using Go templates.
+
+> 5/5. It seems very complete and like it would improve my life.
+
+> 🔥!
 
 ## Repository Structure
 
