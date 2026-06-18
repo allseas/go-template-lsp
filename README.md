@@ -37,12 +37,12 @@ This project was started as a 10-week student project at Allseas by a group of 5
 | Custom function hints (`//tmpl:func`)                    | ✅       | ✅         | Must     |
 | Template type checking                                   | ✅       | ✅         | Must     |
 | Configuration (project + IDE)                            | ✅       | ✅         | Must     |
-| Snippets                                                 | ✅       | ✅         | Could    |
 | Wrap selection in a comment                              | ✅       | ✅         | Should   |
 | Wrap selection in a block                                | ✅       | ✅         | Should   |
-| Type checking on function arguments                      | ⏳       | ⏳         | Should   |
+| Type checking on function arguments                      | ✅       | ✅         | Should   |
 | Highlight matching `{{end}}`                             | ⏳       | ⏳         | Should   |
 | Unused variable detection                                | ⏳       | ⏳         | Should   |
+| Snippets                                                 | ✅       | ✅         | Could    |
 | Missing whitespace trim detection                        | ⏳       | ⏳         | Could    |
 | Syntax highlighting for embedded language                | ❓       | ❓         | Could    |
 

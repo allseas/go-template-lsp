@@ -4,16 +4,22 @@ Diagnostics report errors in template files as squiggly underlines. They are pub
 
 ## What the user sees
 
-| Template input                | Diagnostic message                                                        | Range                                        |
-| ----------------------------- | ------------------------------------------------------------------------- | -------------------------------------------- |
-| `{{ $?????`                   | `undefined variable: bad character U+003F '?'`                            | The `{{ … }}` block containing the bad token |
-| `{{ }}`                       | `template: …: missing value for command`                                  | The full `{{ }}`                             |
-| `{{ $x }}` (undeclared)       | `undefined variable: $x`                                                  | The `{{ … }}` block                          |
-| `{{ foo }}` Unknown function  | `unsupported function or unregistered command: foo`                       | The `{{ … }}` block                          |
-| `{{ $x := 1 }} {{ $x := 2 }}` | `duplicate variable name: $x`                                             | The `{{ … }}` block with the duplicate       |
-| `{{template "T" .Order}}`*    | `template "T" expects argument of type models.User, but got models.Order` | The full `{{ … }}` block                     |
+| Template input                                           | Diagnostic message                                                        | Range                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------------- |
+| `{{ $?????`                                              | `undefined variable: bad character U+003F '?'`                            | The `{{ … }}` block containing the bad token |
+| `{{ }}`                                                  | `template: …: missing value for command`                                  | The full `{{ }}`                             |
+| `{{ $x }}` (undeclared)                                  | `undefined variable: $x`                                                  | The `{{ … }}` block                          |
+| `{{ foo }}` Unknown function                             | `unsupported function or unregistered command: foo`                       | The `{{ … }}` block                          |
+| `{{ $x := 1 }} {{ $x := 2 }}`                            | `variable $x already declared in this scope`                              | The `{{ … }}` block with the duplicate       |
+| `{{ range .Items }}{{ $x := 1 }}{{ $x := 2 }}{{ end }}`* | `variable $x already declared in this scope`                              | The redeclaration `{{ … }}` block            |
+| `{{ range . }}`** (`.` is a struct)                      | `cannot range over value of type models.Order`                            | The `{{ range … }}` block                    |
+| `{{/*gotype: pkg.NoSuchType*/}}`***                      | `could not load type "pkg.NoSuchType": …`                                 | The hint comment                             |
+| `{{template "T" .Order}}`****                            | `template "T" expects argument of type models.User, but got models.Order` | The full `{{ … }}` block                     |
 
-*Template `T` has type hint `/*gotype: models.User*/`. See [template_checking.md](template_checking.md).
+*Redeclaration inside `{{ range }}` clause; same `doubleDeclaredVariable` diagnostic as flat scope.
+**`invalidRange` diagnostic; raised when the ranged-over value is not a slice, array, map, channel, or string.
+***`hintLoadFailure` diagnostic; the exact message includes the loader error. See [type_hints.md](type_hints.md).
+****Template `T` has type hint `/*gotype: models.User*/`. See [template_checking.md](template_checking.md).
 
 ## Request flow
 
