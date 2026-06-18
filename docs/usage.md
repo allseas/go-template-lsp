@@ -293,16 +293,25 @@ Go to *Settings -> Tools -> Go Text Template*. Application-level settings apply 
 
 ### Configuration Options Reference
 
-| Option                               | Type    | Default      | Description                                            |
-| ------------------------------------ | ------- | ------------ | ------------------------------------------------------ |
-| `enableHover`                        | boolean | `true`       | Show hover tooltips                                    |
-| `enableDefinition`                   | boolean | `true`       | Enable go-to-definition                                |
-| `enableDiagnostics`                  | boolean | `true`       | Enable all diagnostics                                 |
-| `diagnostics.syntaxError`            | string  | `"error"`    | Severity for syntax errors                             |
-| `diagnostics.doubleDeclaredVariable` | string  | `"warning"`  | Severity for duplicate variable declarations           |
-| `diagnostics.invalidFunction`        | string  | `"warning"`  | Severity for unknown functions                         |
-| `diagnostics.unknownRangeType`       | string  | `"warning"`  | Severity for ranging over a value of undetermined type |
-| `enableAutocompletion`               | boolean | `true`       | Enable completions                                     |
-| `trace.server`                       | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"` |
+Common options:
+
+| Option                | Type    | Default      | Description                                             |
+| --------------------- | ------- | ------------ | ------------------------------------------------------- |
+| `enableHover`         | boolean | `true`       | Show hover tooltips                                     |
+| `enableDefinition`    | boolean | `true`       | Enable go-to-definition                                 |
+| `enableDiagnostics`   | boolean | `true`       | Enable all diagnostics                                  |
+| `enableAutocompletion`| boolean | `true`       | Enable completions                                      |
+| `trace.server`        | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"`  |
 
 Setting `trace.server` to `"verbose"` logs the full LSP traffic and is useful when debugging why a feature isn't working. The output appears in the *Output* panel (VS Code) or the LSP4IJ console (JetBrains).
+
+The `diagnostics` object controls severity per check. For example:
+
+```json
+"diagnostics": {
+  "invalidFunction": "warning",
+  "doubleDeclaredVariable": "disabled"
+}
+```
+
+For the full list of diagnostic keys and their defaults see [docs/configuration.md](configuration.md).
