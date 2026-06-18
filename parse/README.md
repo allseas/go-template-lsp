@@ -2,7 +2,7 @@
 
 This is an extended version of the go/text/template/parse package.
 
-Changes implemented:
+## Changes implemented
 
 - added new node type (Undefined)
 - added new operation mode to the parser (ParsePartial)
@@ -22,3 +22,43 @@ Changes implemented:
 - Added end field to tree, signifying the position in file where the definition ends.
 
 We aim to have these changes eventually merged into the upstream of go, then having this package locally will become obsolete.
+
+## Usage
+
+The package exposes two distinct parse modes.
+
+### Normal mode (`Parse`)
+
+Behaves identically to the upstream `text/template/parse` package: returns an error and an empty tree set on any syntactic mistake.
+
+```go
+treeSet, err := parse.Parse("myTemplate", text, "{{", "}}", funcMap)
+if err != nil {
+    // template had a syntax error; treeSet is empty
+}
+```
+
+### Partial mode (`ParsePartial`)
+
+Used by the language server so that an incomplete or syntactically broken template still produces a usable AST. Errors are collected in `Tree.Errors` rather than aborting the parse. Malformed nodes become `UndefinedNode` values localised to the smallest containing construct.
+
+```go
+t := parse.New("t")
+t.Mode = parse.ParsePartial | parse.SkipFuncCheck | parse.ParseComments
+treeSet := map[string]*parse.Tree{}
+_, err := t.Parse(text, "{{", "}}", treeSet)
+// err is non-nil only for truly unrecoverable failures.
+// Partial errors are in t.Errors and as UndefinedNode leaves in the AST.
+```
+
+Flags that can be combined with `|`:
+
+| Flag            | Effect                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ParseComments` | Include `{{/* … */}}` nodes in the tree (required for gotype hints)                                              |
+| `SkipFuncCheck` | Do not validate that called functions are registered (required when the function map is not known at parse time) |
+| `ParsePartial`  | Non-fatal error recovery; populate `Tree.Errors` instead of aborting                                             |
+
+### `UndefinedNode`
+
+An `UndefinedNode` in the tree signals a position where parsing failed but recovery was possible. The server's diagnostics handler walks the tree and converts these into LSP diagnostics. See [docs/features/diagnostics.md](../docs/features/diagnostics.md) for details.
