@@ -67,7 +67,7 @@ gotemplate-lsp/
 │   └── handlers/   # LSP request handlers
 ├── clients/
 │   ├── VSCode/     # VS Code extension (TypeScript)
-│   └── JetBrains/ # JetBrains plugin (Kotlin)
+│   └── JetBrains/  # JetBrains plugin (Kotlin)
 ├── syntax/          # TextMate grammar generator (Haskell)
 ├── scripts/         # Build scripts
 ├── docs/            # Documentation
