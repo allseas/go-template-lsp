@@ -4,10 +4,10 @@
  * Verifies the three timing requirements against a ~5 000-line template file.
  *
  *   1. Dynamic analysis (completions)
- *        average response ≤ 1 000 ms
- *        95th percentile  ≤ 2 000 ms
- *   2. Jump to definition   mean ≤ 1 000 ms
- *   3. Find usages          mean ≤ 1 000 ms
+ *        average response < 1 000 ms
+ *        95th percentile  < 2 000 ms
+ *   2. Jump to definition   mean < 1 000 ms
+ *   3. Find usages          mean < 1 000 ms
  *
  * Run via:  npm run benchmark  (or npm run benchmark:allseas)
  */
@@ -17,20 +17,14 @@ import { after, before } from "mocha";
 import * as vscode from "vscode";
 import { cleanupDocument, createDocument } from "./utils";
 
-// ---- Thresholds ----------------------------------------------------------
-
 const THRESHOLD_AVERAGE_MS = 1_000;
 const THRESHOLD_P95_MS = 2_000;
 const THRESHOLD_DEFINITION_MS = 1_000;
 const THRESHOLD_REFERENCES_MS = 1_000;
 
-// ---- Iterations ----------------------------------------------------------
-
 const WARMUP_ITERATIONS = 3;
 const BENCH_ITERATIONS = 20;
 
-// ---- Fixture positions (0-indexed line / character) ----------------------
-//
 // The generated fixture starts with these exact lines:
 //
 //  0  {{- /*gotype: cg/model.Model*/ -}}
@@ -57,8 +51,6 @@ const REF_POS = new vscode.Position(3, 5); // 'c' of $counter
 
 /** After the dot in `.Name` on line 4 (for completions). */
 const COMPL_POS = new vscode.Position(4, 14); // 'N' of .Name
-
-// ---- Fixture generation --------------------------------------------------
 
 function generateFixture(targetLines: number): string {
     const header = [
@@ -104,8 +96,6 @@ function generateFixture(targetLines: number): string {
     return lines.slice(0, targetLines).join("\n") + "\n";
 }
 
-// ---- Statistics ----------------------------------------------------------
-
 interface Stats {
     mean: number;
     p50: number;
@@ -136,8 +126,6 @@ function formatStats(s: Stats): string {
         `p95=${s.p95.toFixed(0)} ms  min=${s.min.toFixed(0)} ms  max=${s.max.toFixed(0)} ms`
     );
 }
-
-// ---- LSP helpers ---------------------------------------------------------
 
 async function measureCompletion(
     uri: vscode.Uri,
@@ -203,8 +191,6 @@ async function waitForServerReady(
     }
 }
 
-// ---- Suite ---------------------------------------------------------------
-
 suite("Benchmark Suite", () => {
     let tmplUri: vscode.Uri;
 
@@ -227,10 +213,9 @@ suite("Benchmark Suite", () => {
     });
 
     // ======================================================================
-    // 1. Dynamic analysis - completions
-    //    SLA: average ≤ 1 000 ms, p95 ≤ 2 000 ms
+    // 1. Completions: average < 1 000 ms, p95 < 2 000 ms
     // ======================================================================
-    test("Dynamic analysis: average completion ≤ 1 000 ms and p95 ≤ 2 000 ms", async function () {
+    test("Dynamic analysis: average completion < 1 000 ms and p95 < 2 000 ms", async function () {
         this.timeout(120_000);
 
         for (let i = 0; i < WARMUP_ITERATIONS; i++) {
@@ -256,10 +241,9 @@ suite("Benchmark Suite", () => {
     });
 
     // ======================================================================
-    // 2. Jump to definition
-    //    SLA: mean ≤ 1 000 ms
+    // 2. Jump to definition: mean < 1 000 ms
     // ======================================================================
-    test(`Jump to definition: mean ≤ ${THRESHOLD_DEFINITION_MS} ms`, async function () {
+    test(`Jump to definition: mean < ${THRESHOLD_DEFINITION_MS} ms`, async function () {
         this.timeout(60_000);
 
         for (let i = 0; i < WARMUP_ITERATIONS; i++) {
@@ -281,10 +265,9 @@ suite("Benchmark Suite", () => {
     });
 
     // ======================================================================
-    // 3. Find usages (references)
-    //    SLA: mean ≤ 1 000 ms
+    // 3. Find usages (references): mean < 1 000 ms
     // ======================================================================
-    test(`Find usages: mean ≤ ${THRESHOLD_REFERENCES_MS} ms`, async function () {
+    test(`Find usages: mean < ${THRESHOLD_REFERENCES_MS} ms`, async function () {
         this.timeout(60_000);
 
         for (let i = 0; i < WARMUP_ITERATIONS; i++) {
