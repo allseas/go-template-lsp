@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"go/types"
 	"testing"
 
 	serverTypes "text-template-server/types"
@@ -100,4 +101,20 @@ func TestHoverMultiDefines(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestMessageVariableChainedIdent tests that hover must show the full chain "$order.TotalAmount float64", not just "$order float64".
+func TestMessageVariableChainedIdent(t *testing.T) {
+	float64Type := types.Typ[types.Float64]
+
+	msg := MessageVariable(
+		&serverTypes.VariableNode{Ident: []string{"$order", "TotalAmount"}},
+		nil,
+		float64Type,
+	)
+
+	assert.Contains(t, msg, "$order.TotalAmount")
+	assert.Contains(t, msg, "float64")
+	assert.NotContains(t, msg, "var $order float64",
+		"should show full chain, not just the base variable name")
 }
