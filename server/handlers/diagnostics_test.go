@@ -143,8 +143,8 @@ func TestCollectDiagnostics_InvalidTokens(t *testing.T) {
 	diags := collectDiagnostics(text, "file:///test.tmpl")
 	require.NotEmpty(t, diags)
 
-	diag, ok := findDiagnosticContaining(diags, "unsupported function or unregistered command")
-	require.True(t, ok, "expected unsupported function diagnostic, got: %v", diagMessages(diags))
+	diag, ok := findDiagnosticContaining(diags, "undefined function")
+	require.True(t, ok, "expected undefined function diagnostic, got: %v", diagMessages(diags))
 
 	startIdx := strings.Index(text, "{{")
 	endIdx := strings.LastIndex(text, "}}") + 2
@@ -171,7 +171,7 @@ func TestCollectDiagnostics_InvalidTokens(t *testing.T) {
 
 	count := 0
 	for _, d := range diags {
-		if strings.Contains(d.Message, "unsupported function") {
+		if strings.Contains(d.Message, "undefined function") {
 			count++
 		}
 	}
@@ -331,11 +331,11 @@ func TestCollectDiagnostics_MultiDefines(t *testing.T) {
 			"{{- end -}}\n"
 
 		diags := collectDiagnostics(src, "file:///diag-multi-err.tmpl")
-		_, ok := findDiagnosticContaining(diags, "unsupported function or unregistered command")
+		_, ok := findDiagnosticContaining(diags, "undefined function")
 		require.True(
 			t,
 			ok,
-			"expected unsupported-function diagnostic in define A, got: %v",
+			"expected undefined-function diagnostic in define A, got: %v",
 			diagMessages(diags),
 		)
 	})
