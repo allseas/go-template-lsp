@@ -61,6 +61,7 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
                   displayName="Project Settings" />
           <fileIconProvider implementation="com.allseas.gotexttemplate.MyFileIconProvider" order="first"/>
           <typedHandler implementation="com.allseas.gotexttemplate.GoTemplateTypedHandler" />
+          <backspaceHandlerDelegate implementation="com.allseas.gotexttemplate.GoTemplateBackspaceHandler" />
      </extensions>
 
      <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">

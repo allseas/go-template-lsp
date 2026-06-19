@@ -10,13 +10,23 @@ import com.intellij.psi.PsiFile
 /**
  * Fixes the "{{}}}" autoclose bug for Go text/template files.
  *
- * When the user types "{{" in a .tmpl file, the IDE sometimes autocloses
- * the single "{" into "{}" (generic brace matching) AND then the TextMate
- * pair "{{" -> "}}" also fires, producing "{{}}}" with the cursor inside.
+ * Two independent layers used to insert a closing "}" for the same "{":
+ *   1. The IDE's generic single-brace matcher autocloses a lone "{" into "{}".
+ *   2. The TextMate `autoClosingPairs` declares "{{" -> "}}".
  *
- * This handler intercepts the second "{" when the buffer is in the state
- * "{|}" (caret between an existing "{" and the unwanted "}") and rewrites
- * it to "{{|}}" deterministically.
+ * When the user typed "{{", both fired and produced "{{}}}" with the caret in
+ * the wrong place. Rather than try to patch up the buffer *after* the fact
+ * (which only worked for one specific caret state), this handler takes full
+ * control of typing "{" inside `.tmpl` files and ALWAYS returns
+ * [Result.STOP]. Because we stop the typing action, neither the generic brace
+ * matcher nor the TextMate pair ever runs, so no layer can double-insert.
+ *
+ * Behaviour:
+ *   * Typing the *first* "{" inserts a single literal "{" (no autoclosed "}"),
+ *     because a lone "{" is not a Go template delimiter.
+ *   * Typing the *second* "{" (completing the "{{" action opener) produces
+ *     "{{}}" with the caret between the delimiters, consuming any stray "}"
+ *     that an earlier layer may already have inserted.
  */
 class GoTemplateTypedHandler : TypedHandlerDelegate() {
     override fun beforeCharTyped(
@@ -28,19 +38,36 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
     ): Result {
         if (c != '{') return Result.CONTINUE
         if (!isGoTemplateFile(file)) return Result.CONTINUE
+        // Leave selection-surrounding to the platform.
+        if (editor.selectionModel.hasSelection()) return Result.CONTINUE
 
-        val caret = editor.caretModel.offset
         val document = editor.document
+        val caret = editor.caretModel.offset
         val text = document.charsSequence
 
-        if (caret <= 0 || caret >= text.length) return Result.CONTINUE
-        if (text[caret - 1] != '{') return Result.CONTINUE
-        if (text[caret] != '}') return Result.CONTINUE
+        val prevChar = if (caret > 0) text[caret - 1] else null
+        val nextChar = if (caret < text.length) text[caret] else null
 
-        // Replace the unwanted single "}" with "{}}", landing the caret
-        // between the resulting "{{" and "}}".
-        document.replaceString(caret, caret + 1, "{}}")
-        editor.caretModel.moveToOffset(caret + 1)
+        // Are we completing a fresh "{{" delimiter? Only when the char right
+        // before the caret is "{" and the one before that is NOT "{" (so we do
+        // not turn "{{" into "{{{...}}}" when typing a third brace).
+        val charBeforePrev = if (caret >= 2) text[caret - 2] else null
+        val completingDelimiter = prevChar == '{' && charBeforePrev != '{'
+
+        if (completingDelimiter) {
+            // We want the buffer to become "{{}}" with the caret between the
+            // delimiters. Consume a stray autoclosed "}" if one is already
+            // sitting under the caret so we don't end up with "{{}}}".
+            val end = if (nextChar == '}') caret + 1 else caret
+            document.replaceString(caret, end, "{}}")
+            editor.caretModel.moveToOffset(caret + 1)
+        } else {
+            // Lone opening brace: insert it literally and suppress the generic
+            // single-brace autoclose so we never get an unwanted "}".
+            document.insertString(caret, "{")
+            editor.caretModel.moveToOffset(caret + 1)
+        }
+
         PsiDocumentManager.getInstance(project).commitDocument(document)
         return Result.STOP
     }
