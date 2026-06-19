@@ -9,6 +9,9 @@ This guide is for developers using the GoTemplate Support extension. It covers w
 - [Installation](#installation)
   - [VS Code](#vs-code)
   - [JetBrains](#jetbrains)
+- [Bug Reporting](#bug-reporting)
+  - [Server Logs in VS Code](#server-logs-in-vs-code)
+  - [Server Logs in JetBrains](#server-logs-in-jetbrains)
 - [File Association](#file-association)
 - [Features](#features)
   - [Syntax Highlighting](#syntax-highlighting)
@@ -46,6 +49,24 @@ This guide is for developers using the GoTemplate Support extension. It covers w
 2. Open *Settings* (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd>) → **Plugins**.
 3. Click the gear icon ⚙ → **Install Plugin from Disk…**
 4. Select the `.zip` file and restart the IDE when prompted.
+
+---
+
+## Bug Reporting
+
+If you encounter issues while using the extension please report them to us by creating a GitHub issue! You can create one easily here: <https://github.com/allseas/go-template-lsp/issues/new?template=bug.yml>.
+
+The following sections explain how to find the relevant server logs.
+
+### Server Logs in VS Code
+
+To find the server logs you should go to the `Output` tab, you can do so by opening the command pallet (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) and then selecting `Output: Focus on Output View`. Then select `Go Template Language Server` and copy the logs into the bug report.
+
+### Server Logs in JetBrains
+
+To find the server logs you need to go the `Language Servers` tab, which you can open in the bottom-left menu. Then, you can navigate to `go-text-template-lsp` and click on the server process (it will be called `started pid:...`). You can copy the logs from `Traces` and `Logs`.
+
+In order to see the logs you might need to not only change the options in the UI or config, but also in the `Language Servers` tab. To enable verbose logging here you need to select `go-text-template-lsp` and go into the `Debug` tab. Then select the `Trace` level to `verbose` and save.
 
 ---
 
