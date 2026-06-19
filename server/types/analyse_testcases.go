@@ -759,6 +759,38 @@ var analyseTestCases = []analyseTestCase{
 		expectedErrors: []TError{},
 	},
 	{
+		// ai
+		// {{ $i := .Inner }}{{ $i.Name }}  -- variable bound to a struct value,
+		// then a field is accessed on the variable.
+		name: "field access on variable bound to struct",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$i")), coms(com(field("Inner")))),
+			actpipe(nil, coms(com(varnf("$i", "Name")))),
+		)),
+		resTree: ttree("test", tlist(
+			mockDotType,
+			tactpipe(
+				mockInnerType,
+				tdecls(tvarn("$i", mockInnerType)),
+				tcoms(tcom(mockInnerType, tfield(mockInnerType, "Inner"))),
+			),
+			tactpipe(
+				types.Typ[types.String],
+				nil,
+				tcoms(
+					tcom(
+						types.Typ[types.String],
+						tvarnf(types.Typ[types.String], "$i", "Name"),
+					),
+				),
+			),
+		)),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
 		// {{ 2 | FuncB 1 }}  -- curried function in pipe: FuncB partially applied with 1, pipe supplies 2
 		name: "curried function in pipe",
 		parseTree: tree("test", list(actpipe(nil, coms(

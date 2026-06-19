@@ -34,7 +34,7 @@ type GlobalFuncEntry struct {
 
 // DefinitionPos returns the best position to navigate to for go-to-definition.
 func (e GlobalFuncEntry) DefinitionPos() token.Pos {
-	if e.Func != nil {
+	if e.Func != nil && e.Func.Pos().IsValid() {
 		return e.Func.Pos()
 	}
 	return e.FuncMapKeyPos
@@ -294,29 +294,30 @@ func extractFuncMapInto(
 			continue
 		}
 		out[name] = GlobalFuncEntry{
-			Func:          resolveFuncObj(kv.Value, info),
+			Func:          resolveFuncObj(name, kv.Value, info),
 			FuncMapKeyPos: bl.Pos(),
 			Fset:          fset,
 		}
 	}
 }
 
-func resolveFuncObj(expr ast.Expr, info *types.Info) *types.Func {
+func resolveFuncObj(name string, expr ast.Expr, info *types.Info) *types.Func {
 	if info == nil {
 		return nil
 	}
-	var ident *ast.Ident
 	switch v := expr.(type) {
 	case *ast.Ident:
-		ident = v
+		fn, _ := info.ObjectOf(v).(*types.Func)
+		return fn
 	case *ast.SelectorExpr:
-		ident = v.Sel
-	default:
-		return nil
+		fn, _ := info.ObjectOf(v.Sel).(*types.Func)
+		return fn
+	case *ast.FuncLit:
+		sig, _ := info.TypeOf(v).(*types.Signature)
+		if sig == nil {
+			return nil
+		}
+		return types.NewFunc(token.NoPos, nil, name, sig)
 	}
-	if ident == nil {
-		return nil
-	}
-	fn, _ := info.ObjectOf(ident).(*types.Func)
-	return fn
+	return nil
 }

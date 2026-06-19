@@ -301,6 +301,7 @@ Common options:
 | `enableDefinition`    | boolean | `true`       | Enable go-to-definition                                 |
 | `enableDiagnostics`   | boolean | `true`       | Enable all diagnostics                                  |
 | `enableAutocompletion`| boolean | `true`       | Enable completions                                      |
+| `pipeChainCompletion`                      | string  | `"full"`     | Nested field completions: `"off"`, `"full"`, or `"step"` |
 | `trace.server`        | string  | `"messages"` | LSP trace level: `"off"`, `"messages"`, or `"verbose"`  |
 
 Setting `trace.server` to `"verbose"` logs the full LSP traffic and is useful when debugging why a feature isn't working. The output appears in the *Output* panel (VS Code) or the LSP4IJ console (JetBrains).
@@ -315,3 +316,5 @@ The `diagnostics` object controls severity per check. For example:
 ```
 
 For the full list of diagnostic keys and their defaults see [docs/configuration.md](configuration.md).
+
+When a specific type in the template should be provided, `pipeChainCompletion` allows users to see valid fields/methods differently. For example, if a `string` should be provided, when `pipeChainCompletion` is set to `full`, we see all the available children fields/methods like `.Address.City` or `.Address.Info.Desc.Info1` up to the depth of 8. If it is set to `step`, only immediate fields are suggested in case they or their children match the type. When it is `off`, nested fields are not suggested.

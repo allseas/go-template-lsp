@@ -136,6 +136,16 @@
                     "default": true,
                     "description": "Enable/disable autocompletion."
                 },
+                "goTmplSupport.pipeChainCompletion": {
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "full",
+                        "step"
+                    ],
+                    "default": "full",
+                    "description": "Change nested field configuration"
+                },
                 "goTmplSupport.trace.server": {
                     "type": "string",
                     "enum": [

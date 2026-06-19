@@ -17,8 +17,9 @@ These options are supported on all platforms:
 | `enableDefinition`  | `boolean` | `true`     | Enable/disable go-to-definition                      |
 | `enableDiagnostics` | `boolean` | `true`     | Enable/disable all diagnostics                       |
 | `diagnostics`       | `object`  | see below  | Per-diagnostic severity levels (see table below)     |
-| `enableAutocompletion` | `boolean` | `true`  | Enable/disable autocompletion                        |
+| `enableAutocompletion` | `boolean` | `true`     | Enable/disable autocompletion                        |
 | `trace.server`      | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose` |
+| `pipeChainCompletion`      | `string`  | `full`     | Nested completion logic: `off`, `full`, or `step`    |
 
 ### `diagnostics` keys
 

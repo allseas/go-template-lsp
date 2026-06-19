@@ -29,6 +29,7 @@ class TextTemplateLspLanguageClient(
                         addProperty("server", config.traceServer.value)
                     },
                 )
+                addProperty("pipeChainCompletion", config.chainServer.value)
             }
         return JsonObject().apply {
             add("goTmplSupport", settings)

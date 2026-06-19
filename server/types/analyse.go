@@ -669,29 +669,8 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 		return ident
 	}
 
-	// if no function with that name -> resolve a method on the current dot type
-	if named := dotAsNamed(ctx.dotType); named != nil {
-		for _, m := range NamedMethods(named) {
-			if m.Name == name && m.Func != nil {
-				ident.typ = m.Func.Type()
-				return ident
-			}
-		}
-	}
-
 	ctx.errorf(ident, ErrorTypeInvalidFunction, "undefined function: %s", name)
 	return ident
-}
-
-func dotAsNamed(t types.Type) *types.Named {
-	if t == nil {
-		return nil
-	}
-	if ptr, ok := t.(*types.Pointer); ok {
-		t = ptr.Elem()
-	}
-	n, _ := t.(*types.Named)
-	return n
 }
 
 func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *VariableNode {
@@ -705,7 +684,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	var baseType types.Type
 	found := false
 	for i := len(ctx.vars) - 1; i >= 0; i-- {
-		if ctx.vars[i].Ident[0] == n.Ident[0] {
+		if len(ctx.vars[i].Ident) == 1 && ctx.vars[i].Ident[0] == n.Ident[0] {
 			baseType = ctx.vars[i].typ
 			found = true
 			break
@@ -714,6 +693,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if !found {
 		return v
 	}
+	v.Base = baseType
 
 	// $var with no field path -- type is the variable's type.
 	if len(n.Ident) == 1 {
@@ -1089,8 +1069,10 @@ func typesCompatible(want, got types.Type) bool {
 	if isEmptyInterface(want) || isEmptyInterface(got) {
 		return true
 	}
-	return types.Identical(want, got) ||
-		(want != nil && got != nil && types.AssignableTo(got, want))
+	if want == nil || got == nil {
+		return false
+	}
+	return types.Identical(want, got) || types.AssignableTo(got, want)
 }
 
 // getNodeType returns the type of a node without modifying it.

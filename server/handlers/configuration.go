@@ -72,6 +72,7 @@ type Config struct {
 	EnableDiagnostics    bool              `json:"enableDiagnostics"`
 	Diagnostics          DiagnosticsConfig `json:"diagnostics"`
 	EnableAutocompletion bool              `json:"enableAutocompletion"`
+	PipeChainCompletion  string            `json:"pipeChainCompletion"`
 	Trace                struct {
 		Server protocol.TraceValue `json:"server"`
 	} `json:"trace"`
@@ -99,6 +100,7 @@ var (
 			types.ErrorTypeEmptyDefineName:    DiagnosticSeverityWarning,
 		},
 		EnableAutocompletion: true,
+		PipeChainCompletion:  "full",
 	}
 	configMu sync.RWMutex
 )

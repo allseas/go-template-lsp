@@ -16,6 +16,7 @@ class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
         var diagnosticsOverride: MutableMap<String, String> = mutableMapOf(),
         var enableAutocompletionOverride: Boolean? = null,
         var traceServerOverride: AppSettings.TraceLevel? = null,
+        var chainServerOverride: AppSettings.ChainLevel? = null,
     )
 
     private var state = State()
@@ -39,6 +40,7 @@ class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
             diagnostics = (appState.diagnostics + state.diagnosticsOverride).toMutableMap(),
             enableAutocompletion = state.enableAutocompletionOverride ?: appState.enableAutocompletion,
             traceServer = state.traceServerOverride ?: appState.traceServer,
+            chainServer = state.chainServerOverride ?: appState.chainServer,
         )
     }
 
