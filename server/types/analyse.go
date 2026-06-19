@@ -238,7 +238,18 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if argType != nil && argType.String() != expectedType.String() {
+			if isEmptyInterface(argType) {
+				ctx.errorf(
+					t,
+					ErrorUnknownType,
+					"template %q expects argument of type %s, it's impossible to determine the type of the argument provided",
+					n.Name,
+					expectedType.String(),
+				)
+			}
+			if argType != nil && argType != expectedType &&
+				!types.AssignableTo(argType, expectedType) &&
+				!types.ConvertibleTo(argType, expectedType) {
 				ctx.errorf(
 					t,
 					ErrorTypeInvalidTemplateArg,
@@ -705,6 +716,7 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		Pos:      Pos(n.Position()),
 		Ident:    n.Ident,
 		parent:   parent,
+		dotType:  ctx.dotType,
 	}
 
 	if len(n.Ident) == 0 {
@@ -797,6 +809,14 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 			ctx.vars = append(ctx.vars, typePipe.Decl[0])
 			typePipe.Decl[0].typ = types.Typ[types.Int] // unsigned int for index
 			ctx.vars = append(ctx.vars, typePipe.Decl[1])
+
+			if typePipe.Decl[0].Ident[0] == typePipe.Decl[1].Ident[0] {
+				ctx.errorf(
+					typePipe,
+					ErrorDoubleDeclaredVariable,
+					"assignment to multiple variables with the same name is not supported",
+				)
+			}
 		}
 
 	} else {
@@ -824,6 +844,12 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 				ErrorUndeclaredVariable,
 				"undeclared variable: %s is assigned to",
 				typePipe.Decl[0].Ident[0],
+			)
+		} else {
+			ctx.errorf(
+				typePipe,
+				ErrorTypeInvalidCommand,
+				"assignment to multiple variables is not supported",
 			)
 		}
 	}
@@ -1044,7 +1070,7 @@ func typesCompatible(want, got types.Type) bool {
 	if want == nil || got == nil {
 		return false
 	}
-	return types.AssignableTo(got, want)
+	return types.Identical(want, got) || types.AssignableTo(got, want)
 }
 
 // getNodeType returns the type of a node without modifying it.

@@ -33,7 +33,7 @@ This document provides an overview of all features implemented and planned for t
 | Duplicate variable detection           | ✅ (✅)            | ✅ (✅)              | Must     | Warn about redefined variables                                            |
 | Unknown function detection             | ✅ (✅)            | ✅ (✅)              | Must     | Warn about calls to unregistered functions                                |
 | Template type checking                 | ✅ (⏳)            | ✅ (⏳)              | Must     | Validate argument types on `{{template}}` calls                           |
-| Function argument type checking        | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Validate argument types on function calls                                 |
+| Function argument type checking        | ✅ (⏳)            | ✅ (⏳)              | Should   | Validate argument types on function calls                                 |
 | Unused variable detection              | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Flag declared but unused variables                                        |
 | Missing whitespace trim detection      | ⏳ (⏳)            | ⏳ (⏳)              | Could    | Suggest whitespace trim operators when needed                             |
 | **Type & Function Hints**              |                  |                    |          |                                                                           |
