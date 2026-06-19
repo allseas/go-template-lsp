@@ -19,7 +19,6 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
                 "invalidFunction" to "warning",
                 "invalidCommand" to "error",
                 "invalidRange" to "error",
-                "invalidIf" to "error",
                 "invalidWith" to "error",
                 "undeclaredVariable" to "error",
                 "doubleDeclaredVariable" to "warning",

@@ -87,7 +87,6 @@ var (
 			types.ErrorTypeInvalidFunction:    DiagnosticSeverityWarning,
 			types.ErrorTypeInvalidCommand:     DiagnosticSeverityError,
 			types.ErrorTypeInvalidRange:       DiagnosticSeverityError,
-			types.ErrorTypeInvalidIf:          DiagnosticSeverityError,
 			types.ErrorTypeInvalidWith:        DiagnosticSeverityError,
 			types.ErrorUndeclaredVariable:     DiagnosticSeverityError,
 			types.ErrorDoubleDeclaredVariable: DiagnosticSeverityWarning,
