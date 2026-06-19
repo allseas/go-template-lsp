@@ -1402,4 +1402,47 @@ var analyseTestCases = []analyseTestCase{
 			{typ: ErrorUnknownType},
 		},
 	},
+	{
+		name: "inline-literal func (nil *types.Func) produces no undefined-function error",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("inlineFn")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
+			tcom(nil, tident("inlineFn", nil)),
+		)))),
+		funcs:          map[string]*types.Func{"inlineFn": nil},
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		name: "truly undefined function produces error",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("noSuchFunc")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
+			tcom(nil, tident("noSuchFunc", nil)),
+		)))),
+		funcs:   map[string]*types.Func{},
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidFunction},
+		},
+	},
+	{
+		name: "inline-literal func in pipeline produces no error",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(str("hello")),
+			com(ident("inlineFn")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
+			tcom(types.Typ[types.String], tstr("hello")),
+			tcom(nil, tident("inlineFn", nil)),
+		)))),
+		funcs:          map[string]*types.Func{"inlineFn": nil},
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
 }
