@@ -108,13 +108,11 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 			diagnostics = append(diagnostics, analyzeNode(n, text)...)
 			return true
 		})
+		diagnostics = append(diagnostics, collectTemplateDiagnostics(tree, text)...)
 	}
 
-	// Surface template argument type errors and hint load failures from the stored document.
+	// Surface hint load failures and empty define names from the stored document.
 	if doc, ok := store.Get(uri); ok {
-		for _, tt := range doc.typedTrees {
-			diagnostics = append(diagnostics, collectTemplateDiagnostics(tt, text)...)
-		}
 		diagnostics = append(diagnostics, collectHintLoadFailureDiagnostics(doc, text)...)
 		diagnostics = append(diagnostics, collectEmptyDefineNameDiagnostics(doc, text)...)
 	}

@@ -171,7 +171,7 @@ func TestCollectDiagnostics_InvalidTokens(t *testing.T) {
 
 	count := 0
 	for _, d := range diags {
-		if strings.Contains(d.Message, "unsupported function") {
+		if strings.Contains(d.Message, "undefined function") {
 			count++
 		}
 	}
