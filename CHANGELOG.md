@@ -9,7 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Integration test coverage for the custom funcmap (`//tmpl:func "global"`)
+  feature. New shared cross-client testcases (grep prefix `Custom funcmap:`) in
+  `test/testcases/{completion,definition,diagnostics}.json` exercise completion,
+  go-to-definition and diagnostics for workspace-defined global template
+  functions, backed by a new fixture
+  `test/resources/templ-tests/funcs/global_funcs.go` (`gtmplShout`,
+  `gtmplRepeatN`, `gtmplGreet`). The completion/definition cases carry a
+  `gotype:` hint so the JetBrains client routes them through the heavy fixture
+  (which loads the Go workspace); the diagnostics cases are consumed by the
+  VSCode suite only (JetBrains has no shared diagnostics test pipeline).
+  Note: the "no diagnostic" diagnostics case uses only *named-reference* global
+  funcs (`gtmplShout`, `gtmplRepeatN`); inline-literal funcmap values (e.g.
+  `gtmplGreet`) currently still raise an `undefined function` diagnostic in
+  `analyse.go` even though they complete fine — pre-existing behaviour, left
+  untouched here.
+- Type-awareness diagnostics coverage for custom global funcs: the
+  `Custom funcmap:` diagnostics cases now also assert that calling a typed
+  named-reference func with too few arguments, a wrong argument type, or a
+  nested call whose return type is incompatible each produces the expected
+  `argumentNumberMismatch` / `invalidCommand` diagnostic (and that a correctly
+  typed call stays clean).
+
 ### Changed
+
+- JetBrains `DefinitionGotypeTest` now honours each testcase's `poll` flag,
+  retrying go-to-declaration (and pumping the IDE event queue) until a
+  cross-file target resolves. This mirrors the VSCode `pollDefinitions` helper
+  and removes latent flakiness in the heavy-fixture definition tests where the
+  first asynchronous LSP definition response could arrive after the assertion.
 
 ### Removed
 

@@ -114,5 +114,52 @@
         { "index": 0, "severity": "error", "messageContains": "unexpected EOF" }
       ]
     }
+  },
+  {
+    "name": "Custom funcmap: registered func produces no unsupported-function diagnostic",
+    "content": "{{ gtmplShout \"hi\" }}\n{{ gtmplRepeatN \"a\" 2 }}\n",
+    "expected": {
+      "count": 0
+    }
+  },
+  {
+    "name": "Custom funcmap: unregistered func still produces diagnostic",
+    "content": "{{ gtmplDoesNotExist }}\n",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "warning", "messageContains": "gtmplDoesNotExist" }
+      ]
+    }
+  },
+  {
+    "name": "Custom funcmap: too few arguments to typed func is reported",
+    "content": "{{ gtmplRepeatN \"a\" }}\n",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "error", "messageContains": "arguments" }
+      ]
+    }
+  },
+  {
+    "name": "Custom funcmap: wrong argument type to typed func is reported",
+    "content": "{{ gtmplRepeatN \"a\" \"b\" }}\n",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "error", "messageContains": "expected type int" }
+      ]
+    }
+  },
+  {
+    "name": "Custom funcmap: nested func return type is type-checked",
+    "content": "{{ gtmplRepeatN \"x\" (gtmplShout \"y\") }}\n",
+    "expected": {
+      "minCount": 1,
+      "diagnostics": [
+        { "index": 0, "severity": "error", "messageContains": "argument 2" }
+      ]
+    }
   }
 ]

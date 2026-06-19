@@ -1,5 +1,6 @@
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationAction
 import com.intellij.psi.PsiElement
+import com.intellij.testFramework.PlatformTestUtil
 
 // Definition test cases that resolve a Go type (via a `gotype` annotation) and
 // therefore navigate into the Go model files. These require the heavy fixture
@@ -19,12 +20,27 @@ class DefinitionGotypeTest : CustomFixtureHeavyTestCase() {
             val fileName = "definition-${tc.name.lowercase().replace(Regex("[^a-z0-9]+"), "-")}.txt.tmpl"
             myFixture.configureByText(fileName, toCaret(tc.content))
 
-            val targets: Array<PsiElement> =
-                GotoDeclarationAction.findAllTargetElements(
-                    myFixture.project,
-                    myFixture.editor,
-                    myFixture.caretOffset,
-                )
+            var targets: Array<PsiElement> = findTargets()
+
+            // The LSP definition response is asynchronous. For polling cases the
+            // first request can return before the server resolved the target, in
+            // which case GotoDeclaration falls back to the element under the
+            // caret (the template file itself). Retry, pumping the IDE event
+            // queue so background LSP responses are applied between attempts,
+            // until a cross-file target appears - mirroring VSCode's
+            // pollDefinitions helper.
+            if (tc.poll == true && tc.expected.noResult != true) {
+                var attempts = 0
+                while (attempts < 40 &&
+                    targets.none { it.containingFile?.virtualFile?.name != fileName }
+                ) {
+                    PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+                    Thread.sleep(200)
+                    PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+                    targets = findTargets()
+                    attempts++
+                }
+            }
 
             if (tc.expected.noResult == true) {
                 assertTrue(
@@ -35,6 +51,12 @@ class DefinitionGotypeTest : CustomFixtureHeavyTestCase() {
             }
 
             assertNotNull("[${tc.name}] Definition targets should not be null", targets)
+
+            // Prefer a cross-file target (the real definition) over a fallback to
+            // the template element under the caret.
+            val target =
+                targets.firstOrNull { it.containingFile?.virtualFile?.name != fileName }
+                    ?: targets[0]
 
             tc.expected.count?.let { count ->
                 assertEquals(
@@ -50,16 +72,16 @@ class DefinitionGotypeTest : CustomFixtureHeavyTestCase() {
                 )
             }
             tc.expected.targetFile?.let { expectedFile ->
-                val actualFile = targets[0].containingFile?.virtualFile?.name
+                val actualFile = target.containingFile?.virtualFile?.name
                 assertTrue(
                     "[${tc.name}] Expected definition in $expectedFile, got $actualFile",
                     actualFile != null && actualFile.endsWith(expectedFile),
                 )
             }
             tc.expected.targetLine?.let { expectedLine ->
-                val containingFile = targets[0].containingFile
+                val containingFile = target.containingFile
                 val document = myFixture.getDocument(containingFile)
-                val targetLine = document.getLineNumber(targets[0].textOffset)
+                val targetLine = document.getLineNumber(target.textOffset)
                 assertEquals(
                     "[${tc.name}] Expected definition on line $expectedLine, got $targetLine",
                     expectedLine,
@@ -68,4 +90,11 @@ class DefinitionGotypeTest : CustomFixtureHeavyTestCase() {
             }
         }
     }
+
+    private fun findTargets(): Array<PsiElement> =
+        GotoDeclarationAction.findAllTargetElements(
+            myFixture.project,
+            myFixture.editor,
+            myFixture.caretOffset,
+        )
 }

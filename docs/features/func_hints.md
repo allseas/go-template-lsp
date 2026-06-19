@@ -99,3 +99,26 @@ The server registers a dynamic `workspace/didChangeWatchedFiles` watcher for `**
 - `TestCollectGlobalFuncs_OnlyGlobalHint` - inline AST test confirming non-global scopes are filtered.
 - `TestGlobalFuncsCacheRoundTrip` - snapshot isolation of the cache.
 - `TestIsFuncMapType` - unit coverage for the type-name matcher.
+
+## Testing (integration)
+
+End-to-end coverage runs through the shared cross-client testcases. Search the
+prefix `Custom funcmap:` in
+[`test/testcases/completion.json`](../../test/testcases/completion.json),
+[`definition.json`](../../test/testcases/definition.json) and
+[`diagnostics.json`](../../test/testcases/diagnostics.json) to find the cases
+covering completion, go-to-definition and diagnostics for workspace-defined
+global functions. They are backed by the fixture
+[`test/resources/templ-tests/funcs/global_funcs.go`](../../test/resources/templ-tests/funcs/global_funcs.go),
+which registers `gtmplShout` (named reference), `gtmplRepeatN` (multi-arg named
+reference) and `gtmplGreet` (inline literal). The completion/definition cases
+include a `gotype:` hint so the JetBrains client drives them through its heavy
+fixture (the one that copies the Go workspace in); the diagnostics cases are
+exercised by the VSCode suite only.
+
+The diagnostics cases also cover **type awareness** of the resolved
+(named-reference) functions: calling a typed func with the wrong number of
+arguments, a wrong argument type, or a nested call whose return type does not
+match the outer parameter each asserts the corresponding diagnostic, while a
+correctly typed call asserts none.
+

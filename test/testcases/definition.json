@@ -77,5 +77,24 @@
     "expected": {
       "noResult": true
     }
+  },
+  {
+    "name": "Custom funcmap: jump to named Go function",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ gtmplSh<cursor>out \"hi\" }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "global_funcs.go",
+      "targetLine": 10
+    }
+  },
+  {
+    "name": "Custom funcmap: inline literal definition jumps into funcmap file",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ gtmplGr<cursor>eet \"world\" }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "global_funcs.go"
+    }
   }
 ]

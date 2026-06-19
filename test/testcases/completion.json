@@ -250,5 +250,32 @@
     "expectedIncludes": ["CustomerName"],
     "expectedExcludes": [],
     "expectedResult": "{{/*gotype: cg/model.Order*/}}\n{{.CustomerName}}"
+  },
+  {
+    "name": "Custom funcmap: named function appears in completion",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ gtmpl<cursor> }}",
+    "poll": true,
+    "expectedIncludes": ["gtmplShout", "gtmplRepeatN", "gtmplGreet"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Custom funcmap: inline literal func appears in completion",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ gtmpl<cursor> }}",
+    "poll": true,
+    "expectedIncludes": ["gtmplGreet"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Custom funcmap: custom funcs appear alongside builtins",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ <cursor> }}",
+    "poll": true,
+    "expectedIncludes": ["gtmplShout", "printf"],
+    "expectedExcludes": []
+  },
+  {
+    "name": "Custom funcmap: custom func not suggested outside action",
+    "content": "{{/*gotype: cg/model.Order*/}}\nhello gtmpl<cursor>",
+    "expectedIncludes": [],
+    "expectedExcludes": ["gtmplShout", "gtmplRepeatN", "gtmplGreet"]
   }
 ]
