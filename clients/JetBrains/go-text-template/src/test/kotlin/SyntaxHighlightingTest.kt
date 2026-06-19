@@ -314,4 +314,13 @@ class SyntaxHighlightingTest : CustomPlatformTestCase() {
     fun testPlainTextOutsideActionsHasNoGotmplTokenScopes() {
         assertNoGotmplScope("hello world", 0)
     }
+
+    fun testRangeOutsideBracketsIsNotHighlightedAsKeyword() {
+        val content = "range"
+        val actualScope = getScopeAt(content, 0)
+        assertFalse(
+            "Expected 'range' outside brackets to NOT have keyword.control.gotmpl scope, but got '$actualScope'",
+            actualScope.contains("keyword.control.gotmpl"),
+        )
+    }
 }
