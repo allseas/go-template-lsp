@@ -85,6 +85,9 @@ func targetKindForArg(cur serverTypes.Node, offset serverTypes.Pos, text string)
 	}
 	params := sig.Params()
 	paramIdx := cursorParamSlot(cmd, offset)
+	if _, ok := cur.(*serverTypes.UndefinedNode); ok {
+		paramIdx--
+	}
 	if paramIdx >= params.Len() {
 		paramIdx = params.Len() - 1
 	}
