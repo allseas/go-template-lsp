@@ -76,7 +76,10 @@ func TestAnalyseTree_NilDotTypeResolvesToEmptyInterface(t *testing.T) {
 	if tree.Root.Nodes[0].ValueType() == nil {
 		t.Fatal("expected non-nil DotType, got nil")
 	}
-	if !types.Identical(tree.Root.Nodes[0].ValueType(), types.NewInterfaceType(nil, nil).Complete()) {
+	if !types.Identical(
+		tree.Root.Nodes[0].ValueType(),
+		types.NewInterfaceType(nil, nil).Complete(),
+	) {
 		t.Fatalf("DotType: got %v, want empty interface", tree.Root.Nodes[0].ValueType())
 	}
 }
