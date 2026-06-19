@@ -60,6 +60,7 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
                   id="com.allseas.gotexttemplate.ProjectSettingsConfigurable"
                   displayName="Project Settings" />
           <fileIconProvider implementation="com.allseas.gotexttemplate.MyFileIconProvider" order="first"/>
+          <typedHandler implementation="com.allseas.gotexttemplate.GoTemplateTypedHandler" />
      </extensions>
 
      <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
