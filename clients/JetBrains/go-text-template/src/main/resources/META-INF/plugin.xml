@@ -62,6 +62,18 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
           <fileIconProvider implementation="com.allseas.gotexttemplate.MyFileIconProvider" order="first"/>
           <typedHandler implementation="com.allseas.gotexttemplate.GoTemplateTypedHandler" />
           <backspaceHandlerDelegate implementation="com.allseas.gotexttemplate.GoTemplateBackspaceHandler" />
+
+          <!-- *.tmpl files are opened with the TextMate file type (language id "textmate"),
+               which is what LSP4IJ is mapped to via the fileNamePatternMapping below.
+               LSP4IJ's own LSPCompletionContributor provides the language-server items; this
+               contributor runs right after it (but before wordCompletion) and calls
+               result.stopHere() so the platform WordCompletionContributor ("Suggest words from
+               the editor") is suppressed. It adds no items itself, so LSP items are not duplicated. -->
+          <completion.contributor
+                  language="textmate"
+                  id="goTemplateWordCompletionSuppressor"
+                  implementationClass="com.allseas.gotexttemplate.GoTemplateWordCompletionSuppressor"
+                  order="after LSPCompletionContributor, before wordCompletion" />
      </extensions>
 
      <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
