@@ -14,9 +14,9 @@ This document provides an overview of all features implemented and planned for t
 ## Editor Features
 
 | Feature                                | VS Code (tested) | JetBrains (tested) | Priority | Notes                                                                     |
-| -------------------------------------- | ---------------- | ------------------ | -------- | ------------------------------------------------------------------------- |
+| -------------------------------------- |------------------|--------------------| -------- | ------------------------------------------------------------------------- |
 | **Syntax Highlighting**                |                  |                    |          |                                                                           |
-| Static syntax highlighting             | ✅ (⏳)            | ✅ (⏳)              | Must     | Syntax defined in `.tmpl` files                                           |
+| Static syntax highlighting             | ✅                | ✅                  | Must     | Syntax defined in `.tmpl` files                                           |
 | Dynamic syntax highlighting            | ✅ (⏳)            | ✅ (⏳)              | Must     | Semantic tokens for variables, fields, functions, keywords                |
 | Target language syntax                 | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.)              |
 | **Code Completion**                    |                  |                    |          |                                                                           |
