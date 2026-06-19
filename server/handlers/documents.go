@@ -8,7 +8,6 @@ import (
 	"sync"
 	parse "text-template-parser"
 	"text-template-server/types"
-	"text-template-server/utils"
 
 	gotypes "go/types"
 
@@ -34,6 +33,8 @@ type document struct {
 	loadedTypes map[string]*types.Tree
 	// typedTrees is the per-tree analysed (typed) tree, paired with loadedTypes.
 	typedTrees map[string]*types.Tree
+	// failedHints maps tree name to the error message when its gotype hint failed to load from all dirs.
+	failedHints map[string]string
 }
 
 type documentStore struct {
@@ -59,12 +60,14 @@ func (s *documentStore) Set(uri, text string) {
 	loadDirs := []string{WorkspaceRoot, uriDir(uri)}
 
 	loadedTypes := make(map[string]*types.Tree)
+	failedHints := make(map[string]string)
 	for name, tr := range treeSet {
 		isRoot := tree != nil && tr == tree
 		hint := hintTypeForTree(text, tr, isRoot)
 		if hint == "" {
 			continue
 		}
+		var lastErr error
 		for _, dir := range loadDirs {
 			if dir == "" {
 				continue
@@ -72,10 +75,15 @@ func (s *documentStore) Set(uri, text string) {
 			loaded, lerr := types.CachedLoadTypeFromHint(hint, dir)
 			if lerr != nil {
 				log.Debug().Str("hint", hint).Str("dir", dir).Err(lerr).Msg("type hint load failed")
+				lastErr = lerr
 				continue
 			}
 			loadedTypes[name] = loaded
+			lastErr = nil
 			break
+		}
+		if lastErr != nil {
+			failedHints[name] = lastErr.Error()
 		}
 	}
 
@@ -152,6 +160,7 @@ func (s *documentStore) Set(uri, text string) {
 		typedTree:   typed,
 		loadedTypes: loadedTypes,
 		typedTrees:  typedTrees,
+		failedHints: failedHints,
 	}
 }
 
@@ -243,6 +252,82 @@ func (d *document) typedTreeAt(offset parse.Pos) *types.Tree {
 		}
 	}
 	return d.typedTree
+}
+
+// typedTreeAtTyped returns the typed tree for the tree that covers offset.
+// It is the parse-free entry point that other handlers should use; documents.go
+// remains the only file that needs to bridge to the parse package.
+func (d *document) typedTreeAtTyped(offset types.Pos) *types.Tree {
+	return d.typedTreeAt(parse.Pos(offset))
+}
+
+// loadedTypeAtTyped is the parse-free counterpart of loadedTypeAt.
+//
+// Deprecated: prefer typedTreeAtTyped where possible.
+func (d *document) loadedTypeAtTyped(offset types.Pos) *types.Tree {
+	return d.loadedTypeAt(parse.Pos(offset))
+}
+
+// nodeRange converts a typed node into an LSP Range using its start position
+// and rendered length. It is the parse-free counterpart of nodeToRange.
+func nodeRange(n types.Node, text string) protocol.Range {
+	start := int(n.Position())
+	length := len(n.String())
+	end := start + length
+
+	return protocol.Range{
+		Start: offsetToPosition(text, start),
+		End:   offsetToPosition(text, end),
+	}
+}
+
+// FindVarDeclarationsTyped returns all variable declaration nodes for a given
+// variable name found anywhere within the typed subtree rooted at root.
+// It is the parse-free counterpart of FindVarDeclarations.
+func FindVarDeclarationsTyped(root types.Node, varName string) []*types.VariableNode {
+	var decls []*types.VariableNode
+
+	types.Inspect(root, func(n types.Node) bool {
+		pipe, ok := n.(*types.PipeNode)
+		if !ok {
+			return true
+		}
+		for _, decl := range pipe.Decl {
+			if len(decl.Ident) > 0 && decl.Ident[0] == varName {
+				decls = append(decls, decl)
+			}
+		}
+		return true
+	})
+	return decls
+}
+
+// IsIndexVariableTyped reports whether target refers to the index variable
+// (the first declared variable) of any enclosing range loop. It walks the
+// typed node's parent chain to find an enclosing RangeNode whose first Decl
+// matches target by identity or by name.
+func IsIndexVariableTyped(target *types.VariableNode) bool {
+	if target == nil || len(target.Ident) == 0 {
+		return false
+	}
+	name := target.Ident[0]
+	for cur := types.Node(target).Parent(); cur != nil; cur = cur.Parent() {
+		rn, ok := cur.(*types.RangeNode)
+		if !ok {
+			continue
+		}
+		if rn.Pipe == nil || len(rn.Pipe.Decl) == 0 {
+			continue
+		}
+		first := rn.Pipe.Decl[0]
+		if first == nil || len(first.Ident) == 0 {
+			continue
+		}
+		if first == target || first.Ident[0] == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *documentStore) Get(uri string) (*document, bool) {
@@ -439,253 +524,6 @@ func DidChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) 
 func DidClose(_ *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
 	store.Remove(params.TextDocument.URI)
 	return nil
-}
-
-// nodeFind finds a node in a tree given the offset
-// deprecated, NodeFind should now find the correct node in a type tree
-func nodeFind(root parse.Node, offset parse.Pos) parse.Node {
-	best := root
-	bestPos := parse.Pos(0)
-
-	var walk func(n parse.Node)
-	walk = func(n parse.Node) {
-		if utils.IsNilNode(n) {
-			return
-		}
-
-		pos := n.Position()
-		if pos <= offset && pos >= bestPos {
-			bestPos = pos
-			best = n
-		}
-
-		switch node := n.(type) {
-		case *parse.ListNode:
-			for _, child := range node.Nodes {
-				walk(child)
-			}
-		case *parse.ActionNode:
-			walk(node.Pipe)
-		case *parse.PipeNode:
-			for _, v := range node.Decl {
-				walk(v)
-			}
-			for _, cmd := range node.Cmds {
-				walk(cmd)
-			}
-		case *parse.CommandNode:
-			for _, arg := range node.Args {
-				walk(arg)
-			}
-		case *parse.ChainNode:
-			walk(node.Node)
-		case *parse.IfNode:
-			walk(node.Pipe)
-			walk(node.List)
-			if node.ElseList != nil {
-				walk(node.ElseList)
-			}
-		case *parse.RangeNode:
-			walk(node.Pipe)
-			walk(node.List)
-			if node.ElseList != nil {
-				walk(node.ElseList)
-			}
-		case *parse.WithNode:
-			walk(node.Pipe)
-			walk(node.List)
-			if node.ElseList != nil {
-				walk(node.ElseList)
-			}
-		case *parse.TemplateNode:
-			walk(node.Pipe)
-		case *parse.UndefinedNode:
-			log.Debug().Msg("found the undefined node")
-		}
-	}
-
-	walk(root)
-	return best
-}
-
-// walkAndAnalyze recursively walks the node tree, maintaining scope context, and calls fn on every node.
-func walkAndAnalyze(
-	node parse.Node,
-	text string,
-	ctx *Context,
-	visited map[parse.Node]bool,
-	fn func(parse.Node, string, *Context) []protocol.Diagnostic,
-) (diagnostics []protocol.Diagnostic) {
-	if node == nil || visited[node] {
-		return nil
-	}
-	if ctx == nil {
-		ctx = &Context{Vars: make(map[string]parse.Node)}
-	}
-	visited[node] = true
-	defer delete(visited, node)
-
-	diagnostics = append(diagnostics, fn(node, text, ctx)...)
-
-	switch n := node.(type) {
-	case *parse.ListNode:
-		for _, child := range n.Nodes {
-			diagnostics = append(diagnostics, walkAndAnalyze(child, text, ctx, visited, fn)...)
-		}
-	case *parse.ActionNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, walkAndAnalyze(n.Pipe, text, ctx, visited, fn)...)
-		}
-	case *parse.PipeNode:
-		if ctx.Vars == nil {
-			ctx.Vars = make(map[string]parse.Node)
-		}
-		for _, v := range n.Decl {
-			if v != nil && len(v.Ident) > 0 {
-				ctx.Vars[v.Ident[0]] = n
-			}
-		}
-		prevPipe := ctx.Pipe
-		ctx.Pipe = n
-		for _, cmd := range n.Cmds {
-			diagnostics = append(diagnostics, walkAndAnalyze(cmd, text, ctx, visited, fn)...)
-		}
-		ctx.Pipe = prevPipe
-	case *parse.CommandNode:
-		for _, arg := range n.Args {
-			diagnostics = append(diagnostics, walkAndAnalyze(arg, text, ctx, visited, fn)...)
-		}
-	case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
-		pipe, list, elseList := extractBranchNodes(n)
-		if ctx.Vars == nil {
-			ctx.Vars = make(map[string]parse.Node)
-		}
-		snapshot := snapshotVars(ctx.Vars)
-		if pipe != nil {
-			diagnostics = append(diagnostics, walkAndAnalyze(pipe, text, ctx, visited, fn)...)
-		}
-		if list != nil {
-			diagnostics = append(diagnostics, walkAndAnalyze(list, text, ctx, visited, fn)...)
-		}
-		ctx.Vars = snapshot
-		if elseList != nil {
-			diagnostics = append(diagnostics, walkAndAnalyze(elseList, text, ctx, visited, fn)...)
-		}
-		ctx.Vars = snapshot
-	}
-
-	return diagnostics
-}
-
-// FindVarDeclarations returns all variable declaration nodes for a given variable name in the tree.
-func FindVarDeclarations(root parse.Node, varName string) []*parse.VariableNode {
-	var decls []*parse.VariableNode
-
-	inspect(root, func(n parse.Node) bool {
-		// this goes over the tree and finds declarations (inside PipeNode) of varName
-		pipe, ok := n.(*parse.PipeNode)
-		if !ok {
-			return true
-		}
-		for _, decl := range pipe.Decl {
-			if len(decl.Ident) > 0 && decl.Ident[0] == varName {
-				decls = append(decls, decl)
-			}
-		}
-		return true
-	})
-	return decls
-}
-
-// IsIndexVariable determines if a variable node refers to the index variable in a range.
-func IsIndexVariable(target *parse.VariableNode, root *parse.ListNode) bool {
-	if target == nil || len(target.Ident) == 0 {
-		return false
-	}
-	ctx := &Context{Vars: make(map[string]parse.Node)}
-	buildPath(root, target, ctx)
-
-	path := ctx.Path
-	if len(path) < 2 {
-		return WasDeclaredAsIndex(target, ctx)
-	}
-	branch := path[len(path)-2]
-	if _, ok := branch.(*parse.RangeNode); !ok {
-		return WasDeclaredAsIndex(target, ctx)
-	}
-	branchNode := branch.(*parse.RangeNode)
-
-	pipe := branchNode.Pipe
-	if len(pipe.Decl) == 0 {
-		return false
-	}
-	return pipe.Decl[0] == target
-}
-
-// WasDeclaredAsIndex checks whether the provided variable node was declared as the index by scanning
-// the context constructed by buildPath (used when the variable isn't directly the declared index in the immediate range).
-func WasDeclaredAsIndex(target *parse.VariableNode, ctx *Context) bool {
-	if target == nil || len(target.Ident) == 0 {
-		return false
-	}
-	for ident, pipe := range ctx.Vars {
-		if ident != target.Ident[0] {
-			continue
-		}
-		pn, ok := pipe.(*parse.PipeNode)
-		if !ok || len(pn.Decl) == 0 || len(pn.Decl[0].Ident) == 0 {
-			return false
-		}
-		if pn.Decl[0].Ident[0] != target.Ident[0] {
-			return false
-		}
-		for _, node := range ctx.Path {
-			rn, ok := node.(*parse.RangeNode)
-			if !ok {
-				continue
-			}
-			if rn.Pipe != pipe {
-				continue
-			}
-			return true
-		}
-	}
-	return false
-}
-
-// ResolveVarInfo resolves a variable node to its value and Go type.
-//
-// The Go type is looked up by finding the corresponding node in the analysed
-// (typed) tree. The analysis stage attaches a `typ` to every VariableNode it
-// produces (see server/types/analyse.go: analyseVariable / analysePipe), so we
-// just need to locate the typed node that lives at the same source position
-// as `target`
-//
-// Literal values are not currently tracked by the analyser, so the returned
-// `value` is always nil. The signature is kept so the caller can render
-// either piece of information once value tracking is added.
-func ResolveVarInfo(
-	_ parse.Node,
-	target *parse.VariableNode,
-	typedTree *types.Tree,
-) (value any, goType gotypes.Type) {
-	if target == nil || len(target.Ident) == 0 {
-		return nil, nil
-	}
-	if typedTree == nil || typedTree.Root == nil {
-		return nil, nil
-	}
-
-	found := types.NodeFind(typedTree.Root, types.Pos(target.Position()))
-	v, ok := found.(*types.VariableNode)
-	if !ok || v == nil {
-		return nil, nil
-	}
-	// Guard against accidental position collisions with a different variable.
-	if len(v.Ident) == 0 || len(target.Ident) == 0 || v.Ident[0] != target.Ident[0] {
-		return nil, nil
-	}
-	return nil, v.ValueType()
 }
 
 // uriDir returns the local filesystem directory that contains the file

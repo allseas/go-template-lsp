@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build !allseas
+
 // Package parse builds parse trees for templates as defined by text/template
 // and html/template. Clients should use those packages to construct templates
 // rather than this one, which provides shared internal data structures not
@@ -205,10 +207,6 @@ func (t *Tree) recordError(pos Pos, format string, args ...any) error {
 	return err
 }
 
-// errMark returns the current length of t.Errors, for use as a baseline by
-// callers that need to detect new errors recorded by a sub-parse step.
-func (t *Tree) errMark() int { return len(t.Errors) }
-
 // expect consumes the next token and guarantees it has the required type.
 func (t *Tree) expect(expected itemType, context string) item {
 	token := t.nextNonSpace()
@@ -364,6 +362,14 @@ func (t *Tree) parse() {
 			}
 		default:
 			t.Root.append(n)
+		}
+	}
+	if t.peek().typ == itemError {
+		if t.Mode&ParsePartial == 0 {
+			t.errorf("%s", t.peek().val)
+		} else {
+			err := t.recordError(t.peek().pos, "%s", t.peek().val)
+			t.Root.append(t.newUndefined(t.peek().pos, err, t.peek().val))
 		}
 	}
 	t.End = t.peek().pos

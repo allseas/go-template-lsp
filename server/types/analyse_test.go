@@ -14,7 +14,8 @@ func TestAnalyze(t *testing.T) {
 			tree := NewTreeWithType(tc.parseTree, tc.funcs, tc.dotType, tc.pkg, nil)
 			if len(tree.TypeErrors) != len(tc.expectedErrors) {
 				t.Fatalf(
-					"Expected %d type errors, got %d: %v",
+					"Name: %s: Expected %d type errors, got %d: %v",
+					tc.name,
 					len(tc.expectedErrors),
 					len(tree.TypeErrors),
 					tree.TypeErrors,

@@ -91,6 +91,9 @@ tasks.test {
 
 tasks.processTestResources {
     from(sourceSets.main.get().resources)
+    from(rootProject.file("../../../test/testcases")) {
+        into("testcases")
+    }
     dependsOn("copyServerBin")
 }
 
@@ -135,8 +138,8 @@ tasks {
 tasks.register<Exec>("compileServer") {
     workingDir = rootDir.resolve("..").resolve("..")
     val npmCommand = if (System.getProperty("os.name").lowercase().contains("windows")) "npm.cmd" else "npm"
-    commandLine(npmCommand, "install")
-    commandLine(npmCommand, "run", "build:server")
+    val buildTarget = if (project.hasProperty("allseas")) "build:server:allseas" else "build:server"
+    commandLine(npmCommand, "run", buildTarget)
 }
 
 tasks.register<Copy>("copyServerBin") {

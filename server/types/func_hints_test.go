@@ -5,6 +5,9 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,8 +92,8 @@ func O() template.FuncMap {
 	file, err := parser.ParseFile(fset, "x.go", src, parser.ParseComments)
 	require.NoError(t, err)
 
-	out := map[string]*types.Func{}
-	collectGlobalFuncs(file, nil, out)
+	out := map[string]GlobalFuncEntry{}
+	collectGlobalFuncs(file, nil, fset, out)
 
 	assert.Contains(t, out, "a")
 	assert.Contains(t, out, "b")
@@ -140,4 +143,117 @@ func TestComputeGlobalFuncsEmptyWorkspace(t *testing.T) {
 	assert.Contains(t, funcs, "gt")
 	assert.Contains(t, funcs, "eq")
 	assert.Contains(t, funcs, "print")
+}
+
+func TestFindPackageRoots(t *testing.T) {
+	roots, err := findPackageRoots("../../test/resources")
+	require.NoError(t, err)
+	require.NotEmpty(t, roots, "should find package roots in test/resources")
+
+	var relRoots []string
+	for _, root := range roots {
+		rel, err := filepath.Rel("../../test/resources", root)
+		require.NoError(t, err)
+		relRoots = append(relRoots, rel)
+	}
+	sort.Strings(relRoots)
+
+	expectedModules := []string{
+		"definition-tests-client",
+		"definition-tests-server",
+		"funcmap-tests",
+		"templ-tests",
+		"template-arg-typechecking",
+		"typehints-tests",
+	}
+	for _, expected := range expectedModules {
+		assert.True(t, contains(relRoots, expected), "should find %s module root", expected)
+	}
+}
+
+func TestFindPackageRoots_SkipsHiddenDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	gitDir := filepath.Join(tmpDir, ".git", "subdir")
+	require.NoError(t, os.MkdirAll(gitDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "go.mod"), []byte("module test"), 0o600))
+
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module main"), 0o600))
+
+	roots, err := findPackageRoots(tmpDir)
+	require.NoError(t, err)
+
+	// Should only find the root go.mod, not the one inside .git
+	require.Equal(t, 1, len(roots))
+	assert.Equal(t, tmpDir, roots[0])
+}
+
+func TestFindPackageRoots_SkipsVendor(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	vendorDir := filepath.Join(tmpDir, "vendor", "some", "package")
+	require.NoError(t, os.MkdirAll(vendorDir, 0o700))
+	require.NoError(
+		t,
+		os.WriteFile(filepath.Join(vendorDir, "go.mod"), []byte("module test"), 0o600),
+	)
+
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module main"), 0o600))
+
+	roots, err := findPackageRoots(tmpDir)
+	require.NoError(t, err)
+
+	// Should only find the root go.mod, not the one inside vendor
+	require.Equal(t, 1, len(roots))
+	assert.Equal(t, tmpDir, roots[0])
+}
+
+func TestFindPackageRoots_MultipleNestedModules(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mod1Dir := filepath.Join(tmpDir, "module1")
+	mod2Dir := filepath.Join(tmpDir, "module2", "nested")
+
+	require.NoError(t, os.MkdirAll(mod1Dir, 0o700))
+	require.NoError(t, os.MkdirAll(mod2Dir, 0o700))
+
+	require.NoError(t, os.WriteFile(filepath.Join(mod1Dir, "go.mod"), []byte("module mod1"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(mod2Dir, "go.mod"), []byte("module mod2"), 0o600))
+
+	roots, err := findPackageRoots(tmpDir)
+	require.NoError(t, err)
+
+	// Should find both module roots
+	require.Equal(t, 2, len(roots))
+	rootDirs := append([]string{}, roots...)
+	sort.Strings(rootDirs)
+
+	assert.Equal(t, mod1Dir, rootDirs[0])
+	assert.Equal(t, mod2Dir, rootDirs[1])
+}
+
+func TestLoadGlobalFuncs_WithNestedModules(t *testing.T) {
+	funcs, err := LoadGlobalFuncs("../../test/resources")
+	require.NoError(t, err)
+
+	names := make([]string, 0, len(funcs))
+	for k := range funcs {
+		names = append(names, k)
+	}
+
+	assert.Contains(t, names, "upper")
+	assert.Contains(t, names, "lower")
+	assert.Contains(t, names, "repeat")
+	assert.Contains(t, names, "shout")
+	assert.Contains(t, names, "sprintf")
+}
+
+// Helper function to check if a string is in a slice
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

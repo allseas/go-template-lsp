@@ -11,16 +11,37 @@ The Go Text Template LSP supports consistent configuration across VS Code and Je
 
 These options are supported on all platforms:
 
-| Option                                | Type      | Default    | Description                                                       |
-|---------------------------------------|-----------|------------|-------------------------------------------------------------------|
-| `enableHover`                         | `boolean` | `true`     | Enable/disable hover information                                  |
-| `enableDefinition`                    | `boolean` | `true`     | Enable/disable go-to-definition                                   |
-| `enableDiagnostics`                   | `boolean` | `true`     | Enable/disable all diagnostics                                    |
-| `diagnostics.syntaxError`             | `boolean` | `true`     | Report syntax errors                                              |
-| `diagnostics.variableRedeclaration`   | `boolean` | `true`     | Report duplicate variable declarations                            |
-| `diagnostics.incorrectFunction`       | `boolean` | `true`     | Report unknown or incorrectly used functions                      |
-| `enableAutocompletion`                | `boolean` | `true`     | Enable/disable autocompletion                                     |
-| `trace.server`                        | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose`             |
+| Option              | Type      | Default    | Description                                          |
+|---------------------|-----------|------------|------------------------------------------------------|
+| `enableHover`       | `boolean` | `true`     | Enable/disable hover information                     |
+| `enableDefinition`  | `boolean` | `true`     | Enable/disable go-to-definition                      |
+| `enableDiagnostics` | `boolean` | `true`     | Enable/disable all diagnostics                       |
+| `diagnostics`       | `object`  | see below  | Per-diagnostic severity levels (see table below)     |
+| `enableAutocompletion` | `boolean` | `true`  | Enable/disable autocompletion                        |
+| `trace.server`      | `string`  | `messages` | Trace communication: `off`, `messages`, or `verbose` |
+
+### `diagnostics` keys
+
+Each key in the `diagnostics` object controls a specific check. The value must be one of:
+`"disabled"`, `"error"`, `"warning"`, `"information"`, `"hint"`.
+
+| Key                    | Default       | Description                                               |
+|------------------------|---------------|-----------------------------------------------------------|
+| `syntaxError`          | `"error"`     | Syntax errors reported by the parser                      |
+| `invalidField`         | `"error"`     | Field or method lookup failed                             |
+| `invalidFunction`      | `"warning"`   | Unknown or incorrectly called function                    |
+| `invalidCommand`       | `"error"`     | Command type mismatch                                     |
+| `invalidRange`         | `"error"`     | Range over a non-rangeable type                           |
+| `invalidIf`            | `"error"`     | If condition is not boolean                               |
+| `invalidWith`          | `"error"`     | With dot is not a struct/interface                        |
+| `undeclaredVariable`   | `"error"`     | Variable used without declaration                         |
+| `doubleDeclaredVariable` | `"warning"` | Variable declared more than once in the same scope        |
+| `invalidTemplateArg`   | `"error"`     | Template called with an argument of the wrong type        |
+| `argumentNumberMismatch` | `"error"`   | Function called with the wrong number of arguments        |
+| `unknownType`          | `"information"` | Type information is missing or could not be resolved    |
+| `hintLoadFailure`      | `"warning"`   | A `gotype` hint type could not be loaded or resolved      |
+| `unknownRangeType`     | `"warning"`   | Range over a value whose type could not be determined     |
+| `emptyDefineName`      | `"warning"`   | Define block has an empty name                            |
 
 ## Configuration Hierarchy
 
@@ -41,9 +62,21 @@ You can create a `gotmpl.config.json` file in your project root to configure the
   "enableDefinition": true,
   "enableDiagnostics": true,
   "diagnostics": {
-    "syntaxError": true,
-    "variableRedeclaration": true,
-    "incorrectFunction": true
+    "syntaxError": "error",
+    "invalidField": "error",
+    "invalidFunction": "warning",
+    "invalidCommand": "error",
+    "invalidRange": "error",
+    "invalidIf": "error",
+    "invalidWith": "error",
+    "undeclaredVariable": "error",
+    "doubleDeclaredVariable": "warning",
+    "invalidTemplateArg": "error",
+    "argumentNumberMismatch": "error",
+    "unknownType": "information",
+    "hintLoadFailure": "warning",
+    "unknownRangeType": "warning",
+    "emptyDefineName": "warning"
   },
   "enableAutocompletion": true,
   "trace": {

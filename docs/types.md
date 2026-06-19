@@ -19,14 +19,14 @@ expression at this position?" without re-walking the source.
 
 Defined in [analyse.go](../server/types/analyse.go):
 
-| Symbol                                         | Purpose                                                                                                                                                                                                                                         |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Tree`                                         | Typed counterpart of `parse.Tree`. Holds `Root *ListNode`, the function map, the optional `DotType` / `Pkg`, and accumulated `TypeErrors`.                                                                                                      |
-| `NewTree(parseTree, funcs, dotType, pkg) Tree` | Main constructor. Walks the parse tree and returns a fully analysed `Tree`. `funcs` carries the template's known global functions (typically `types.GlobalFuncs()` - see [features/func_hints.md](features/func_hints.md)).                     |
-| `NewTreeWithType(...)`                         | Thin wrapper around `NewTree` for callers that have a `*types.Named` dot type.                                                                                                                                                                  |
-| `TError`                                       | A type error attached to a specific typed `Node`, categorised by `ErrorType`.                                                                                                                                                                   |
-| `ErrorType` constants                          | `ErrorTypeInvalidField`, `ErrorTypeInvalidFunction`, `ErrorTypeInvalidCommand`, `ErrorTypeInvalidRange`, `ErrorTypeInvalidIf`, `ErrorTypeInvalidWith`, `ErrorUndeclaredVariable`, `ErrorDoubleDeclaredVariable`, `ErrorTypeInvalidTemplateArg`. |
-| `Node` interface                               | Common interface for typed nodes; adds `ValueType() types.Type` and `IsElseList() bool` on top of the usual parse-node API.                                                                                                                     |
+| Symbol                                         | Purpose                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Tree`                                         | Typed counterpart of `parse.Tree`. Holds `Root *ListNode`, the function map, the optional `DotType` / `Pkg`, and accumulated `TypeErrors`.                                                                                                                                     |
+| `NewTree(parseTree, funcs, dotType, pkg) Tree` | Main constructor. Walks the parse tree and returns a fully analysed `Tree`. `funcs` carries the template's known global functions (typically `types.GlobalFuncs()` - see [features/func_hints.md](features/func_hints.md)).                                                    |
+| `NewTreeWithType(...)`                         | Thin wrapper around `NewTree` for callers that have a `*types.Named` dot type.                                                                                                                                                                                                 |
+| `TError`                                       | A type error attached to a specific typed `Node`, categorised by `ErrorType`.                                                                                                                                                                                                  |
+| `ErrorType` constants                          | `ErrorTypeInvalidField`, `ErrorTypeInvalidFunction`, `ErrorTypeInvalidCommand`, `ErrorTypeInvalidRange`, `ErrorTypeInvalidIf`, `ErrorTypeInvalidWith`, `ErrorUndeclaredVariable`, `ErrorDoubleDeclaredVariable`, `ErrorTypeInvalidTemplateArg`, `ErrorArgumentNumberMismatch`. |
+| `Node` interface                               | Common interface for typed nodes; adds `ValueType() types.Type` and `IsElseList() bool` on top of the usual parse-node API.                                                                                                                                                    |
 
 Concrete node types (in [node.go](../server/types/node.go)) mirror the parse
 package: `ListNode`, `ActionNode`, `PipeNode`, `CommandNode`, `IdentifierNode`,
@@ -65,9 +65,23 @@ pattern is used inside branch helpers:
 - **`with`** - evaluates the pipe in the outer dot, then sets
   `ctx.dotType = pipe.typ` for `List`, restores the outer dot for `ElseList`.
 - **`range`** - like `with`, but `dotType` becomes the element type derived
-  by `getRangeableType` (array / slice / map / chan element, or the integer
-  itself for `range N`). The single-decl form binds `$v` to the element type;
-  the two-decl form binds `$i` to `uint` and `$v` to the element type.
+  by `getRangeableType` (array / slice / map / chan element / integer / iter.Seq / iter.Seq2). The single-decl form binds `$v` to the element type;
+  the two-decl form binds `$i` to key of map and `Seq2`, otherwise to `int` and `$v` to the element type.
+
+  `getRangeableType` resolves pointer indirection before switching on the underlying type:
+
+  | Ranged-over type           | `$i` (key) type          | `$v` (value / dot) type             |
+  | -------------------------- | ------------------------ | ----------------------------------- |
+  | `[]T`, `[N]T`              | `int`                    | `T`                                 |
+  | `map[K]V`                  | `K`                      | `V`                                 |
+  | `chan T`                   | `int`                    | `T`                                 |
+  | integer (`int`, `uint`, …) | `int`                    | integer type itself                 |
+  | `iter.Seq[V]`              | `nil` (single-decl only) | `V`                                 |
+  | `iter.Seq2[K, V]`          | `K`                      | `V`                                 |
+  | empty `interface{}`        | unknown                  | unknown (emits `ErrorUnknownType`)  |
+  | struct / non-rangeable     |                          | (emits `ErrorTypeInvalidRange`)     |
+  | `nil` / unresolved         |                          | (emits `ErrorTypeUnknownRangeType`) |
+
 - **`if`** - does *not* introduce a new dot scope. Both `List` and `ElseList`
   are analysed with the surrounding dot. Variables declared in the condition
   pipe are popped on exit.
@@ -91,25 +105,13 @@ consumers (e.g. semantic-token highlighting) to distinguish `.Address`
 ### Pipelines and commands
 
 - `analyseCommand` types a command from its head argument. If the head is a
-  function, the command type is either the function's result (when fully
-  applied) or a *curried* `*types.Signature` taking the one remaining
-  parameter (when one argument is missing). Other head kinds use the head's
-  own type.
-- `analysePipe` types a pipe as the type of its last command. For multi-stage
-  pipes whose last stage is still a function (curried), the pipe's type is
-  the first result of that signature.
+  function, and is not the first command in a pipeline, the output of the previous command is appended to the argument list.
+  The arguments are checked for matching the signature and the type is set to the output of the functions. There are special cases for iter functions, as they can be directly ranged over, with the arg provided by the template engine. The second special case is for the builtin call function, which calls its first argument, so the type checking is shifted by one.
+- `analysePipe` types a pipe as the type of its last command.
 - Declarations on a pipe (`{{ $x := … }}`) bind `$x` to the pipe's type and
   push it onto `ctx.vars`. Redeclaration in the same scope produces an
   `ErrorDoubleDeclaredVariable`. Reassignment (`{{ $x = … }}`) requires the
   variable to exist and the types to match.
-
-### Mising Functionality
-
-- checks on amount of params and their types when passed to a function
-- support for variadic functions
-- support for iter.Seq in a range
-- indexing using key on maps in a range
-- special case for `call`
 
 ### Implemented Features
 

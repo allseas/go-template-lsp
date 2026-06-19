@@ -444,6 +444,97 @@ func TestFunctionReturn(t *testing.T) {
 	assert.Equal(t, uint32(6), loc.Range.Start.Line)
 }
 
+func TestDefinitionFieldInRangeContext(t *testing.T) {
+	src := "{{ range .Items }}\n{{ .Name }}\n{{ end }}"
+	uri := "file:///def-field-range.tmpl"
+	lt := loadModelTypes(t, "Order")["Order"]
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 4),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	assert.Equal(t, uint32(40), loc.Range.Start.Line)
+}
+
+func TestDefinitionFieldInWithContext(t *testing.T) {
+	src := "{{ with .Address }}\n{{ .City }}\n{{ end }}"
+	uri := "file:///def-field-with.tmpl"
+	lt := loadModelTypes(t, "Order")["Order"]
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 4),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	assert.Equal(t, uint32(7), loc.Range.Start.Line)
+}
+
+func TestDefinitionMethodInRangeContext(t *testing.T) {
+	src := "{{ range .Items }}\n{{ .Describe }}\n{{ end }}"
+	uri := "file:///def-method-range.tmpl"
+	lt := loadModelTypes(t, "Order")["Order"]
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 4),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	assert.Equal(
+		t,
+		uint32(61),
+		loc.Range.Start.Line,
+	)
+}
+
 // TestDefinitionMultiDefines tests Definition inside a document with
 // multiple {{define}} blocks, each (optionally) preceded by its own gotype hint.
 func TestDefinitionMultiDefines(t *testing.T) {
@@ -539,4 +630,153 @@ func TestDefinitionMultiDefines(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestDefinitionVariableChainBaseIdent verifies that clicking on the base variable
+// ($item) in a chained expression like {{ $item.IsExpensive }} jumps to the
+// variable's declaration (the range pipe), not to the Go source file.
+func TestDefinitionVariableChainBaseIdent(t *testing.T) {
+	src := "{{ range $item := .Items }}\n{{ $item.IsExpensive }}\n{{ end }}"
+	uri := "file:///def-var-chain-base.tmpl"
+	lt := definitionOrderType(t)
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 4),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	locations, ok := result.([]protocol.Location)
+	require.True(t, ok, "expected []protocol.Location for base variable, got %T", result)
+	require.NotEmpty(t, locations)
+	assert.Equal(t, uri, locations[0].URI)
+	assert.Equal(t, uint32(0), locations[0].Range.Start.Line)
+}
+
+func TestDefinitionVariableChainMethodIdent(t *testing.T) {
+	src := "{{ range $item := .Items }}\n{{ $item.IsExpensive }}\n{{ end }}"
+	uri := "file:///def-var-chain-method.tmpl"
+	lt := definitionOrderType(t)
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 9),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location for chained method, got %T", result)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	// Item.IsExpensive is defined at line 57 in model.go (0-indexed: 56)
+	assert.Equal(t, uint32(56), loc.Range.Start.Line)
+}
+
+// TestDefinitionVariableChainFieldIdent verifies that clicking on a chained struct
+// field (.SKU) in {{ $item.SKU }} jumps to the Go source definition.
+func TestDefinitionVariableChainFieldIdent(t *testing.T) {
+	src := "{{ range $item := .Items }}\n{{ $item.SKU }}\n{{ end }}"
+	uri := "file:///def-var-chain-field.tmpl"
+	lt := definitionOrderType(t)
+	setDocWithType(t, uri, src, lt)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(1, 9),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location for chained field, got %T", result)
+	assert.True(
+		t,
+		strings.HasSuffix(loc.URI, "model.go"),
+		"expected URI to point to model.go, got %s",
+		loc.URI,
+	)
+	// Item.SKU is defined at line 40 in model.go (0-indexed: 39)
+	assert.Equal(t, uint32(39), loc.Range.Start.Line)
+}
+
+func TestDefinitionFuncMapNamedFunction(t *testing.T) {
+	_, err := serverTypes.LoadGlobalFuncs("../../test/resources/funcmap-tests")
+	require.NoError(t, err)
+	defer serverTypes.SetGlobalFuncs(nil)
+
+	src := "{{ upper .Name }}"
+	uri := "file:///def-func-named.tmpl"
+	store.Set(uri, src)
+	defer store.Delete(uri)
+
+	// Position cursor on "upper" (offset 3 inside "{{ upper")
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(0, 3),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location, got %T", result)
+
+	assert.True(t, strings.HasSuffix(loc.URI, "funcs.go"),
+		"expected URI to point to funcs.go, got %s", loc.URI)
+}
+
+func TestDefinitionFuncMapInlineLiteral(t *testing.T) {
+	// "shout" is an inline literal (nil *types.Func). Definition should navigate
+	// to the string key in the FuncMap literal.
+	_, err := serverTypes.LoadGlobalFuncs("../../test/resources/funcmap-tests")
+	require.NoError(t, err)
+	defer serverTypes.SetGlobalFuncs(nil)
+
+	src := "{{ shout .Name }}"
+	uri := "file:///def-func-inline.tmpl"
+	store.Set(uri, src)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     position(0, 3),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location, got %T", result)
+
+	assert.True(t, strings.HasSuffix(loc.URI, "funcs.go"),
+		"expected URI to point to funcs.go, got %s", loc.URI)
 }

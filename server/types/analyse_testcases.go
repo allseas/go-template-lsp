@@ -6,6 +6,10 @@ import (
 	parse "text-template-parser"
 )
 
+// anyType is the empty interface type (i.e. `any` / `interface{}`), reused
+// across test cases as the expected type for unresolved nodes.
+var anyType = types.NewInterfaceType(nil, nil).Complete()
+
 type analyseNodePanicTestCase struct {
 	name      string
 	node      parse.Node
@@ -82,6 +86,49 @@ func init() {
 	mockDotType.AddMethod(mockDotGreet)
 }
 
+// mockSeqType models iter.Seq[string] -- func(yield func(string) bool).
+var mockSeqType = types.NewSignatureType(
+	nil, nil, nil,
+	types.NewTuple(types.NewVar(0, mockPkg, "yield",
+		types.NewSignatureType(nil, nil, nil,
+			types.NewTuple(types.NewVar(0, mockPkg, "", types.Typ[types.String])),
+			types.NewTuple(types.NewVar(0, mockPkg, "", types.Typ[types.Bool])),
+			false,
+		),
+	)),
+	types.NewTuple(),
+	false,
+)
+
+// mockSeq2Type models iter.Seq2[int, string] -- func(yield func(int, string) bool).
+var mockSeq2Type = types.NewSignatureType(
+	nil, nil, nil,
+	types.NewTuple(types.NewVar(0, mockPkg, "yield",
+		types.NewSignatureType(nil, nil, nil,
+			types.NewTuple(
+				types.NewVar(0, mockPkg, "", types.Typ[types.Int]),
+				types.NewVar(0, mockPkg, "", types.Typ[types.String]),
+			),
+			types.NewTuple(types.NewVar(0, mockPkg, "", types.Typ[types.Bool])),
+			false,
+		),
+	)),
+	types.NewTuple(),
+	false,
+)
+
+// mockSeqDotType is a dot type exposing iter.Seq and iter.Seq2 valued fields
+// so range-over-seq behaviour can be exercised without touching mockDotType.
+var mockSeqDotType = func() *types.Named {
+	fields := []*types.Var{
+		types.NewVar(0, mockPkg, "Seq", mockSeqType),
+		types.NewVar(0, mockPkg, "Seq2", mockSeq2Type),
+	}
+	structType := types.NewStruct(fields, nil)
+	typeName := types.NewTypeName(0, mockPkg, "MockSeqDot", nil)
+	return types.NewNamed(typeName, structType, nil)
+}()
+
 var funcs = map[string]*types.Func{
 	"FuncA": types.NewFunc(
 		0,
@@ -119,17 +166,40 @@ var funcs = map[string]*types.Func{
 		"GetInner",
 		signature([]types.Type{mockDotType}, []types.Type{mockInnerType}),
 	), // MockDot -> Inner
+	"VoidFn": types.NewFunc(
+		0,
+		nil,
+		"VoidFn",
+		signature([]types.Type{types.Typ[types.String]}, []types.Type{}),
+	), // string -> ()
+	"FuncAnyParam": types.NewFunc(
+		0,
+		nil,
+		"FuncAnyParam",
+		signature(
+			[]types.Type{types.NewInterfaceType(nil, nil).Complete()},
+			[]types.Type{types.Typ[types.String]},
+		),
+	), // any -> string
+	"FuncPrintf": types.NewFunc(
+		0,
+		nil,
+		"FuncPrintf",
+		types.NewSignatureType(nil, nil, nil,
+			types.NewTuple(
+				types.NewVar(0, nil, "format", types.Typ[types.String]),
+				types.NewVar(
+					0,
+					nil,
+					"args",
+					types.NewSlice(types.NewInterfaceType(nil, nil).Complete()),
+				),
+			),
+			types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.String])),
+			true,
+		),
+	), // (string, ...any) -> string
 }
-
-// funcBCurried1 is the type analyseCommand produces for `FuncB 1` when one of
-// FuncB's two parameters is supplied as a literal -- a signature taking just
-// the remaining (last) parameter and returning FuncB's result tuple.
-var funcBCurried1 = types.NewSignatureType(
-	nil, nil, nil,
-	types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.Int])),
-	types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.String])),
-	false,
-)
 
 func varn(name string) *parse.VariableNode {
 	return &parse.VariableNode{
@@ -474,7 +544,7 @@ var analyseTestCases = []analyseTestCase{
 					tcoms(
 						tcom(types.Typ[types.Int], tnum(42)),
 						tcom(
-							funcs["FuncD"].Type(),
+							types.Typ[types.String],
 							tident("FuncB", funcs["FuncB"].Type()),
 							tnum(1),
 						),
@@ -522,8 +592,8 @@ var analyseTestCases = []analyseTestCase{
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(42)),
-			tcom(funcs["FuncD"].Type(), tident("FuncD", funcs["FuncD"].Type())),
-			tcom(funcs["FuncA"].Type(), tident("FuncA", funcs["FuncA"].Type())),
+			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
+			tcom(types.Typ[types.Int], tident("FuncA", funcs["FuncA"].Type())),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -576,7 +646,7 @@ var analyseTestCases = []analyseTestCase{
 		resTree: ttree("test", tlist(mockDotType, trangeN(
 			tpipe(
 				types.NewSlice(types.Typ[types.String]),
-				tdecls(tvarn("$i", types.Typ[types.Uint]), tvarn("$v", types.Typ[types.String])),
+				tdecls(tvarn("$i", types.Typ[types.Int]), tvarn("$v", types.Typ[types.String])),
 				tcoms(
 					tcom(
 						types.NewSlice(types.Typ[types.String]),
@@ -697,7 +767,7 @@ var analyseTestCases = []analyseTestCase{
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(2)),
-			tcom(funcBCurried1, tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
+			tcom(types.Typ[types.String], tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -714,8 +784,8 @@ var analyseTestCases = []analyseTestCase{
 		)))),
 		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(5)),
-			tcom(funcBCurried1, tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
-			tcom(funcs["FuncA"].Type(), tident("FuncA", funcs["FuncA"].Type())),
+			tcom(types.Typ[types.String], tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
+			tcom(types.Typ[types.Int], tident("FuncA", funcs["FuncA"].Type())),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -787,7 +857,7 @@ var analyseTestCases = []analyseTestCase{
 						tpipe(mockInnerType, nil, tcoms(
 							tcom(mockDotType, &DotNode{typ: mockDotType}),
 							tcom(
-								funcs["GetInner"].Type(),
+								mockInnerType,
 								tident("GetInner", funcs["GetInner"].Type()),
 							),
 						)),
@@ -933,5 +1003,403 @@ var analyseTestCases = []analyseTestCase{
 		resTree:        ttree("test", tlist(nil, tcomment("/* a comment */"))),
 		funcs:          funcs,
 		expectedErrors: []TError{},
+	},
+	{
+		// {{ FuncA 42 }}  -- FuncA :: string -> int, called with an int.
+		// Expect a single ErrorTypeInvalidCommand for the bad argument type.
+		// The command's result type is still FuncA's return type (int).
+		name: "wrong argument type (single param)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncA"), num(42)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+			tcom(
+				types.Typ[types.Int],
+				tident("FuncA", funcs["FuncA"].Type()),
+				tnum(42),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ FuncB 1 "hi" }}  -- FuncB :: (int, int) -> string, second arg
+		// is a string instead of an int. Expect one ErrorTypeInvalidCommand.
+		name: "wrong argument type (second of two params)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncB"), num(1), str("hi")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tnum(1),
+				tstr("hi"),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ FuncB "hi" 2 }}  -- FuncB :: (int, int) -> string, first arg
+		// is a string instead of an int. Expect one ErrorTypeInvalidCommand.
+		name: "wrong argument type (first of two params)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncB"), str("hi"), num(2)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tstr("hi"),
+				tnum(2),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ FuncB "x" "y" }}  -- both args wrong type. Expect two
+		// ErrorTypeInvalidCommand entries (one per mismatched argument).
+		name: "wrong argument type (both params wrong)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncB"), str("x"), str("y")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tstr("x"),
+				tstr("y"),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ FuncA "x" "y" }}  -- FuncA expects 1 arg, given 2.
+		// Expect a single ErrorArgumentNumberMismatch. The provided first
+		// argument type matches so no other errors are reported.
+		name: "too many arguments (single-param func)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncA"), str("x"), str("y")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+			tcom(
+				types.Typ[types.Int],
+				tident("FuncA", funcs["FuncA"].Type()),
+				tstr("x"),
+				tstr("y"),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorArgumentNumberMismatch},
+		},
+	},
+	{
+		// {{ FuncB 1 2 3 }}  -- FuncB expects 2 args, given 3.
+		// Expect a single ErrorArgumentNumberMismatch.
+		name: "too many arguments (multi-param func)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncB"), num(1), num(2), num(3)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tnum(1),
+				tnum(2),
+				tnum(3),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorArgumentNumberMismatch},
+		},
+	},
+	{
+		// {{ "hello" | FuncD }}  -- FuncD :: int -> string, but the
+		// pipelined value is a string. Expect one ErrorTypeInvalidCommand.
+		name: "wrong argument type via pipeline",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(str("hello")),
+			com(ident("FuncD")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tstr("hello")),
+			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ "x" | FuncB 1 }}  -- FuncB :: (int, int) -> string. The
+		// literal arg supplies the first int; the pipeline supplies a
+		// string for the second. Expect one ErrorTypeInvalidCommand on
+		// the second argument.
+		name: "wrong argument type via pipeline (multi-param func)",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(str("x")),
+			com(ident("FuncB"), num(1)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tstr("x")),
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tnum(1),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidCommand},
+		},
+	},
+	{
+		// {{ 1 | FuncB 1 2 }}  -- FuncB expects 2 args; literal supplies
+		// 2 and the pipeline adds a 3rd, yielding 3 args total. Expect a
+		// single ErrorArgumentNumberMismatch.
+		name: "too many arguments via pipeline",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(num(1)),
+			com(ident("FuncB"), num(1), num(2)),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.Int], tnum(1)),
+			tcom(
+				types.Typ[types.String],
+				tident("FuncB", funcs["FuncB"].Type()),
+				tnum(1),
+				tnum(2),
+			),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorArgumentNumberMismatch},
+		},
+	},
+	{
+		// {{ range .Seq }}{{ . }}{{ end }}
+		// .Seq is iter.Seq[string]; ranging yields a string-typed dot
+		// inside the body. No declared vars.
+		name: "range over iter.Seq",
+		parseTree: tree("test", list(rangeN(
+			pipe(nil, coms(com(field("Seq")))),
+			list(actpipe(nil, coms(com(&parse.DotNode{})))),
+		))),
+		resTree: ttree("test", tlist(mockSeqDotType, trangeN(
+			tpipe(
+				mockSeqType,
+				nil,
+				tcoms(tcom(mockSeqType, tfield(mockSeqType, "Seq"))),
+			),
+			tlist(
+				types.Typ[types.String],
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], &DotNode{typ: types.Typ[types.String]})),
+				),
+			),
+		))),
+		funcs:          funcs,
+		dotType:        mockSeqDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ range $v := .Seq }}{{ $v }}{{ end }}
+		// Single declared var binds the iter.Seq value type (string).
+		name: "range over iter.Seq with value var",
+		parseTree: tree("test", list(rangeN(
+			pipe(decls(varn("$v")), coms(com(field("Seq")))),
+			list(actpipe(nil, coms(com(varn("$v"))))),
+		))),
+		resTree: ttree("test", tlist(mockSeqDotType, trangeN(
+			tpipe(
+				mockSeqType,
+				tdecls(tvarn("$v", types.Typ[types.String])),
+				tcoms(tcom(mockSeqType, tfield(mockSeqType, "Seq"))),
+			),
+			tlist(
+				types.Typ[types.String],
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], tvarn("$v", types.Typ[types.String]))),
+				),
+			),
+		))),
+		funcs:          funcs,
+		dotType:        mockSeqDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{ // {{ range $k, $v := .Seq2 }}{{ $v }}{{ end }}
+		// iter.Seq2[int, string]: $k -> int, $v -> string; dot in body
+		// becomes the value type (string).
+		name: "range over iter.Seq2 with key and value vars",
+		parseTree: tree("test", list(rangeN(
+			pipe(decls(varn("$k"), varn("$v")), coms(com(field("Seq2")))),
+			list(actpipe(nil, coms(com(varn("$v"))))),
+		))),
+		resTree: ttree("test", tlist(mockSeqDotType, trangeN(
+			tpipe(
+				mockSeq2Type,
+				tdecls(
+					tvarn("$k", types.Typ[types.Int]),
+					tvarn("$v", types.Typ[types.String]),
+				),
+				tcoms(tcom(mockSeq2Type, tfield(mockSeq2Type, "Seq2"))),
+			),
+			tlist(
+				types.Typ[types.String],
+				tactpipe(
+					types.Typ[types.String],
+					nil,
+					tcoms(tcom(types.Typ[types.String], tvarn("$v", types.Typ[types.String]))),
+				),
+			),
+		))),
+		funcs:          funcs,
+		dotType:        mockSeqDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ VoidFn "x" }} -- VoidFn :: string -> (); should not panic;
+		// command and pipe type are nil.
+		name: "void function produces nil type",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("VoidFn"), str("x")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
+			tcom(nil, tident("VoidFn", funcs["VoidFn"].Type()), tstr("x")),
+		)))),
+		funcs:          funcs,
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ .Columns }} with no dotType -- field access on unknown dot;
+		// should produce any type with no error (type is simply unknown).
+		name: "field access with nil dot type produces any",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(field("Columns")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(anyType, nil, tcoms(
+			tcom(anyType, tfield(anyType, "Columns")),
+		)))),
+		funcs:          funcs,
+		dotType:        nil,
+		pkg:            nil,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ .BadField }} on mockDotType -- field that doesn't exist;
+		// should produce any type and one ErrorTypeInvalidField.
+		name: "unknown field on known type produces any",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(field("BadField")),
+		)))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(anyType, nil, tcoms(
+			tcom(anyType, tfield(anyType, "BadField")),
+		)))),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+		},
+	},
+	{
+		// {{ FuncPrintf }} -- variadic func (string, ...any) -> string called
+		// with zero args; the required format arg is missing.
+		// Should not panic, and should emit ErrorArgumentNumberMismatch.
+		name: "variadic function missing required arg does not panic",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(ident("FuncPrintf")),
+		)))),
+		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(types.Typ[types.String], tident("FuncPrintf", funcs["FuncPrintf"].Type())),
+		)))),
+		funcs:   funcs,
+		dotType: nil,
+		pkg:     nil,
+		expectedErrors: []TError{
+			{typ: ErrorArgumentNumberMismatch},
+		},
+	},
+	{
+		// {{ .Items | FuncAnyParam }} -- .Items is []string; FuncAnyParam takes
+		// any. Concrete type passed to any param: no warning.
+		name: "concrete arg to any param produces no warning",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(field("Items")),
+			com(ident("FuncAnyParam")),
+		)))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(
+				types.NewSlice(types.Typ[types.String]),
+				tfield(types.NewSlice(types.Typ[types.String]), "Items"),
+			),
+			tcom(types.Typ[types.String], tident("FuncAnyParam", funcs["FuncAnyParam"].Type())),
+		)))),
+		funcs:          funcs,
+		dotType:        mockDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	{
+		// {{ .BadField | FuncD }} -- .BadField is unknown (any); FuncD takes int.
+		// Passing any to a concrete param: ErrorTypeInvalidField (field) +
+		// ErrorUnknownType (any->int warning).
+		name: "any arg to concrete param produces warning",
+		parseTree: tree("test", list(actpipe(nil, coms(
+			com(field("BadField")),
+			com(ident("FuncD")),
+		)))),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(
+			tcom(anyType, tfield(anyType, "BadField")),
+			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
+		)))),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+			{typ: ErrorUnknownType},
+		},
 	},
 }

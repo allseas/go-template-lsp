@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	parse "text-template-parser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -208,186 +207,6 @@ func TestPublishDiagnostics_NilContext(t *testing.T) {
 	})
 }
 
-// ai generated below
-func TestExtractBranchNodes(t *testing.T) {
-	ifPipe, ifList, ifElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
-	p, l, e := extractBranchNodes(&parse.IfNode{
-		BranchNode: parse.BranchNode{
-			Pipe:     ifPipe,
-			List:     ifList,
-			ElseList: ifElse,
-		},
-	})
-	assert.Equal(t, ifPipe, p)
-	assert.Equal(t, ifList, l)
-	assert.Equal(t, ifElse, e)
-
-	rangePipe, rangeList, rangeElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
-	p, l, e = extractBranchNodes(&parse.RangeNode{
-		BranchNode: parse.BranchNode{
-			Pipe:     rangePipe,
-			List:     rangeList,
-			ElseList: rangeElse,
-		},
-	})
-	assert.Equal(t, rangePipe, p)
-	assert.Equal(t, rangeList, l)
-	assert.Equal(t, rangeElse, e)
-
-	withPipe, withList, withElse := &parse.PipeNode{}, &parse.ListNode{}, &parse.ListNode{}
-	p, l, e = extractBranchNodes(&parse.WithNode{
-		BranchNode: parse.BranchNode{
-			Pipe:     withPipe,
-			List:     withList,
-			ElseList: withElse,
-		},
-	})
-	assert.Equal(t, withPipe, p)
-	assert.Equal(t, withList, l)
-	assert.Equal(t, withElse, e)
-
-	p, l, e = extractBranchNodes(&parse.TextNode{})
-	assert.Nil(t, p)
-	assert.Nil(t, l)
-	assert.Nil(t, e)
-}
-
-func TestCollectDeclarations(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{}}
-	assert.Nil(t, collectDeclarations(nil, "", ctx))
-
-	pipeWithNil := &parse.PipeNode{Decl: []*parse.VariableNode{nil}}
-	assert.Empty(t, collectDeclarations(pipeWithNil, "", ctx))
-
-	text := "{{ $newVar := . }}"
-	declVar := &parse.VariableNode{Ident: []string{"$newVar"}}
-	pipe := &parse.PipeNode{Decl: []*parse.VariableNode{declVar}}
-
-	diags := collectDeclarations(pipe, text, ctx)
-	assert.Empty(t, diags)
-	assert.NotNil(t, ctx.Vars["$newVar"])
-
-	diags = collectDeclarations(pipe, text, ctx)
-	require.Len(t, diags, 1)
-	assert.Contains(t, diags[0].Message, "duplicate variable declaration: $newVar")
-	assert.Equal(t, protocol.DiagnosticSeverityWarning, *diags[0].Severity)
-}
-
-func TestCheckPipeUsage(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	assert.Nil(t, checkPipeUsage(nil, "", ctx))
-
-	ctx.Vars["$defined"] = &parse.PipeNode{}
-	vnode := &parse.VariableNode{Ident: []string{"$defined"}}
-	cmd := &parse.CommandNode{Args: []parse.Node{vnode}}
-	pipe := &parse.PipeNode{Cmds: []*parse.CommandNode{cmd}}
-	assert.Empty(t, checkPipeUsage(pipe, "{{ $defined }}", ctx))
-
-	vnodeUndef := &parse.VariableNode{Ident: []string{"$undef"}}
-	cmdUndef := &parse.CommandNode{Args: []parse.Node{vnodeUndef}}
-	pipeUndef := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdUndef}}
-	diags := checkPipeUsage(pipeUndef, "{{ $undef }}", ctx)
-	require.Len(t, diags, 1)
-	assert.Contains(t, diags[0].Message, "undeclared variable: $undef")
-}
-
-func TestDeclareNode(t *testing.T) {
-	actVar := &parse.VariableNode{Ident: []string{"$act"}}
-	rngVar := &parse.VariableNode{Ident: []string{"$rng"}}
-	ifVar := &parse.VariableNode{Ident: []string{"$if"}}
-
-	tests := []struct {
-		name    string
-		node    parse.Node
-		text    string
-		varName string
-	}{
-		{
-			name:    "action node",
-			node:    &parse.ActionNode{Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{actVar}}},
-			text:    "{{ $act := . }}",
-			varName: "$act",
-		},
-		{
-			name: "range node",
-			node: &parse.RangeNode{
-				BranchNode: parse.BranchNode{
-					Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{rngVar}},
-				},
-			},
-			text:    "{{ range $rng := . }}",
-			varName: "$rng",
-		},
-		{
-			name: "if node",
-			node: &parse.IfNode{
-				BranchNode: parse.BranchNode{
-					Pipe: &parse.PipeNode{Decl: []*parse.VariableNode{ifVar}},
-				},
-			},
-			text:    "{{ if $if := . }}",
-			varName: "$if",
-		},
-	}
-
-	for _, tc := range tests {
-		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-		diags := declareNode(tc.node, tc.text, ctx)
-		assert.Empty(t, diags, tc.name)
-		assert.NotNil(t, ctx.Vars[tc.varName], tc.name)
-	}
-}
-
-func TestAnalyzeNode_PipeWrappers(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	vnode := &parse.VariableNode{Ident: []string{"$undef"}}
-	cmd := &parse.CommandNode{Args: []parse.Node{vnode}}
-	pipe := &parse.PipeNode{Cmds: []*parse.CommandNode{cmd}}
-
-	tests := []struct {
-		name string
-		node parse.Node
-		text string
-	}{
-		{
-			name: "action block",
-			node: &parse.ActionNode{Pipe: pipe},
-			text: "{{ $undef }}",
-		},
-		{
-			name: "range block",
-			node: &parse.RangeNode{BranchNode: parse.BranchNode{Pipe: pipe}},
-			text: "{{ range $undef }}",
-		},
-		{
-			name: "if block",
-			node: &parse.IfNode{BranchNode: parse.BranchNode{Pipe: pipe}},
-			text: "{{ if $undef }}",
-		},
-		{
-			name: "with block",
-			node: &parse.WithNode{BranchNode: parse.BranchNode{Pipe: pipe}},
-			text: "{{ with $undef }}",
-		},
-	}
-
-	for _, tc := range tests {
-		diags := analyzeNode(tc.node, tc.text, ctx)
-		require.Len(t, diags, 1, tc.name)
-		assert.Contains(t, diags[0].Message, "undeclared variable: $undef", tc.name)
-	}
-}
-
-func TestAnalyzeNode_CommandNode(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	ident := &parse.IdentifierNode{Ident: "unregisteredCommand"}
-	cmd := &parse.CommandNode{Args: []parse.Node{ident}}
-
-	diags := analyzeNode(cmd, "{{ unregisteredCommand }}", ctx)
-	require.Len(t, diags, 1)
-	assert.Contains(t, diags[0].Message, "unsupported function or unregistered command")
-}
-
 func TestPublishDiagnostics_SendsDiagnostics(t *testing.T) {
 	var notified bool
 	var notifyMethod string
@@ -433,46 +252,6 @@ func TestPublishDiagnostics_UnknownDiagnosticFallback(t *testing.T) {
 	}
 }
 
-func TestCollectDeclarations_RootIdent(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	declVar := &parse.VariableNode{Ident: []string{"$"}}
-	pipe := &parse.PipeNode{Decl: []*parse.VariableNode{declVar}}
-
-	diags := collectDeclarations(pipe, "{{ $ := . }}", ctx)
-	assert.Empty(t, diags)
-}
-
-func TestCollectDeclarations_Assignment(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil, "$x": &parse.PipeNode{}}}
-	declVar := &parse.VariableNode{Ident: []string{"$x"}}
-	pipe := &parse.PipeNode{
-		Decl:     []*parse.VariableNode{declVar},
-		IsAssign: true,
-	}
-	diags := collectDeclarations(pipe, "{{ $x = . }}", ctx)
-	assert.Empty(t, diags)
-	assert.Equal(t, pipe, ctx.Vars["$x"])
-}
-
-func TestCheckPipeUsage_SpecialVariables(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	vnodeRoot := &parse.VariableNode{Ident: []string{"$"}}
-	cmdRoot := &parse.CommandNode{Args: []parse.Node{vnodeRoot}}
-	pipeRoot := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdRoot}}
-	assert.Empty(t, checkPipeUsage(pipeRoot, "{{ $ }}", ctx))
-	vnodeEmpty := &parse.VariableNode{Ident: []string{""}}
-	cmdEmpty := &parse.CommandNode{Args: []parse.Node{vnodeEmpty}}
-	pipeEmpty := &parse.PipeNode{Cmds: []*parse.CommandNode{cmdEmpty}}
-	assert.Empty(t, checkPipeUsage(pipeEmpty, "{{}}", ctx))
-}
-
-func TestAnalyzeNode_UndefinedNodeEmptyName(t *testing.T) {
-	ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-	undefNode := &parse.UndefinedNode{}
-	diags := analyzeNode(undefNode, "{{ }}", ctx)
-	assert.Empty(t, diags)
-}
-
 func TestCollectDiagnostics_EmptyAction(t *testing.T) {
 	text := `{{ }}`
 	diags := collectDiagnostics(text, "file:///test.tmpl")
@@ -500,7 +279,7 @@ func TestCollectDiagnostics_Comments(t *testing.T) {
 multi-line
 comment
 */}}`},
-		{"comment with trim left", `{{- /* comment */ }}`},
+		{"comment with trim left", `{{- /* comment */}}`},
 		{"comment with trim both", `{{- /* comment */ -}}`},
 		{"comment with template syntax", `{{/* {{ .Field }} */}}`},
 		{"comment in range", `{{range .Items}}{{/* iteration comment */}}{{end}}`},
@@ -517,6 +296,13 @@ comment
 			assert.Empty(t, diags)
 		})
 	}
+}
+
+func TestCollectDiagnostics_IncorrectCommentSyntax(t *testing.T) {
+	text := `{{/* unclosed comment */   dyguayudsgyaui   }}`
+	diags := collectDiagnostics(text, "file:///test.tmpl")
+	require.Len(t, diags, 1)
+	assert.Contains(t, diags[0].Message, "comment ends before closing delimiter")
 }
 
 // TestCollectDiagnostics_MultiDefines verifies that diagnostics are collected
@@ -619,6 +405,63 @@ func TestCollectDiagnostics_TemplateArgTypeCheck(t *testing.T) {
 			ok,
 			"expected no type-mismatch diagnostic for untyped target, got: %v",
 			diagMessages(diags),
+		)
+	})
+}
+
+func TestCollectDiagnostics_HintLoadFailure(t *testing.T) {
+	fileURI := "file:///hint-load-failure.tmpl"
+	t.Cleanup(func() { store.Remove(fileURI) })
+
+	t.Run("unresolvable root hint emits warning on comment", func(t *testing.T) {
+		src := "{{/*gotype: nonexistent/pkg.Type*/}}\n{{ .Name }}\n"
+		store.Set(fileURI, src)
+
+		diags := collectDiagnostics(src, fileURI)
+		diag, ok := findDiagnosticContaining(diags, "could not load type")
+		require.True(t, ok, "expected hint-load-failure diagnostic, got: %v", diagMessages(diags))
+
+		assert.Equal(t, uint32(0), diag.Range.Start.Line, "diagnostic should be on line 0")
+		require.NotNil(t, diag.Severity)
+		assert.Equal(t, protocol.DiagnosticSeverityWarning, *diag.Severity)
+	})
+
+	t.Run("valid hint emits no hint-load-failure diagnostic", func(t *testing.T) {
+		const resourceDir = "../../test/resources/definition-tests-server"
+		t.Cleanup(func() { WorkspaceRoot = "" })
+		WorkspaceRoot = resourceDir
+
+		src := "{{/*gotype: text-template-server/src/model.Order*/}}\n{{ .CustomerName }}\n"
+		store.Set(fileURI, src)
+
+		diags := collectDiagnostics(src, fileURI)
+		_, ok := findDiagnosticContaining(diags, "could not load type")
+		require.False(
+			t,
+			ok,
+			"expected no hint-load-failure diagnostic for valid hint, got: %v",
+			diagMessages(diags),
+		)
+	})
+
+	t.Run("unresolvable define-block hint emits warning on its comment", func(t *testing.T) {
+		src := "{{- define \"myblock\" -}}\n{{/*gotype: nonexistent/pkg.Type*/}}\n{{ .Name }}\n{{- end -}}\n"
+		store.Set(fileURI, src)
+
+		diags := collectDiagnostics(src, fileURI)
+		diag, ok := findDiagnosticContaining(diags, "could not load type")
+		require.True(
+			t,
+			ok,
+			"expected hint-load-failure diagnostic for define block, got: %v",
+			diagMessages(diags),
+		)
+
+		assert.Equal(
+			t,
+			uint32(1),
+			diag.Range.Start.Line,
+			"diagnostic should be on the gotype comment line",
 		)
 	})
 }

@@ -1,35 +1,159 @@
-{{/*gotype: cg/model.Order*/}}
+{{- /*gotype: cg/model.Model*/ -}}
 
-{{ $test := 0 }}
+{{ define "control_logger.conf.tmpl.taglist" }}
+  {{- /*gotype: cg/model.Instance*/ -}}
+  {{# $taglist := "" }}
+  {{- with $tagMap := .IdentifyingSelection }}
+    {{- range $key := .Order }}
+      {{- if $taglist }}
+          {{- $taglist = print $taglist ", " }}
+      {{- end }}
+      {{- $taglist = print $taglist "[\"" ($key | kebabCase) "\", \"" ($tagMap.Get $key | kebabCase) "\"]" }}
+    {{- end }}
+  {{- end }}
+  {{- if $taglist }}
+    {{- print "taglist=[ " $taglist " ]," }}
+  {{- end }}
+{{- end }}
 
-{{ .CustomerName }}
+{{- define "control_logger.conf.tmpl.signal_entry" }}
+  {{- $signalInstance := .signalInstance }}
+  {{- $instance := .instance }}
+  {{- $offset := .offset -}}
+  { measurement="{{ $instance.Block.Name | kebabCase }}", |{{ template "control_logger.conf.tmpl.taglist" $instance }} |name="{{ $signalInstance.Name | kebabCase }}", |type="{{ $signalInstance.Signal.Datatype.Golang }}", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
+{{- end }}
 
-{{ .DisplayName }}
+[agent]
+  interval = "1s"
+  metric_batch_size = 1000
+  metric_buffer_limit = 10000
+  flush_interval = "${AGENT_FLUSH_INTERVAL:-10s}"
+  logtarget = "stderr"
+  hostname = ""
+  omit_hostname = true
 
-{{ range .Items }}
-    {{ .Desc }}
-{{ end }}
+[global_tags]
+  "?dlg_source"="${DLG_SOURCE:?err}"
 
-{{ with .Address }}
-    {{ .Country }}
-{{ end }}
+{{- if .LoggerInfo.EnablePing }}
 
-{{ .Address.Desc.Long }}
+[[inputs.ping]]
+  tags = {"?dlg_destination"="monitoring"}
+  interval = "60s"
+  urls = ["${SENDER_IP:?err}"]
+{{- end }}
 
-{{ $test }}
+[[processors.dedup_fields]]
+  tagpass={"?dlg_destination"=["data"]}
+  dedup_interval = "60s"
+  always_pass_fields = ["framecounter*"]
+  always_pass_field_types = ["float", "string", "int"]
 
-{{ $test }}
+{{- /*TODO: Implement logger scaling*/}}
+{{- /*TODO: Implement instance name as environment variable*/}}
+{{- /*TODO: Implement multiple instances for instance tag*/}}
 
-{{ $rangeee := "fake range" }}
+[[inputs.socket_listener]]
+  tags = {"?dlg_destination"="data"{{ if .LoggerInfo.UdpHeader.SystemInstanceID }}, "?${DLG_SOURCE:?err}-instance"="${DLG_SOURCE_INSTANCE:?err}"{{ end }}}
+  name_prefix = "${DLG_SOURCE:?err}."
+  service_address = "udp://:${SOCKET_LISTENER_PORT:?err}"
+  data_format = "allseas_cudp"
+  fieldexclude = ["dummy"]
 
-{{ $tt := .Address }}
+  [inputs.socket_listener.allseas_cudp]
+    omit_instance_tag = true
+    entries = [
+{{- $layout := siemensLayout }}
+{{- block "code" .IdentifyingSelection }}
+  {{ . }}
+  {{- range .Machine.Inputs }}
+    {{- $offset := $layout.Add . }}
+      {{ template "control_logger.conf.tmpl.signal_entry" (dict "signalInstance" . "instance" $.Machine "offset" $offset) }}
+  {{- else }}
+    {{- /* Compensation for dummy */}}
+    {{- $silent := $layout.AddBit }}
+  {{- end }}
+  {{- $silent := $layout.Align }}
+  {{ $testing := "asdcasdc" }}
 
-{{ with .Address }}
+  {{- range $instance := .Instances }}
+    {{- range .Inputs }}
+      {{- $offset := $layout.Add . }}
+      {{ template "control_logger.conf.tmpl.signal_entry" (dict "signalInstance" . "instance" $instance "offset" $offset) }}
+    {{- else }}
+      {{- /* Compensation for dummy */}}
+      {{- $silent := $layout.AddBit }}
+    {{- end }}
+    {{- $silent := $layout.Align }}
+  {{- end }}
+  {{- range $instance := .Instances }}
+    {{- range .Outputs }}
+      {{- $offset := $layout.Add . }}
+      {{ template "control_logger.conf.tmpl.signal_entry" (dict "signalInstance" . "instance" $instance "offset" $offset) }}
+    {{- else }}
+      {{- if $instance.Block.IsComponent }}
+        {{- /* Compensation for dummy */}}
+        {{- $silent := $layout.AddBit }}
+      {{- end }}
+    {{- end }}
+    {{- $silent := $layout.Align }}
+  {{- end }}
 
-{{ end }}
+  {{- range .Commands }}
+    {{- range $commandInstance := .CommandInstances }}
+      {{- if .Command.HasHardwareInputs }}
+        {{- range .Inputs }}
+          {{- $offset := $layout.Add . }}
+      { measurement="{{ $commandInstance.Command.Name | kebabCase }}", |{{/* template "control_logger.conf.tmpl.taglist" $commandInstance */}} |name="{{ .Name | kebabCase }}", |type="{{ .Signal.Datatype.Golang }}", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
+        {{- else }}
+          {{- /* Compensation for dummy */}}
+          {{- $silent := $layout.AddBit }}
+        {{- end }}
+        {{- $silent := $layout.Align }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- range .Commands }}
+    {{- range $commandInstance := .CommandInstances }}
+      {{- if .Command.HasHardwareOutputs }}
+        {{- range .Outputs }}
+          {{- $offset := $layout.Add . }}
+      { measurement="{{ $commandInstance.Command.Name | kebabCase }}", |{{/* template "control_logger.conf.tmpl.taglist" $commandInstance */}} |name="{{ .Name | kebabCase }}", |type="{{ .Signal.Datatype.Golang }}", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
+        {{- else }}
+          {{- /* Compensation for dummy */}}
+          {{- $silent := $layout.AddBit }}
+        {{- end }}
+        {{- $silent := $layout.Align }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
 
-{{ .Items }}
+  {{- if .AlarmInstances }}
+    {{- $silent := $layout.StartBitSet 64 }}
+    {{- range .AlarmInstances }}
+        {{- $offset := $layout.AddBit }}
+        {{- $blockName := .Instance.Block.Name | kebabCase }}
+      { measurement="{{ $blockName }}", |{{ template "control_logger.conf.tmpl.taglist" .Instance }} |name="{{ .Alarm.Name | kebabCase }}", |type="bool", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
+    {{- end }}
+    {{- /* Compensation for the not used part of the LWord */}}
+    {{- $silent = $layout.EndBitSet }}
+  {{- end }}
 
-{{$variable := "abc"}}
-
-{{ $variable }}
+  {{- range .Machine.Block.Logging }}
+    {{- $offset := $layout.Add . }}
+      { measurement="{{ $.Machine.Block.Name | kebabCase }}", |{{ template "control_logger.conf.tmpl.taglist" $.Machine }} |name="{{ .Name | kebabCase }}", |type="{{ .Datatype.Golang }}", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
+  {{- end }}
+  {{- range $instance := .Instances }}
+    {{- range .Block.Logging }}
+      {{- $offset := $layout.Add . }}
+      { measurement="{{ $instance.Block.Name | kebabCase }}", |{{ template "control_logger.conf.tmpl.taglist" $instance }} |name="{{ .Name | kebabCase }}", |type="{{ .Datatype.Golang }}", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
+    {{- else }}
+      {{- /* Compensation for dummy */}}
+      {{- $silent := $layout.AddBit }}
+    {{- end }}
+    {{- $silent := $layout.Align }}
+  {{- end }}
+  {{- range .ControlSystem.Block.Logging }}
+      {{- $offset := $layout.Add . }}
+      { measurement="{{ .Name | kebabCase }}", | |name="{{ .Name | kebabCase }}", |type="{{ .Datatype.Golang }}", |byte_offset={{ $offset.Byte }}, |bit_offset={{ $offset.Bit }} },
+  {{- end }}

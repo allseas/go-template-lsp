@@ -5,6 +5,8 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"sync"
@@ -19,9 +21,29 @@ var funcHintRe = regexp.MustCompile(`tmpl:func\s+"([^"]+)"`)
 // as template-global functions.
 const globalHintName = "global"
 
+// GlobalFuncEntry holds the resolved function together with the position
+// information needed for go-to-definition.
+type GlobalFuncEntry struct {
+	// Func is the resolved Go function. Nil for inline literals.
+	Func *types.Func
+	// FuncMapKeyPos is the position of the string key in the FuncMap literal.
+	// Used as a fallback navigation target when Func is nil.
+	FuncMapKeyPos token.Pos
+	Fset          *token.FileSet
+}
+
+// DefinitionPos returns the best position to navigate to for go-to-definition.
+func (e GlobalFuncEntry) DefinitionPos() token.Pos {
+	if e.Func != nil {
+		return e.Func.Pos()
+	}
+	return e.FuncMapKeyPos
+}
+
 var (
-	globalFuncsMu    sync.RWMutex
-	globalFuncsCache map[string]*types.Func
+	globalFuncsMu           sync.RWMutex
+	globalFuncsCache        map[string]*types.Func
+	globalFuncsEntriesCache map[string]GlobalFuncEntry
 )
 
 // SetGlobalFuncs replaces the cached global function map. A nil map clears it.
@@ -29,6 +51,24 @@ func SetGlobalFuncs(m map[string]*types.Func) {
 	globalFuncsMu.Lock()
 	defer globalFuncsMu.Unlock()
 	globalFuncsCache = m
+	if m == nil {
+		globalFuncsEntriesCache = nil
+	}
+}
+
+// SetGlobalFuncEntries stores the rich entry data used for go-to-definition.
+func SetGlobalFuncEntries(m map[string]GlobalFuncEntry) {
+	globalFuncsMu.Lock()
+	defer globalFuncsMu.Unlock()
+	globalFuncsEntriesCache = m
+}
+
+// GetGlobalFuncEntry returns the rich entry for the given function name, if known.
+func GetGlobalFuncEntry(name string) (GlobalFuncEntry, bool) {
+	globalFuncsMu.RLock()
+	defer globalFuncsMu.RUnlock()
+	e, ok := globalFuncsEntriesCache[name]
+	return e, ok
 }
 
 // GlobalFuncs returns a snapshot of the cached global function map.
@@ -52,23 +92,90 @@ func GlobalFuncs() map[string]*types.Func {
 // otherwise nil. Builtin functions are NOT included; use ComputeGlobalFuncs
 // to obtain the merged set.
 func LoadGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
-	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
-			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
-		Dir: workspaceRoot,
-	}
-	pkgs, err := packages.Load(cfg, "./...")
+	entries := map[string]GlobalFuncEntry{}
+
+	// Find all package roots to load (handles nested modules)
+	packageRoots, err := findPackageRoots(workspaceRoot)
 	if err != nil {
-		return nil, fmt.Errorf("packages.Load: %w", err)
+		return nil, fmt.Errorf("findPackageRoots: %w", err)
 	}
 
-	out := map[string]*types.Func{}
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Syntax {
-			collectGlobalFuncs(file, pkg.TypesInfo, out)
+	for _, root := range packageRoots {
+		cfg := &packages.Config{
+			Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
+				packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+			Dir: root,
+		}
+		pkgs, err := packages.Load(cfg, "./...")
+		if err != nil {
+			continue
+		}
+
+		for _, pkg := range pkgs {
+			for _, file := range pkg.Syntax {
+				collectGlobalFuncs(file, pkg.TypesInfo, pkg.Fset, entries)
+			}
 		}
 	}
+
+	SetGlobalFuncEntries(entries)
+
+	out := make(map[string]*types.Func, len(entries))
+	for k, e := range entries {
+		out[k] = e.Func
+	}
 	return out, nil
+}
+
+// findPackageRoots recursively discovers all directories that contain Go packages
+// (either with go.mod or .go files). Returns roots from which to load packages.
+func findPackageRoots(dir string) ([]string, error) {
+	var roots []string
+	seen := make(map[string]bool)
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !info.IsDir() {
+			return nil
+		}
+
+		if len(info.Name()) > 0 && info.Name()[0] == '.' {
+			return filepath.SkipDir
+		}
+		// skip common cache directories
+		if info.Name() == "node_modules" || info.Name() == "vendor" {
+			return filepath.SkipDir
+		}
+
+		// Check if this directory has a go.mod file (module root)
+		gomod := filepath.Join(path, "go.mod")
+		if _, err := os.Stat(gomod); err == nil {
+			if !seen[path] {
+				roots = append(roots, path)
+				seen[path] = true
+			}
+			// Don't descend into subdirectories of a module root
+			// as packages.Load with "./..." will find them
+			if path != dir {
+				return filepath.SkipDir
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// If no go.mod files found, add the root itself (it may be a standalone package)
+	if len(roots) == 0 {
+		roots = append(roots, dir)
+	}
+
+	return roots, nil
 }
 
 // ComputeGlobalFuncs returns the full set of functions that should be available
@@ -100,7 +207,12 @@ func ComputeGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
 
 // collectGlobalFuncs walks file and merges FuncMap entries marked with
 // //tmpl:func "global" into out.
-func collectGlobalFuncs(file *ast.File, info *types.Info, out map[string]*types.Func) {
+func collectGlobalFuncs(
+	file *ast.File,
+	info *types.Info,
+	fset *token.FileSet,
+	out map[string]GlobalFuncEntry,
+) {
 	lits := collectFuncMapLits(file)
 	if len(lits) == 0 {
 		return
@@ -116,7 +228,7 @@ func collectGlobalFuncs(file *ast.File, info *types.Info, out map[string]*types.
 			if target == nil {
 				continue
 			}
-			extractFuncMapInto(target, info, out)
+			extractFuncMapInto(target, info, fset, out)
 		}
 	}
 }
@@ -159,7 +271,12 @@ func isFuncMapType(e ast.Expr) bool {
 	return false
 }
 
-func extractFuncMapInto(cl *ast.CompositeLit, info *types.Info, out map[string]*types.Func) {
+func extractFuncMapInto(
+	cl *ast.CompositeLit,
+	info *types.Info,
+	fset *token.FileSet,
+	out map[string]GlobalFuncEntry,
+) {
 	for _, elt := range cl.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
 		if !ok {
@@ -176,7 +293,11 @@ func extractFuncMapInto(cl *ast.CompositeLit, info *types.Info, out map[string]*
 		if _, seen := out[name]; seen {
 			continue
 		}
-		out[name] = resolveFuncObj(kv.Value, info)
+		out[name] = GlobalFuncEntry{
+			Func:          resolveFuncObj(kv.Value, info),
+			FuncMapKeyPos: bl.Pos(),
+			Fset:          fset,
+		}
 	}
 }
 

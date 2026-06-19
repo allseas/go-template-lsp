@@ -38,12 +38,24 @@ func semanticOrderType(t *testing.T) *serverTypes.Tree {
 // bypassing the type-hint loading mechanism that requires a workspace root.
 func setDocWithTypedTree(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	t.Helper()
-	tree, _, err := tryParse(src)
+	tree, treeSet, err := tryParse(src)
 	require.NoError(t, err)
 	typedTree := buildTypedTree(tree, lt, nil)
-	doc := &document{text: src, tree: tree, loadedType: lt, typedTree: typedTree}
-	if doc.typedTree != nil {
-		serverTypes.SetEndsForTree(*doc.typedTree, serverTypes.Pos(len(src)), &doc.text)
+	typedTrees := make(map[string]*serverTypes.Tree, len(treeSet))
+	for name, tr := range treeSet {
+		typedTrees[name] = buildTypedTree(tr, lt, nil)
+	}
+	doc := &document{
+		text:       src,
+		tree:       tree,
+		loadedType: lt,
+		typedTree:  typedTree,
+		typedTrees: typedTrees,
+	}
+	for _, tt := range typedTrees {
+		if tt != nil {
+			serverTypes.SetEndsForTree(*tt, serverTypes.Pos(len(src)), &doc.text)
+		}
 	}
 	store.mu.Lock()
 	store.docs[uri] = doc
@@ -378,6 +390,51 @@ func TestDocumentSymbolsThreeDefines(t *testing.T) {
 	assert.ElementsMatch(t, []string{"a", "b", "c"}, names)
 }
 
+func TestDocumentSymbolsNameSubstringOfDefine(t *testing.T) {
+	for _, name := range []string{"e", "n", "in", "define"} {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			uri := "file:///sym-name-" + name + ".tmpl"
+			src := `{{define "` + name + `"}}body{{end}}`
+			setDocFromSource(t, uri, src)
+			defer store.Delete(uri)
+
+			result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+			require.NoError(t, err)
+			syms := castDocSymbols(t, result)
+			require.Len(t, syms, 1)
+
+			sym := syms[0]
+			assert.Equal(t, name, sym.Name)
+
+			expectedChar := uint32(10)
+			assert.Equal(t, expectedChar, sym.SelectionRange.Start.Character,
+				"selectionRange should point at the name, not inside the keyword")
+		})
+	}
+}
+
+// TestDocumentSymbolsBlockTreeExcluded verifies that {{block}} trees are not
+// included in the document symbols output (they have no {{define}} header).
+func TestDocumentSymbolsBlockTreeExcluded(t *testing.T) {
+	uri := "file:///sym-block.tmpl"
+	// {{block}} creates a tree in the treeSet but has no {{define}} header.
+	src := `{{define "outer"}}{{block "inner" .}}default{{end}}{{end}}`
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := DocumentSymbols(nil, makeDocSymParams(uri))
+	require.NoError(t, err)
+	syms := castDocSymbols(t, result)
+
+	names := make([]string, len(syms))
+	for i, s := range syms {
+		names[i] = s.Name
+	}
+	// Only "outer" should appear; "inner" is a {{block}}, not a {{define}}.
+	assert.ElementsMatch(t, []string{"outer"}, names)
+}
+
 // TestSemanticTokensAdditionalCases covers node kinds not exercised by
 // TestSemanticTokenNodeTypes, including else/if branches, pipes with assignment,
 // and template calls with a pipeline argument.
@@ -701,4 +758,59 @@ func TestDocumentSymbolsBlockStartRegression(t *testing.T) {
 		lines[line] = s.Name
 	}
 	assert.Len(t, lines, 3, "all three symbols must start on distinct lines")
+}
+
+// TestVariableNodeTokenTypes verifies that chained variable expressions like
+// $item.IsExpensive split into a ttVariable token for $item and a ttFunction
+// (or ttProperty) token for the chained segment.
+func TestVariableNodeTokenTypes(t *testing.T) {
+	lt := semanticOrderType(t)
+
+	tests := []struct {
+		name           string
+		src            string
+		wantTokenCount int
+		wantTypes      []uint32
+	}{
+		{
+			// Plain variable with no chain: 4 tokens (range, $item decl, .Items, $item usage)
+			name:           "bare variable emits variable token",
+			src:            `{{ range $item := .Items }}{{ $item }}{{ end }}`,
+			wantTokenCount: 4,
+			wantTypes:      []uint32{ttKeyword, ttVariable, ttProperty, ttVariable},
+		},
+		{
+			// $item.SKU - SKU is a struct field -> ttProperty
+			// 5 tokens: range, $item decl, .Items, $item, .SKU
+			name:           "variable.field emits variable then property token",
+			src:            `{{ range $item := .Items }}{{ $item.SKU }}{{ end }}`,
+			wantTokenCount: 5,
+			wantTypes:      []uint32{ttKeyword, ttVariable, ttProperty, ttVariable, ttProperty},
+		},
+		{
+			// $item.IsExpensive - IsExpensive is a method -> ttFunction
+			// 5 tokens: range, $item decl, .Items, $item, .IsExpensive
+			name:           "variable.method emits variable then function token",
+			src:            `{{ range $item := .Items }}{{ $item.IsExpensive }}{{ end }}`,
+			wantTokenCount: 5,
+			wantTypes:      []uint32{ttKeyword, ttVariable, ttProperty, ttVariable, ttFunction},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uri := "file:///varchain-tok-" + tt.name + ".tmpl"
+			setDocWithTypedTree(t, uri, tt.src, lt)
+			defer store.Delete(uri)
+
+			result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Len(t, result.Data, tt.wantTokenCount*5, "unexpected token count")
+
+			for i, wantType := range tt.wantTypes {
+				assert.Equal(t, wantType, result.Data[i*5+3], "token[%d] tokenType", i)
+			}
+		})
+	}
 }

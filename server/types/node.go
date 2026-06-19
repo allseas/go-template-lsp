@@ -590,11 +590,12 @@ func (i *IdentifierNode) ValueType() types.Type {
 type VariableNode struct {
 	NodeType
 	Pos
-	Ident  []string   // Variable name and fields in lexical order.
-	typ    types.Type // Resolved type of the variable (set during analysis)
-	parent Node
-	endPos Pos
-	isElse bool // Whether this is in an else list.
+	Ident    []string   // Variable name and fields in lexical order.
+	typ      types.Type // Resolved type of the variable (set during analysis)
+	parent   Node
+	endPos   Pos
+	isElse   bool   // Whether this is in an else list.
+	isMethod []bool // Per-identifier (Ident[1:]): true if the segment resolves to a method. (set during analysis)
 }
 
 func (v *VariableNode) IsElseList() bool {
@@ -624,6 +625,17 @@ func (v *VariableNode) End() Pos {
 	return v.endPos
 }
 
+// IdentIsMethod reports whether the i-th identifier in the chain (0-based, where 0 is the
+// base variable) resolves to a method rather than a plain struct field.
+// Always returns false for i == 0 (the base variable itself) or when type analysis
+// did not resolve the node.
+func (v *VariableNode) IdentIsMethod(i int) bool {
+	if i <= 0 || i-1 >= len(v.isMethod) {
+		return false
+	}
+	return v.isMethod[i-1]
+}
+
 func (v *VariableNode) Copy() Node {
 	return &VariableNode{
 		parent:   v.parent,
@@ -632,6 +644,7 @@ func (v *VariableNode) Copy() Node {
 		endPos:   v.endPos,
 		Ident:    append([]string{}, v.Ident...),
 		isElse:   v.isElse,
+		isMethod: append([]bool{}, v.isMethod...),
 	}
 }
 
@@ -746,6 +759,7 @@ type FieldNode struct {
 	parent   Node
 	Ident    []string   // The identifiers in lexical order (period stripped).
 	typ      types.Type // Resolved type of the final segment (set during analysis).
+	dotType  types.Type // Resolved type of the dot context this field is evaluated against (set during analysis).
 	isElse   bool       // Whether this node appears inside an else list.
 	isMethod []bool     // Per-identifier: true if the segment resolves to a method, false for a struct field. (set during analysis)
 }
@@ -780,6 +794,7 @@ func (f *FieldNode) Copy() Node {
 		Ident:    append([]string{}, f.Ident...),
 		isElse:   f.isElse,
 		isMethod: append([]bool{}, f.isMethod...),
+		dotType:  f.dotType,
 	}
 }
 
@@ -799,6 +814,12 @@ func (f *FieldNode) Parent() Node {
 
 func (f *FieldNode) ValueType() types.Type {
 	return f.typ
+}
+
+// DotType returns the resolved type of the dot context this field is
+// evaluated against, or nil if type analysis was unavailable.
+func (f *FieldNode) DotType() types.Type {
+	return f.dotType
 }
 
 // ChainNode holds a term followed by a chain of field accesses (identifier starting with '.').

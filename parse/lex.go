@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build !allseas
+
 package parse
 
 import (
@@ -383,10 +385,7 @@ func lexRightDelim(l *lexer) stateFn {
 }
 
 func (l *lexer) atLeftDelim() bool {
-	if strings.HasPrefix(l.input[l.pos:], l.leftDelim) {
-		return true
-	}
-	return false
+	return strings.HasPrefix(l.input[l.pos:], l.leftDelim)
 }
 
 // lexInsideAction scans the elements inside action delimiters.

@@ -1,0 +1,11 @@
+# gowatch configuration for the allseas build variant.
+# Mirrors gowatch.yml but adds the 'allseas' build tag.
+
+# Whether to prohibit automatic running after build
+disable_run: true
+
+# use GOGC on build
+build_go_gc: false
+
+# build tags
+build_tags: "allseas"

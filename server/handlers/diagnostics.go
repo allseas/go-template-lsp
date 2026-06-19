@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"strings"
-	parse "text-template-parser"
 	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
@@ -13,11 +12,20 @@ import (
 func createDiagnostic(
 	msg string,
 	rang protocol.Range,
-	isError bool,
+	severity DiagnosticsSeverity,
 ) (diagnostic protocol.Diagnostic) {
 	sev := new(protocol.DiagnosticSeverityError)
-	if !isError {
+	switch severity {
+	case DiagnosticSeverityDisabled:
+		sev = nil
+	case DiagnosticSeverityError:
+		sev = new(protocol.DiagnosticSeverityError)
+	case DiagnosticSeverityWarning:
 		sev = new(protocol.DiagnosticSeverityWarning)
+	case DiagnosticSeverityInformation:
+		sev = new(protocol.DiagnosticSeverityInformation)
+	case DiagnosticSeverityHint:
+		sev = new(protocol.DiagnosticSeverityHint)
 	}
 
 	source := "text-template-support"
@@ -72,16 +80,19 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 
 // collectDiagnostics returns diagnostics from AST analysis using the improved parser.
 func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
-	var trees map[string]*parse.Tree
+	var trees map[string]*types.Tree
 
-	if doc, ok := store.Get(uri); ok && len(doc.trees) > 0 {
-		trees = doc.trees
+	if doc, ok := store.Get(uri); ok && len(doc.typedTrees) > 0 {
+		trees = doc.typedTrees
 	} else {
 		_, parsed, err := tryParse(text)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to parse template")
 		}
-		trees = parsed
+		trees = make(map[string]*types.Tree, len(parsed))
+		for name, tr := range parsed {
+			trees[name] = buildTypedTree(tr, nil, nil)
+		}
 	}
 
 	if len(trees) == 0 {
@@ -93,35 +104,153 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 		if tree == nil || tree.Root == nil {
 			continue
 		}
-		ctx := &Context{Vars: map[string]parse.Node{"$": nil}}
-		diagnostics = append(
-			diagnostics,
-			walkAndAnalyze(tree.Root, text, ctx, map[parse.Node]bool{}, analyzeNode)...,
-		)
+		types.Inspect(tree.Root, func(n types.Node) bool {
+			diagnostics = append(diagnostics, analyzeNode(n, text)...)
+			return true
+		})
 	}
 
-	// Surface template argument type errors from the typed trees.
+	// Surface template argument type errors and hint load failures from the stored document.
 	if doc, ok := store.Get(uri); ok {
 		for _, tt := range doc.typedTrees {
-			diagnostics = append(diagnostics, collectTemplateArgTypeDiagnostics(tt, text)...)
+			diagnostics = append(diagnostics, collectTemplateDiagnostics(tt, text)...)
 		}
+		diagnostics = append(diagnostics, collectHintLoadFailureDiagnostics(doc, text)...)
+		diagnostics = append(diagnostics, collectEmptyDefineNameDiagnostics(doc, text)...)
 	}
 
 	return diagnostics
 }
 
-// collectTemplateArgTypeDiagnostics converts ErrorTypeInvalidTemplateArg entries from
-// a typed tree into protocol diagnostics.
-func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
-	if typedTree == nil {
+func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Diagnostic {
+	if doc == nil || len(doc.failedHints) == 0 {
+		return nil
+	}
+	severity := GetConfig().Diagnostics[types.ErrorHintLoadFailure]
+	if severity == DiagnosticSeverityDisabled {
 		return nil
 	}
 	var diagnostics []protocol.Diagnostic
-	for _, terr := range typedTree.TypeErrors {
-		if terr.ErrType() != types.ErrorTypeInvalidTemplateArg {
+	for treeName, errMsg := range doc.failedHints {
+		isRoot := doc.tree != nil && doc.tree.Name == treeName
+		offset := gotypeHintOffset(text, treeName, isRoot)
+		if offset < 0 {
 			continue
 		}
-		if terr.Node == nil {
+		rng := expandToFullBracketsFromOffset(offset, text)
+		diagnostics = append(diagnostics, createDiagnostic(
+			"gotype: could not load type: "+errMsg,
+			rng,
+			severity,
+		))
+	}
+	return diagnostics
+}
+
+// collectEmptyDefineNameDiagnostics returns diagnostics for define blocks with empty names.
+func collectEmptyDefineNameDiagnostics(doc *document, text string) []protocol.Diagnostic {
+	if doc == nil || len(doc.typedTrees) == 0 {
+		return nil
+	}
+	severity := GetConfig().Diagnostics[types.ErrorTypeEmptyDefineName]
+	if severity == DiagnosticSeverityDisabled {
+		return nil
+	}
+
+	var diagnostics []protocol.Diagnostic
+	for name, t := range doc.typedTrees {
+		if t == nil || t.Root == nil || name == "t" || name != "" {
+			continue
+		}
+
+		bodyStart := int(t.Root.Position())
+		blockEnd := int(t.End)
+
+		// Search backward from the body start to find the nearest {{define.
+		blockStart := bodyStart
+		if ms := reDefine.FindAllStringIndex(text[:bodyStart], -1); ms != nil {
+			blockStart = ms[len(ms)-1][0]
+		}
+
+		rng := bytesToRange(text, blockStart, blockEnd)
+		diagnostics = append(diagnostics, createDiagnostic(
+			"define block has an empty name",
+			rng,
+			severity,
+		))
+	}
+	return diagnostics
+}
+
+// gotypeHintOffset returns the byte offset of the start of the "gotype:" token
+func gotypeHintOffset(text, treeName string, isRoot bool) int {
+	var searchIn string
+	var searchStart int
+	if isRoot {
+		// Hint is on the first line of the file.
+		nl := strings.IndexByte(text, '\n')
+		if nl < 0 {
+			searchIn = text
+		} else {
+			searchIn = text[:nl]
+		}
+		searchStart = 0
+	} else {
+		// Hint is on the line immediately after {{define "treeName"}}.
+		defineLine := findDefineLine(text, treeName)
+		if defineLine <= 0 {
+			return -1
+		}
+		lineStart := lineStartOffset(text, defineLine+1)
+		if lineStart < 0 {
+			return -1
+		}
+		searchStart = lineStart
+		nl := strings.IndexByte(text[lineStart:], '\n')
+		if nl < 0 {
+			searchIn = text[lineStart:]
+		} else {
+			searchIn = text[lineStart : lineStart+nl]
+		}
+	}
+	rel := strings.Index(searchIn, "gotype:")
+	if rel < 0 {
+		return -1
+	}
+	return searchStart + rel
+}
+
+// lineStartOffset returns the byte offset of the start of the given 1-based line.
+func lineStartOffset(text string, line int) int {
+	if line <= 1 {
+		if line == 1 {
+			return 0
+		}
+		return -1
+	}
+	current := 1
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\n' {
+			current++
+			if current == line {
+				return i + 1
+			}
+		}
+	}
+	return -1
+}
+
+// collectTemplateDiagnostics collects TypeErrors entries from
+// a typed tree, and converts them into protocol diagnostics.
+func collectTemplateDiagnostics(typedTree *types.Tree, text string) []protocol.Diagnostic {
+	if typedTree == nil {
+		return nil
+	}
+	config := GetConfig()
+
+	var diagnostics []protocol.Diagnostic
+	for _, terr := range typedTree.TypeErrors {
+		if terr.Node == nil || config.Diagnostics[terr.ErrType()] == DiagnosticSeverityDisabled {
 			continue
 		}
 		pos := int(terr.Node.Position())
@@ -129,24 +258,24 @@ func collectTemplateArgTypeDiagnostics(typedTree *types.Tree, text string) []pro
 		diagnostics = append(diagnostics, createDiagnostic(
 			withPos(text, pos, terr.Err),
 			rng,
-			true,
+			config.Diagnostics[terr.ErrType()],
 		))
 	}
 	return diagnostics
 }
 
-// analyzeNode is the visitor passed to walkAndAnalyze; it declares variables then validates the node.
-func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
-	if ctx == nil || node == nil {
+// analyzeNode validates a single typed node and returns any diagnostics
+// raised against it. Scope (visible variables, enclosing pipe) is derived
+// from the node's parent chain rather than threaded through a context.
+func analyzeNode(node types.Node, text string) (diagnostics []protocol.Diagnostic) {
+	if node == nil {
 		return nil
 	}
-	diagnostics = append(diagnostics, declareNode(node, text, ctx)...)
-
 	config := GetConfig()
 
 	switch n := node.(type) {
-	case *parse.UndefinedNode:
-		if !config.Diagnostics.SyntaxError {
+	case *types.UndefinedNode:
+		if config.Diagnostics[types.ErrorSyntaxError] == DiagnosticSeverityDisabled {
 			break
 		}
 		if n.Err == nil && strings.TrimSpace(n.String()) == "" {
@@ -161,55 +290,45 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 		}
 		diagnostics = append(
 			diagnostics,
-			createDiagnostic(msg, expandToFullBracketsFromOffset(int(n.Position()), text), true),
+			createDiagnostic(
+				msg,
+				expandToFullBracketsFromOffset(int(n.Position()), text),
+				config.Diagnostics[types.ErrorSyntaxError],
+			),
 		)
 
-	case *parse.ActionNode:
+	case *types.ActionNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *parse.RangeNode:
+	case *types.RangeNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *parse.IfNode:
+	case *types.IfNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *parse.WithNode:
+	case *types.WithNode:
 		if n.Pipe != nil {
-			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text, ctx)...)
+			diagnostics = append(diagnostics, checkPipeUsage(n.Pipe, text)...)
 		}
 
-	case *parse.CommandNode:
-		if !config.Diagnostics.IncorrectFunction {
-			break
-		}
-		if len(n.Args) > 0 {
-			if identNode, ok := n.Args[0].(*parse.IdentifierNode); ok {
-				funcName := identNode.Ident
-				rng := expandToFullBracketsFromOffset(int(identNode.Position()), text)
-				offset := int(identNode.Position())
-				if _, known := types.GlobalFuncs()[funcName]; !known {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(msgUnknownFunction(text, offset, funcName), rng, true),
-					)
-				} else {
-					currentKind := pipeOutputKind(ctx, false)
-					if currentKind != outputAny && currentKind != outputUntyped {
-						if !funcAcceptsKind(funcName, currentKind) {
-							msg := msgTypeMismatch(text, offset, funcName)
-							diagnostics = append(
-								diagnostics,
-								createDiagnostic(msg, rng, true),
-							)
-						}
-					}
-				}
+	case *types.IdentifierNode:
+		if config.Diagnostics[types.ErrorTypeInvalidFunction] != DiagnosticSeverityDisabled {
+			if _, known := types.GlobalFuncs()[n.Ident]; !known {
+				offset := int(n.Position())
+				diagnostics = append(
+					diagnostics,
+					createDiagnostic(
+						msgUnknownFunction(text, offset, n.Ident),
+						expandToFullBracketsFromOffset(offset, text),
+						config.Diagnostics[types.ErrorTypeInvalidFunction],
+					),
+				)
 			}
 		}
 	}
@@ -217,103 +336,66 @@ func analyzeNode(node parse.Node, text string, ctx *Context) (diagnostics []prot
 	return diagnostics
 }
 
-// declareNode registers variable declarations into ctx.Vars before validation runs.
-func declareNode(node parse.Node, text string, ctx *Context) (diagnostics []protocol.Diagnostic) {
-	if ctx == nil || node == nil {
-		return nil
-	}
-	switch n := node.(type) {
-	case *parse.ActionNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	case *parse.RangeNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	case *parse.IfNode:
-		if n.Pipe != nil {
-			diagnostics = append(diagnostics, collectDeclarations(n.Pipe, text, ctx)...)
-		}
-	}
-	return diagnostics
-}
-
-// collectDeclarations registers variables into ctx.Vars and flags duplicate := declarations.
-func collectDeclarations(
-	pipe *parse.PipeNode,
+// checkPipeUsage flags any variable references in the pipe that are not
+// declared in any visible scope. The pipe's own decls count as visible (to
+// preserve historical behaviour where {{$x := $x}} did not flag the RHS).
+func checkPipeUsage(
+	pipe *types.PipeNode,
 	text string,
-	ctx *Context,
 ) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil || ctx == nil {
+	if pipe == nil {
 		return nil
 	}
-	if ctx.Vars == nil {
-		ctx.Vars = make(map[string]parse.Node)
-	}
+	visible := visibleVarNames(pipe)
+	// $ is always implicitly available.
+	visible["$"] = true
+	// Merge the pipe's own decls so the RHS can reference them.
 	for _, decl := range pipe.Decl {
 		if decl == nil {
 			continue
 		}
 		for _, ident := range decl.Ident {
-			if name := strings.TrimPrefix(ident, "$"); name == "" {
-				continue
-			}
-			if ctx.Vars[ident] != nil && !pipe.IsAssign {
-				if GetConfig().Diagnostics.VariableRedeclaration {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(
-							msgDuplicateDeclaration(text, int(decl.Position()), ident),
-							nodeToRange(decl, text),
-							false,
-						),
-					)
-				}
-				continue
-			}
-			if pipe.IsAssign {
-				ctx.Vars[ident] = pipe
-			} else {
-				ctx.Vars[ident] = decl
-			}
+			visible[ident] = true
 		}
-	}
-	return diagnostics
-}
-
-// checkPipeUsage flags any variable references in the pipe that were not previously declared.
-func checkPipeUsage(
-	pipe *parse.PipeNode,
-	text string,
-	ctx *Context,
-) (diagnostics []protocol.Diagnostic) {
-	if pipe == nil || ctx == nil {
-		return nil
-	}
-	if ctx.Vars == nil {
-		ctx.Vars = make(map[string]parse.Node)
 	}
 	for _, cmd := range pipe.Cmds {
 		if cmd == nil {
 			continue
 		}
 		for _, arg := range cmd.Args {
-			if vnode, ok := arg.(*parse.VariableNode); ok && len(vnode.Ident) > 0 {
-				if name := vnode.Ident[0]; name != "" && name != "$" && ctx.Vars[name] == nil {
-					diagnostics = append(
-						diagnostics,
-						createDiagnostic(
-							msgUndeclaredVariable(text, int(vnode.Position()), name),
-							nodeToRange(vnode, text),
-							true,
-						),
-					)
+			if vnode, ok := arg.(*types.VariableNode); ok && len(vnode.Ident) > 0 {
+				name := vnode.Ident[0]
+				if name == "" || visible[name] {
+					continue
 				}
+				diagnostics = append(
+					diagnostics,
+					createDiagnostic(
+						msgUndeclaredVariable(text, int(vnode.Position()), name),
+						nodeRange(vnode, text),
+						GetConfig().Diagnostics[types.ErrorUndeclaredVariable],
+					),
+				)
 			}
 		}
 	}
 	return diagnostics
+}
+
+// visibleVarNames returns the set of variable identifiers (with leading "$")
+// in scope at n, derived from types.VisibleVarsAt.
+func visibleVarNames(n types.Node) map[string]bool {
+	vars := types.VisibleVarsAt(n)
+	out := make(map[string]bool, len(vars))
+	for _, v := range vars {
+		if v == nil {
+			continue
+		}
+		for _, ident := range v.Ident {
+			out[ident] = true
+		}
+	}
+	return out
 }
 
 // expandToFullBracketsFromOffset returns a Range that includes the surrounding {{ and }}.
@@ -337,19 +419,5 @@ func expandToFullBracketsFromOffset(pos int, text string) protocol.Range {
 	return protocol.Range{
 		Start: offsetToPosition(text, startOffset),
 		End:   offsetToPosition(text, endOffset),
-	}
-}
-
-// extractBranchNodes returns the pipe, list, and else-list for if/range/with nodes.
-func extractBranchNodes(node parse.Node) (*parse.PipeNode, *parse.ListNode, *parse.ListNode) {
-	switch n := node.(type) {
-	case *parse.IfNode:
-		return n.Pipe, n.List, n.ElseList
-	case *parse.RangeNode:
-		return n.Pipe, n.List, n.ElseList
-	case *parse.WithNode:
-		return n.Pipe, n.List, n.ElseList
-	default:
-		return nil, nil, nil
 	}
 }

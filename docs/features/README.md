@@ -13,43 +13,43 @@ This document provides an overview of all features implemented and planned for t
 
 ## Editor Features
 
-| Feature                               | VS Code (tested) | JetBrains (tested) | Priority | Notes                                                                     |
-|---------------------------------------|------------------|--------------------|----------|---------------------------------------------------------------------------|
-| **Syntax Highlighting**               |                  |                    |          |                                                                           |
-| Static syntax highlighting            | ✅                | ✅                  | Must     | Syntax defined in `.tmpl` files                                           |
-| Dynamic syntax highlighting           | ✅ (⏳)            | ✅ (⏳)              | Must     | Semantic tokens for variables, fields, functions, keywords                |
-| Target language syntax                | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.)              |
-| **Code Completion**                   |                  |                    |          |                                                                           |
-| Completion on template variables      | ✅ (✅)            | ✅ (✅)              | Must     | Suggests available variables in current scope                             |
-| Completion on struct field names      | ✅ (✅)            | ✅ (✅)              | Must     | Auto-complete struct field access and chained field accesses              |
-| Completion on built-in functions      | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests standard template functions                                      |
-| Completion on local functions         | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests user-defined template functions via `//tmpl:func "global"` hints |
-| **Navigation**                        |                  |                    |          |                                                                           |
-| Jump to definition                    | ✅ (✅)            | ✅ (✅)              | Must     | Go to variable, field, or function definition                             |
-| Find references                       | ✅ (✅)            | ✅ (✅)              | Must     | Find all usages of a variable or identifier in the current file           |
-| Hover tooltips                        | ✅ (✅)            | ✅ (✅)              | Must     | Contextual documentation for every node type                              |
-| **Inspections & Diagnostics**         |                  |                    |          |                                                                           |
-| Syntax errors                         | ✅ (✅)            | ✅ (✅)              | Must     | Warn about incorrect syntax                                               |
-| Duplicate variable detection          | ✅ (✅)            | ✅ (✅)              | Must     | Warn about redefined variables                                            |
-| Unknown function detection            | ✅ (✅)            | ✅ (✅)              | Must     | Warn about calls to unregistered functions                                |
-| Template type checking                | ✅ (⏳)            | ✅ (⏳)              | Must     | Validate argument types on `{{template}}` calls                           |
-| Function argument type checking       | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Validate argument types on function calls                                 |
-| Unused variable detection             | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Flag declared but unused variables                                        |
-| Missing whitespace trim detection     | ⏳ (⏳)            | ⏳ (⏳)              | Could    | Suggest whitespace trim operators when needed                             |
-| **Type & Function Hints**             |                  |                    |          |                                                                           |
-| Type hints (`/*gotype: pkg.Type*/`)   | ✅ (✅)            | ✅ (✅)              | Must     | Resolve dot type from Go source for completions, hover, and definition    |
-| Custom function hints (`//tmpl:func`) | ✅ (✅)            | ✅ (✅)              | Must     | Register user-defined `FuncMap` functions; hot-reloaded on `.go` save     |
-| **Code Actions & Refactoring**        |                  |                    |          |                                                                           |
-| Wrap selection in comment             | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- /* ... */ -}}`                                                       |
-| Wrap selection in a block             | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- if ... }} ... {{- end }}`                                            |
-| **Snippets**                          |                  |                    |          |                                                                           |
-| Built-in snippets                     | ✅ (✅)            | ✅ (✅)              | Could    | Common template patterns                                                  |
-| **Configuration**                     |                  |                    |          |                                                                           |
-| Project config (`gotmpl.config.json`) | ✅ (✅)            | ✅ (✅)              | Must     | Per-project settings; takes precedence over IDE settings                  |
-| IDE-level settings                    | ✅ (✅)            | ✅ (✅)              | Should   | VS Code settings / JetBrains plugin settings                              |
-| Per-file configuration comments       | ⏳ (⏳)            | ⏳ (⏳)              | Could    | `// @gotemplate disable-inspection-name`                                  |
-| **Other**                             |                  |                    |          |                                                                           |
-| Block boundary highlighting           | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Highlight matching `{{- end }}` tags                                      |
+| Feature                                | VS Code (tested) | JetBrains (tested) | Priority | Notes                                                                     |
+| -------------------------------------- |------------------|--------------------| -------- | ------------------------------------------------------------------------- |
+| **Syntax Highlighting**                |                  |                    |          |                                                                           |
+| Static syntax highlighting             | ✅                | ✅                  | Must     | Syntax defined in `.tmpl` files                                           |
+| Dynamic syntax highlighting            | ✅ (⏳)            | ✅ (⏳)              | Must     | Semantic tokens for variables, fields, functions, keywords                |
+| Target language syntax                 | ❓ (❓)            | ❓ (❓)              | Could    | Syntax highlighting for embedded languages (SQL, HTML, etc.)              |
+| **Code Completion**                    |                  |                    |          |                                                                           |
+| Completion on template variables       | ✅ (✅)            | ✅ (✅)              | Must     | Suggests available variables in current scope                             |
+| Completion on struct field names       | ✅ (✅)            | ✅ (✅)              | Must     | Auto-complete struct field access and chained field accesses              |
+| Completion on built-in functions       | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests standard template functions                                      |
+| Completion on local functions          | ✅ (⏳)            | ✅ (⏳)              | Must     | Suggests user-defined template functions via `//tmpl:func "global"` hints |
+| **Navigation**                         |                  |                    |          |                                                                           |
+| Jump to definition                     | ✅ (✅)            | ✅ (✅)              | Must     | Go to variable, field, or function definition                             |
+| Find references                        | ✅ (✅)            | ✅ (✅)              | Must     | Find all usages of a variable or identifier in the current file           |
+| Hover tooltips                         | ✅ (✅)            | ✅ (✅)              | Must     | Contextual documentation for every node type                              |
+| **Inspections & Diagnostics**          |                  |                    |          |                                                                           |
+| Syntax errors                          | ✅ (✅)            | ✅ (✅)              | Must     | Warn about incorrect syntax                                               |
+| Duplicate variable detection           | ✅ (✅)            | ✅ (✅)              | Must     | Warn about redefined variables                                            |
+| Unknown function detection             | ✅ (✅)            | ✅ (✅)              | Must     | Warn about calls to unregistered functions                                |
+| Template type checking                 | ✅ (⏳)            | ✅ (⏳)              | Must     | Validate argument types on `{{template}}` calls                           |
+| Function argument type checking        | ✅ (⏳)            | ✅ (⏳)              | Should   | Validate argument types on function calls                                 |
+| Unused variable detection              | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Flag declared but unused variables                                        |
+| Missing whitespace trim detection      | ⏳ (⏳)            | ⏳ (⏳)              | Could    | Suggest whitespace trim operators when needed                             |
+| **Type & Function Hints**              |                  |                    |          |                                                                           |
+| Type hints (`/*gotype: pkg.Type*/`)    | ✅ (✅)            | ✅ (✅)              | Must     | Resolve dot type from Go source for completions, hover, and definition    |
+| Custom function hints (`//tmpl:func`)  | ✅ (✅)            | ✅ (✅)              | Must     | Register user-defined `FuncMap` functions; hot-reloaded on `.go` save     |
+| **Code Actions & Refactoring**         |                  |                    |          |                                                                           |
+| Wrap selection in comment              | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- /* ... */ -}}`                                                       |
+| Wrap selection in a block              | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- if ... }} ... {{- end }}`                                            |
+| **Snippets**                           |                  |                    |          |                                                                           |
+| Built-in snippets                      | ✅ (✅)            | ✅ (✅)              | Could    | Common template patterns                                                  |
+| **Configuration**                      |                  |                    |          |                                                                           |
+| Project config (`gotmpl.config.json`)  | ✅ (✅)            | ✅ (✅)              | Must     | Per-project settings; takes precedence over IDE settings                  |
+| IDE-level settings                     | ✅ (✅)            | ✅ (✅)              | Should   | VS Code settings / JetBrains plugin settings                              |
+| Per-file configuration comments        | ⏳ (⏳)            | ⏳ (⏳)              | Could    | `// @gotemplate disable-inspection-name`                                  |
+| **Other**                              |                  |                    |          |                                                                           |
+| Block boundary highlighting            | ⏳ (⏳)            | ⏳ (⏳)              | Should   | Highlight matching `{{- end }}` tags                                      |
 
 ## Language Server Features
 

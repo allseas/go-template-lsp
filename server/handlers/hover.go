@@ -7,8 +7,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
-	parse "text-template-parser"
-	serverTypes "text-template-server/types"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tliron/glsp"
@@ -20,22 +19,6 @@ func mdContent(s string) protocol.MarkupContent {
 	return protocol.MarkupContent{Kind: protocol.MarkupKindMarkdown, Value: s}
 }
 
-// lookupTypedNodeType returns the resolved Go type of the analysed node at
-// the same source position as target, or nil if none is known.
-func lookupTypedNodeType(doc *document, target parse.Node) gotypes.Type {
-	if doc == nil || target == nil {
-		return nil
-	}
-	tt := doc.typedTreeAt(target.Position())
-	if tt == nil || tt.Root == nil {
-		return nil
-	}
-	if n := serverTypes.NodeFind(tt.Root, serverTypes.Pos(target.Position())); n != nil {
-		return n.ValueType()
-	}
-	return nil
-}
-
 // Hover handles providing the hover message.
 func Hover(_ *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 	if !GetConfig().EnableHover {
@@ -43,36 +26,36 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, erro
 		return nil, nil
 	}
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || doc.tree == nil {
+	if !ok || doc.typedTree == nil {
 		return nil, errors.New("document not found or failed to parse")
 	}
 
 	offset := positionToOffset(doc.text, params.Position)
-	tree := doc.treeAt(parse.Pos(offset))
+	tree := doc.typedTreeAtTyped(types.Pos(offset))
 	if tree == nil || tree.Root == nil {
 		return nil, errors.New("no parse tree at offset")
 	}
-	target := nodeFind(tree.Root, parse.Pos(offset))
+	target := types.NodeFind(tree.Root, types.Pos(offset))
 	if target == nil {
 		return nil, errors.New("node not found")
 	}
 
 	// {{end}} and {{else}} tags don't get their own AST nodes, so handle them
 	// at the text level first and bail out with a tag-shaped hover range.
-	if bn, r := endTagHover(target, params.Position, doc.text, tree.Root); bn != nil {
+	if bn, r := endTagHover(target, params.Position, doc.text); bn != nil {
 		return &protocol.Hover{
 			Range:    &r,
 			Contents: mdContent(MessageEnd(bn, offsetToPosition(doc.text, int(bn.Position())))),
 		}, nil
 	}
-	if bn, r := elseNodeHover(target, params.Position, doc.text, tree.Root); bn != nil {
+	if bn, r := elseNodeHover(target, params.Position, doc.text); bn != nil {
 		return &protocol.Hover{
 			Range:    &r,
 			Contents: mdContent(MessageElse(&bn, offsetToPosition(doc.text, int(bn.Position())))),
 		}, nil
 	}
 
-	r := nodeToRange(target, doc.text)
+	r := nodeRange(target, doc.text)
 	return &protocol.Hover{
 		Range:    &r,
 		Contents: mdContent(hoverMessage(target, doc)),
@@ -80,33 +63,32 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, erro
 }
 
 // hoverMessage returns the markdown body for a hover on target.
-func hoverMessage(target parse.Node, doc *document) string {
+func hoverMessage(target types.Node, _ *document) string {
 	log.Debug().Msgf("Hover on %T", target)
 	switch t := target.(type) {
-	case *parse.IfNode:
+	case *types.IfNode:
 		return MessageBranch(&t.BranchNode)
-	case *parse.RangeNode:
+	case *types.RangeNode:
 		return MessageBranch(&t.BranchNode)
-	case *parse.WithNode:
+	case *types.WithNode:
 		return MessageBranch(&t.BranchNode)
-	case *parse.DotNode:
-		return MessageDot(t, lookupTypedNodeType(doc, t))
-	case *parse.FieldNode:
-		return MessageField(t, lookupTypedNodeType(doc, t))
-	case *parse.IdentifierNode:
+	case *types.DotNode:
+		return MessageDot(t, t.ValueType())
+	case *types.FieldNode:
+		return MessageField(t, t.ValueType())
+	case *types.IdentifierNode:
 		return MessageIdentifier(t)
-	case *parse.NilNode:
+	case *types.NilNode:
 		return MessageNil(t)
-	case *parse.VariableNode:
-		tree := doc.treeAt(t.Position())
-		if tree == nil {
-			tree = doc.tree
-		}
-		if IsIndexVariable(t, tree.Root) {
+	case *types.VariableNode:
+		if IsIndexVariableTyped(t) {
 			return MessageIndexVariable(t)
 		}
-		val, typ := ResolveVarInfo(tree.Root, t, doc.typedTreeAt(t.Position()))
-		return MessageVariable(t, val, typ)
+		var goType gotypes.Type
+		if t != nil {
+			goType = t.ValueType()
+		}
+		return MessageVariable(t, nil, goType)
 	}
 	return ""
 }
@@ -121,13 +103,12 @@ var (
 // nesting levels above the cursor; allowTemplate decides whether a
 // TemplateNode in the ancestor chain consumes a nesting level.
 func tagHover(
-	target parse.Node,
+	target types.Node,
 	pos protocol.Position,
 	text string,
-	root parse.Node,
 	tagRe, nestRe *regexp.Regexp,
 	allowTemplate bool,
-) (parse.Node, protocol.Range) {
+) (types.Node, protocol.Range) {
 	var zero protocol.Range
 	lines := strings.Split(text, "\n")
 	if int(pos.Line) >= len(lines) {
@@ -157,11 +138,10 @@ func tagHover(
 				count++
 			}
 		}
-		// Walk the ancestor path, skipping `count` branches before claiming one.
-		ctx := &Context{Vars: make(map[string]parse.Node)}
-		buildPath(root, target, ctx)
-		for i := len(ctx.Path) - 1; i >= 0; i-- {
-			if !isBranchAncestor(ctx.Path[i], allowTemplate) {
+		// Walk the parent chain (innermost to outermost), skipping `count`
+		// branches before claiming one.
+		for cur := target; cur != nil; cur = cur.Parent() {
+			if !isBranchAncestor(cur, allowTemplate) {
 				continue
 			}
 			if count > 0 {
@@ -171,7 +151,7 @@ func tagHover(
 			if match[1] < 0 || match[1] > math.MaxUint32 {
 				panic("line length overflows uint32??")
 			}
-			return ctx.Path[i], protocol.Range{
+			return cur, protocol.Range{
 				Start: protocol.Position{
 					Line:      pos.Line,
 					Character: uint32(match[0]), //nolint:gosec // bounded above
@@ -186,30 +166,28 @@ func tagHover(
 	return nil, zero
 }
 
-func isBranchAncestor(n parse.Node, allowTemplate bool) bool {
+func isBranchAncestor(n types.Node, allowTemplate bool) bool {
 	switch n.(type) {
-	case *parse.RangeNode, *parse.IfNode, *parse.WithNode:
+	case *types.RangeNode, *types.IfNode, *types.WithNode:
 		return true
-	case *parse.TemplateNode:
+	case *types.TemplateNode:
 		return allowTemplate
 	}
 	return false
 }
 
 func endTagHover(
-	target parse.Node,
+	target types.Node,
 	pos protocol.Position,
 	text string,
-	root parse.Node,
-) (parse.Node, protocol.Range) {
-	return tagHover(target, pos, text, root, endTagRe, endTagRe, true)
+) (types.Node, protocol.Range) {
+	return tagHover(target, pos, text, endTagRe, endTagRe, true)
 }
 
 func elseNodeHover(
-	target parse.Node,
+	target types.Node,
 	pos protocol.Position,
 	text string,
-	root parse.Node,
-) (parse.Node, protocol.Range) {
-	return tagHover(target, pos, text, root, elseTagRe, endTagRe, false)
+) (types.Node, protocol.Range) {
+	return tagHover(target, pos, text, elseTagRe, endTagRe, false)
 }

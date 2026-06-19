@@ -66,12 +66,16 @@ func SemanticTokensFull(
 	params *protocol.SemanticTokensParams,
 ) (*protocol.SemanticTokens, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || doc.typedTree == nil || doc.typedTree.Root == nil {
+	if !ok {
 		return nil, nil
 	}
 
 	var tokens []rawToken
-	walkSemanticNode(doc.typedTree.Root, doc.text, &tokens)
+	for _, tt := range doc.typedTrees {
+		if tt != nil && tt.Root != nil {
+			walkSemanticNode(tt.Root, doc.text, &tokens)
+		}
+	}
 
 	sort.Slice(tokens, func(i, j int) bool {
 		return tokens[i].startByte < tokens[j].startByte
@@ -92,13 +96,13 @@ func DocumentSymbols(
 	params *protocol.DocumentSymbolParams,
 ) (any, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || len(doc.trees) == 0 {
+	if !ok || len(doc.typedTrees) == 0 {
 		return nil, nil
 	}
 
 	var symbols []protocol.DocumentSymbol
-	for name, t := range doc.trees {
-		if t.Root == nil || name == "t" {
+	for name, t := range doc.typedTrees {
+		if t == nil || t.Root == nil || name == "t" {
 			continue
 		}
 
@@ -106,27 +110,34 @@ func DocumentSymbols(
 		blockEnd := int(t.End)
 
 		// Search backward from the body start to find the nearest {{define.
-		// FindAllStringIndex is used so we take the last (closest) match;
-		// FindStringIndex would return the first match and attribute the
-		// wrong block range to every define after the first one.
 		blockStart := bodyStart
 		if ms := reDefine.FindAllStringIndex(doc.text[:bodyStart], -1); ms != nil {
 			blockStart = ms[len(ms)-1][0]
 		}
 
-		// The name string sits between "define " and "}}" - find it for selectionRange.
+		// Verify this tree was introduced by a {{define "name"}} (not {{block}}).
+		quotedName := `"` + name + `"`
+		headerFull := doc.text[blockStart:bodyStart]
+		rdelimIdx := strings.Index(headerFull, "}}")
+		if rdelimIdx < 0 || !strings.Contains(headerFull[:rdelimIdx+2], quotedName) {
+			continue
+		}
+		defineHeader := headerFull[:rdelimIdx+2]
+
 		nameStart := bodyStart
-		if bodyStart > blockStart {
-			header := doc.text[blockStart:bodyStart]
-			if idx := strings.Index(header, name); idx >= 0 {
-				nameStart = blockStart + idx
-			}
+		if idx := strings.Index(defineHeader, quotedName); idx >= 0 {
+			nameStart = blockStart + idx + 1 // +1 skips the opening quote
 		}
 		nameEnd := nameStart + len(name)
 
 		fullRange := bytesToRange(doc.text, blockStart, blockEnd)
 		selRange := bytesToRange(doc.text, nameStart, nameEnd)
 		kind := protocol.SymbolKindFunction
+
+		if name == "" {
+			// empty define name - diagnostic emitted by collectEmptyDefineNameDiagnostics
+			continue
+		}
 
 		symbols = append(symbols, protocol.DocumentSymbol{
 			Name:           name,
@@ -182,7 +193,7 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 		walkCommandNode(n, tokens, text)
 
 	case *serverTypes.VariableNode:
-		emitToken(tokens, int(n.Position()), len(n.String()), ttVariable, 0)
+		walkVariableNode(n, tokens)
 
 	case *serverTypes.IdentifierNode:
 		// reached outside CommandNode first-arg - emit as function
@@ -248,6 +259,31 @@ func walkTemplateNode(n *serverTypes.TemplateNode, text string, tokens *[]rawTok
 	}
 	if n.Pipe != nil {
 		walkSemanticNode(n.Pipe, text, tokens)
+	}
+}
+
+// walkVariableNode emits semantic tokens for a VariableNode.
+// The base variable (Ident[0], e.g. "$item") is emitted as ttVariable.
+// Each chained segment (Ident[1:], e.g. ".IsExpensive") is emitted as
+// ttFunction when it resolves to a method, or ttProperty for struct fields.
+// When type information is not available the chained segments fall back to ttProperty.
+func walkVariableNode(n *serverTypes.VariableNode, tokens *[]rawToken) {
+	if len(n.Ident) == 0 {
+		return
+	}
+	pos := int(n.Position())
+	// Base variable: "$item"
+	emitToken(tokens, pos, len(n.Ident[0]), ttVariable, 0)
+	pos += len(n.Ident[0])
+	// Chained fields/methods: ".IsExpensive", ".Addr", etc.
+	for i := 1; i < len(n.Ident); i++ {
+		segLen := 1 + len(n.Ident[i]) // "." + ident
+		tt := ttProperty
+		if n.IdentIsMethod(i) {
+			tt = ttFunction
+		}
+		emitToken(tokens, pos, segLen, tt, 0)
+		pos += segLen
 	}
 }
 

@@ -42,6 +42,8 @@ testing:
   before_script:
     - npm ci
   script:
-    - echo "running tests"
+    - echo "running tests (default build)"
     - cd clients/JetBrains/go-text-template
     - ./gradlew test --build-cache --parallel --max-workers=4 --no-watch-fs --no-configuration-cache
+    - echo "running tests (allseas build)"
+    - ./gradlew test --build-cache --parallel --max-workers=4 --no-watch-fs --no-configuration-cache -Pallseas --rerun-tasks
