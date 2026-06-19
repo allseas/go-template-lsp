@@ -54,7 +54,9 @@ func setEndPos(node Node, end Pos, text *string) {
 		n.endPos = n.Position() + Pos(len(n.Text)) + 2
 	case *CommentNode:
 		n.endPos = end
-		if l := strings.LastIndex((*text)[n.Position():end], "}}"); l != -1 {
+		if l := strings.LastIndex((*text)[n.Position():end], "*/}}"); l != -1 {
+			n.endPos = n.Position() + Pos(l) + 2
+		} else if l := strings.LastIndex((*text)[n.Position():end], "*/ -}}"); l != -1 {
 			n.endPos = n.Position() + Pos(l) + 2
 		}
 	case *IfNode:
