@@ -814,3 +814,68 @@ func TestVariableNodeTokenTypes(t *testing.T) {
 		})
 	}
 }
+
+// TestElseInTextNotHighlighted is a test for the bug where
+// emitElseKeyword would match the first occurrence of "else" in the search
+// range, incorrectly highlighting "else" appearing in plain text or comments
+// before the actual {{else}} delimiter as a keyword
+func TestElseInTextNotHighlighted(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		wantTypes []uint32
+	}{
+		{
+			// "else" appears in body text before the actual {{else}} delimiter.
+			// Only the {{else}} keyword should be highlighted, not the text occurrence.
+			name: "else in body text before else delimiter",
+			src:  `{{if .}}something else here{{else}}fallback{{end}}`,
+			wantTypes: []uint32{
+				ttKeyword,  // if
+				ttVariable, // .
+				ttKeyword,  // else (the {{else}} delimiter, NOT the text "else")
+				ttKeyword,  // end
+			},
+		},
+		{
+			// Comment containing "else" before the actual {{else}}.
+			name: "else in comment before else delimiter",
+			src:  `{{if .}}{{/* else is a keyword */}}{{else}}ok{{end}}`,
+			wantTypes: []uint32{
+				ttKeyword,  // if
+				ttVariable, // .
+				ttComment,  // {{/* else is a keyword */}}
+				ttKeyword,  // else (the actual {{else}})
+				ttKeyword,  // end
+			},
+		},
+		{
+			// Range with "else" in body text.
+			name: "else in range body text",
+			src:  `{{range .}}or else{{else}}empty{{end}}`,
+			wantTypes: []uint32{
+				ttKeyword,  // range
+				ttVariable, // .
+				ttKeyword,  // else
+				ttKeyword,  // end
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uri := "file:///regression-else-text-" + tt.name + ".tmpl"
+			setDocWithTypedTree(t, uri, tt.src, nil)
+			defer store.Delete(uri)
+
+			result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Len(t, result.Data, len(tt.wantTypes)*5, "unexpected token count")
+
+			for i, wantType := range tt.wantTypes {
+				assert.Equal(t, wantType, result.Data[i*5+3], "token[%d] tokenType", i)
+			}
+		})
+	}
+}
