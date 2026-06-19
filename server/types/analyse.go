@@ -279,6 +279,16 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	keepDot := ctx.dotType
 	keepVars := len(ctx.vars)
 	w.Pipe = analysePipe(n.Pipe, w, ctx)
+	if w.Pipe.typ != nil {
+		if _, ok := w.Pipe.typ.Underlying().(*types.Struct); w.Pipe.typ != nil && !ok {
+			ctx.errorf(
+				w.Pipe,
+				ErrorTypeInvalidWith,
+				"cannot use type %v in with statement; expected struct type",
+				w.Pipe.typ,
+			)
+		}
+	}
 	ctx.dotType = w.Pipe.typ
 	w.List = analyseList(n.List, w, ctx)
 	ctx.dotType = keepDot
