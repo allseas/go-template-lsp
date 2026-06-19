@@ -65,6 +65,22 @@ func TestAnalyseNode_UnknownNodeTypePanics(t *testing.T) {
 	}
 }
 
+func TestAnalyseTree_NilDotTypeResolvesToEmptyInterface(t *testing.T) {
+	tree := NewTreeWithType(tree("test", list(varn("$"))), nil, nil, nil, nil)
+	if tree.Root == nil {
+		t.Fatal("expected non-nil Root, got nil")
+	}
+	if len(tree.Root.Nodes) != 1 {
+		t.Fatalf("expected 1 node in Root, got %d", len(tree.Root.Nodes))
+	}
+	if tree.Root.Nodes[0].ValueType() == nil {
+		t.Fatal("expected non-nil DotType, got nil")
+	}
+	if !types.Identical(tree.Root.Nodes[0].ValueType(), types.NewInterfaceType(nil, nil).Complete()) {
+		t.Fatalf("DotType: got %v, want empty interface", tree.Root.Nodes[0].ValueType())
+	}
+}
+
 // CompareTypeTrees reports where two type trees first differ, returning an
 // empty string if they are structurally and type-annotation identical.
 // Parent pointers are ignored so hand-built expected values in tests do not

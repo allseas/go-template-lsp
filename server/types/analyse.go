@@ -148,12 +148,7 @@ func NewTree(
 			tree:               &typeTree,
 			templateInputTypes: templateInputTypes,
 			vars: []*VariableNode{
-				{
-					Pos:      0,
-					NodeType: NodeVariable,
-					Ident:    []string{"$"},
-					typ:      dotType,
-				},
+				&rootVar,
 			},
 		})
 	}
