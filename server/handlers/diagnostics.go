@@ -318,19 +318,7 @@ func analyzeNode(node types.Node, text string) (diagnostics []protocol.Diagnosti
 		}
 
 	case *types.IdentifierNode:
-		if config.Diagnostics[types.ErrorTypeInvalidFunction] != DiagnosticSeverityDisabled {
-			if _, known := types.GlobalFuncs()[n.Ident]; !known {
-				offset := int(n.Position())
-				diagnostics = append(
-					diagnostics,
-					createDiagnostic(
-						msgUnknownFunction(text, offset, n.Ident),
-						expandToFullBracketsFromOffset(offset, text),
-						config.Diagnostics[types.ErrorTypeInvalidFunction],
-					),
-				)
-			}
-		}
+		// handled by analyse.go (ErrorTypeInvalidFunction)
 	}
 
 	return diagnostics

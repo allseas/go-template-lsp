@@ -14,10 +14,6 @@ func msgParseError(text string, offset int, str string) string {
 	return withPos(text, offset, "parse error: "+str)
 }
 
-func msgUnknownFunction(text string, offset int, name string) string {
-	return withPos(text, offset, "unsupported function or unregistered command: "+name)
-}
-
 // withPos prepends a "line:col: " prefix to msg.
 func withPos(text string, offset int, msg string) string {
 	p := offsetToPosition(text, offset)
