@@ -27,6 +27,8 @@
         "test:default": "npm run compile && ts-node --esm ../../scripts/build-server-binaries.ts && shx mkdir -p out/server/bin && shx cp ../../dist/server/* out/server/bin/ && vscode-test --label default",
         "test:allseas": "npm run compile && ts-node --esm ../../scripts/build-server-binaries-allseas.ts && shx mkdir -p out/server/bin && shx cp ../../dist/server/* out/server/bin/ && vscode-test --label allseas",
         "test": "npm run test:default && npm run test:allseas",
+        "benchmark": "npm run compile && shx mkdir -p out/server/bin && shx cp ../../dist/server/* out/server/bin/ && vscode-test --label benchmark",
+        "benchmark:allseas": "npm run compile && ts-node --esm ../../scripts/build-server-binaries-allseas.ts && shx mkdir -p out/server/bin && shx cp ../../dist/server/* out/server/bin/ && vscode-test --label benchmark",
         "verify": "npm run lint:check && npm run format:check && npm test",
         "package": "npm run verify && node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../",
         "package:no-verify": "node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../"

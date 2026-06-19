@@ -28,4 +28,13 @@ export default defineConfig([
         label: "allseas",
         ...baseConfig,
     },
+    {
+        label: "benchmark",
+        ...baseConfig,
+        files: "out/test/benchmark.test.js",
+        mocha: {
+            ...baseConfig.mocha,
+            timeout: 300_000,
+        },
+    },
 ]);
