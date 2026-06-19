@@ -443,24 +443,45 @@ func pipeFilteredItemsT(
 	}
 	funcs := serverTypes.GlobalFuncs()
 	if _, ok := functionsAccepting[effectiveKind]; !ok {
-		// No input-direction constraint.
-		if argKind == outputAny || argKind == outputUntyped {
+		if pipeInputType == nil && (argKind == outputAny || argKind == outputUntyped) {
 			return append(items, builtinItems(wordRange)...)
 		}
-		// Offer every function honouring the output-direction argKind constraint.
-		for name := range funcs {
-			if funcReturnsKind(name, argKind) {
+		for name, fn := range funcs {
+			if funcReturnsKind(name, argKind) && funcAcceptsPipeInput(fn, pipeInputType) {
 				items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
 			}
 		}
 		return items
 	}
-	for name := range funcs {
-		if funcAcceptsKind(name, effectiveKind) && funcReturnsKind(name, argKind) {
+	for name, fn := range funcs {
+		if funcAcceptsKind(name, effectiveKind) && funcReturnsKind(name, argKind) &&
+			funcAcceptsPipeInput(fn, pipeInputType) {
 			items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
 		}
 	}
 	return items
+}
+
+func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) bool {
+	if pipeInputType == nil {
+		return true
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return false
+	}
+	params := sig.Params()
+	if params.Len() == 0 {
+		return false
+	}
+
+	last := params.At(params.Len() - 1).Type()
+	if sig.Variadic() {
+		if slice, ok := last.(*types.Slice); ok {
+			last = slice.Elem()
+		}
+	}
+	return types.AssignableTo(pipeInputType, last)
 }
 
 // dotItemsT returns dot, fields, and methods of the dot type at cur.
