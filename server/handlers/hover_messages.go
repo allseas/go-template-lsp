@@ -126,8 +126,6 @@ func MessageIdentifier(n *serverTypes.IdentifierNode) string {
 	// TODO: add more special messages
 	specialMessages := map[string]string{
 		"and": "```go\nand\n```\nA built-in function that returns the first argument if it is false, and the last argument otherwise.",
-		"len": "```go\nlen\n```\nA built-in function that returns the length of its argument.",
-		"not": "```go\nnot\n```\nA built-in function that returns the boolean negation of its argument.",
 		"or":  "```go\nor\n```\nA built-in function that returns the first argument if it is true, and the last argument otherwise.",
 	}
 
@@ -156,10 +154,7 @@ func MessageVariable(n *serverTypes.VariableNode, varValue any, typ types.Type) 
 	const withType = "```go\nvar %s %s\n```"
 	const unknownType = "```go\nvar %s (unknown)\n```"
 
-	ident := ""
-	if len(n.Ident) > 0 {
-		ident = n.Ident[0]
-	}
+	ident := n.String()
 	typStr := formatType(typ)
 	switch {
 	case varValue != nil && typStr != "":
