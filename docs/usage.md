@@ -28,6 +28,9 @@ This guide is for developers using the GoTemplate Support extension. It covers w
   - [VS Code Settings](#vs-code-settings)
   - [JetBrains Settings](#jetbrains-settings)
   - [Configuration Options Reference](#configuration-options-reference)
+- [Bug Reporting](#bug-reporting)
+  - [Server Logs in VS Code](#server-logs-in-vs-code)
+  - [Server Logs in JetBrains](#server-logs-in-jetbrains)
 
 ---
 
@@ -318,3 +321,27 @@ The `diagnostics` object controls severity per check. For example:
 For the full list of diagnostic keys and their defaults see [docs/configuration.md](configuration.md).
 
 When a specific type in the template should be provided, `pipeChainCompletion` allows users to see valid fields/methods differently. For example, if a `string` should be provided, when `pipeChainCompletion` is set to `full`, we see all the available children fields/methods like `.Address.City` or `.Address.Info.Desc.Info1` up to the depth of 8. If it is set to `step`, only immediate fields are suggested in case they or their children match the type. When it is `off`, nested fields are not suggested.
+
+---
+
+## Bug Reporting
+
+If you encounter issues while using the extension please report them to us by creating a GitHub issue! You can create one easily here: <https://github.com/allseas/go-template-lsp/issues/new?template=bug.yml>.
+
+The following sections explain how to find the relevant server logs.
+
+### Server Logs in VS Code
+
+To find the server logs you should go to the `Output` tab, you can do so by opening the command pallet (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) and then selecting `Output: Focus on Output View`. Then select `Go Template Language Server` and copy the logs into the bug report.
+
+![Output view in VS Code](images/vscode_output.png)
+
+### Server Logs in JetBrains
+
+To find the server logs you need to go the `Language Servers` tab, which you can open in the bottom-left menu. Then, you can navigate to `go-text-template-lsp` and click on the server process (it will be called `started pid:...`). You can copy the logs from `Traces` and `Logs`.
+
+In order to see the logs you might need to not only change the options in the UI or config, but also in the `Language Servers` tab. To enable verbose logging here you need to select `go-text-template-lsp` and go into the `Debug` tab. Then select the `Trace` level to `verbose` and save.
+
+![Server Logs in JetBrains](images/jetbrains_server_logs.png)
+
+---
