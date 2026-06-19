@@ -560,21 +560,21 @@ var analyseTestCases = []analyseTestCase{
 	{
 		name: "dot context switch",
 		parseTree: tree("test", list(withN(
-			pipe(nil, coms(com(field("X")))),
+			pipe(nil, coms(com(field("Inner")))),
 			list(actpipe(nil, coms(com(&parse.DotNode{})))),
 		))),
 		resTree: ttree("test", tlist(mockDotType, twithN(
 			tpipe(
-				types.Typ[types.String],
+				mockInnerType,
 				nil,
-				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
+				tcoms(tcom(mockInnerType, tfield(mockInnerType, "Inner"))),
 			),
 			tlist(
-				types.Typ[types.String],
+				mockInnerType,
 				tactpipe(
-					types.Typ[types.String],
+					mockInnerType,
 					nil,
-					tcoms(tcom(types.Typ[types.String], &DotNode{typ: types.Typ[types.String]})),
+					tcoms(tcom(mockInnerType, &DotNode{typ: mockInnerType})),
 				),
 			),
 		))),
