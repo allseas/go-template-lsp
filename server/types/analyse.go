@@ -40,8 +40,6 @@ const (
 	ErrorTypeInvalidCommand
 	// ErrorTypeInvalidRange Range over non-rangeable type
 	ErrorTypeInvalidRange
-	// ErrorTypeInvalidIf If condition is not boolean
-	ErrorTypeInvalidIf
 	// ErrorTypeInvalidWith With dot is not a struct/interface
 	ErrorTypeInvalidWith
 	// ErrorUndeclaredVariable Variable used without declaration
@@ -70,7 +68,6 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeInvalidFunction:    "invalidFunction",
 	ErrorTypeInvalidCommand:     "invalidCommand",
 	ErrorTypeInvalidRange:       "invalidRange",
-	ErrorTypeInvalidIf:          "invalidIf",
 	ErrorTypeInvalidWith:        "invalidWith",
 	ErrorUndeclaredVariable:     "undeclaredVariable",
 	ErrorDoubleDeclaredVariable: "doubleDeclaredVariable",
