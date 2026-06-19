@@ -156,10 +156,7 @@ func MessageVariable(n *serverTypes.VariableNode, varValue any, typ types.Type) 
 	const withType = "```go\nvar %s %s\n```"
 	const unknownType = "```go\nvar %s (unknown)\n```"
 
-	ident := ""
-	if len(n.Ident) > 0 {
-		ident = n.Ident[0]
-	}
+	ident := n.String()
 	typStr := formatType(typ)
 	switch {
 	case varValue != nil && typStr != "":

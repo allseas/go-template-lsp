@@ -22,6 +22,8 @@
 {{ $street := .Address.Street }}  {{/* string                       */}}
 {{ $total  := .TotalAmount }}     {{/* float64                      */}}
 {{ $paid   := .Paid }}            {{/* bool                         */}}
+{{ $order := . }}
+{{ $order.TotalAmount }}
 {{/* -------- 3. Variables initialised from methods (OK) -------- */}}
 {{ $disp  := .DisplayName }}      {{/* string  (Order.DisplayName)  */}}
 {{ $count := .ItemCount }}        {{/* int     (Order.ItemCount)    */}}
