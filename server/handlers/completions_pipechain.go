@@ -22,6 +22,9 @@ const (
 // maxChainDepth limits recursion
 const maxChainDepth = 8
 
+// maxCycleRevisits limits the number of cycles allowed
+const maxCycleRevisits = 1
+
 func currentPipeChainMode() pipeChainMode {
 	switch strings.ToLower(GetConfig().PipeChainCompletion) {
 	case "full":
@@ -235,8 +238,18 @@ func expandedFieldItems(
 	}
 	out := []protocol.CompletionItem{}
 	seen := map[string]struct{}{}
-	walkChainPaths(named, targetKind, mode, prefix, nil, &out, seen, 0, wordRange)
+	visited := map[string]int{namedKey(named): 1}
+	walkChainPaths(named, targetKind, mode, prefix, nil, &out, seen, 0, wordRange, visited)
 	return out
+}
+
+// namedKey returns the string name of the Named type
+func namedKey(n *types.Named) string {
+	obj := n.Obj()
+	if pkg := obj.Pkg(); pkg != nil {
+		return pkg.Path() + "." + obj.Name()
+	}
+	return obj.Name()
 }
 
 func walkChainPaths(
@@ -249,6 +262,7 @@ func walkChainPaths(
 	seen map[string]struct{},
 	depth int,
 	wordRange protocol.Range,
+	visited map[string]int,
 ) {
 	if depth >= maxChainDepth {
 		return
@@ -268,19 +282,28 @@ func walkChainPaths(
 		if _, isStruct := child.Underlying().(*types.Struct); !isStruct {
 			continue
 		}
+		childKey := namedKey(child)
+		if visited[childKey] > maxCycleRevisits {
+			continue
+		}
 		if mode == pipeChainStep {
-			if depth == 0 && hasMatchingDescendant(child, targetKind, 1) {
-				addPathItem(out, seen, prefix, segs, f.TypeName, wordRange)
+			if depth == 0 {
+				visited[childKey]++
+				if hasMatchingDescendant(child, targetKind, 1, visited) {
+					addPathItem(out, seen, prefix, segs, f.TypeName, wordRange)
+				}
+				visited[childKey]--
 			}
 			continue
 		}
-		walkChainPaths(child, targetKind, mode, prefix, segs, out, seen, depth+1, wordRange)
+		visited[childKey]++
+		walkChainPaths(child, targetKind, mode, prefix, segs, out, seen, depth+1, wordRange, visited)
+		visited[childKey]--
 	}
 }
 
-// hasMatchingDescendant reports whether any nested struct field reachable from
-// named (without crossing methods/slices/maps) has a type matching targetKind.
-func hasMatchingDescendant(named *types.Named, targetKind outputKind, depth int) bool {
+// hasMatchingDescendant reports whether any nested struct field reachable from named
+func hasMatchingDescendant(named *types.Named, targetKind outputKind, depth int, visited map[string]int) bool {
 	if depth >= maxChainDepth {
 		return false
 	}
@@ -295,7 +318,14 @@ func hasMatchingDescendant(named *types.Named, targetKind outputKind, depth int)
 		if _, isStruct := child.Underlying().(*types.Struct); !isStruct {
 			continue
 		}
-		if hasMatchingDescendant(child, targetKind, depth+1) {
+		childKey := namedKey(child)
+		if visited[childKey] > maxCycleRevisits {
+			continue
+		}
+		visited[childKey]++
+		found := hasMatchingDescendant(child, targetKind, depth+1, visited)
+		visited[childKey]--
+		if found {
 			return true
 		}
 	}
