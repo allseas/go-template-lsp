@@ -71,9 +71,17 @@ type Order struct {
 	CustomerName string
 	Email        string
 	Address      Address
+	Tree         Tree
 	Items        []Item
 	TotalAmount  float64
 	Paid         bool
+}
+
+// Tree is a tree
+type Tree struct {
+	Left  *Tree
+	Right *Tree
+	Trr   string
 }
 
 // DisplayName returns a human-readable label - 1 return value, always callable.
