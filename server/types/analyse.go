@@ -674,8 +674,10 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 	}
 
 	name := n.Ident
-	if fn := ctx.funcs[name]; fn != nil {
-		ident.typ = fn.Type()
+	if fn, ok := ctx.funcs[name]; ok {
+		if fn != nil {
+			ident.typ = fn.Type()
+		}
 		return ident
 	}
 
