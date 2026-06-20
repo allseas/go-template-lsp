@@ -29,6 +29,7 @@ In `clients/VSCode/package.json`, add the new option under `contributes.configur
         "goTmplSupport.diagnostics": { ... },
         "goTmplSupport.enableAutocompletion": { ... },
         "goTmplSupport.trace.server": { ... },
+        "goTmplSupport.pipeChainCompletion": { ... },
         "goTmplSupport.myNewOption": {
           "type": "string",
           "default": "default",

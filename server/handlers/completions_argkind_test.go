@@ -29,7 +29,7 @@ func TestArgKindCompletions(t *testing.T) {
 	withFuncmapGlobals(t)
 	original := GetConfig()
 	cfg := original
-	cfg.PipeChainCompletion = "off"
+	cfg.PipeChainCompletion = "full"
 	setConfig(cfg)
 	t.Cleanup(func() { setConfig(original) })
 	lt := orderLoadedType(t)
@@ -48,6 +48,16 @@ func TestArgKindCompletions(t *testing.T) {
 }
 
 var argKindCompletionTestCases = []completionTestCase{
+	{
+		name:        "cyclic test",
+		src:         `{{ repeat x }}`,
+		subStr:      "x",
+		occurrence:  0,
+		offsetAdj:   1,
+		withType:    true,
+		contains:    []string{".Tree.Trr", ".Tree.Left.Trr", ".Tree.Right.Trr"},
+		notContains: []string{".Tree.Left.Left.Trr"},
+	},
 	{
 		name:        "sort func test",
 		src:         `{{ .CustomerName |  }}`,

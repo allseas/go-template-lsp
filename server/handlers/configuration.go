@@ -100,7 +100,7 @@ var (
 			types.ErrorTypeEmptyDefineName:    DiagnosticSeverityWarning,
 		},
 		EnableAutocompletion: true,
-		PipeChainCompletion:  "full",
+		PipeChainCompletion:  "step",
 	}
 	configMu sync.RWMutex
 )
