@@ -297,13 +297,29 @@ func walkChainPaths(
 			continue
 		}
 		visited[childKey]++
-		walkChainPaths(child, targetKind, mode, prefix, segs, out, seen, depth+1, wordRange, visited)
+		walkChainPaths(
+			child,
+			targetKind,
+			mode,
+			prefix,
+			segs,
+			out,
+			seen,
+			depth+1,
+			wordRange,
+			visited,
+		)
 		visited[childKey]--
 	}
 }
 
 // hasMatchingDescendant reports whether any nested struct field reachable from named
-func hasMatchingDescendant(named *types.Named, targetKind outputKind, depth int, visited map[string]int) bool {
+func hasMatchingDescendant(
+	named *types.Named,
+	targetKind outputKind,
+	depth int,
+	visited map[string]int,
+) bool {
 	if depth >= maxChainDepth {
 		return false
 	}
