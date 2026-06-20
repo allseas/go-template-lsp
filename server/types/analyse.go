@@ -240,7 +240,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if isEmptyInterface(argType) {
+			if IsEmptyInterface(argType) {
 				ctx.errorf(
 					t,
 					ErrorUnknownType,
@@ -993,7 +993,7 @@ func validateCommandArguments(
 					t.Params().At(i).Type().String(),
 					tstring,
 				)
-			} else if isEmptyInterface(args[i]) && !isEmptyInterface(t.Params().At(i).Type()) {
+			} else if IsEmptyInterface(args[i]) && !IsEmptyInterface(t.Params().At(i).Type()) {
 				ctx.errorf(
 					typeCmd,
 					ErrorUnknownType,
@@ -1018,7 +1018,7 @@ func validateCommandArguments(
 					variadicType.String(),
 					tstring,
 				)
-			} else if isEmptyInterface(args[i]) && !isEmptyInterface(variadicType) {
+			} else if IsEmptyInterface(args[i]) && !IsEmptyInterface(variadicType) {
 				ctx.errorf(
 					typeCmd,
 					ErrorUnknownType,
@@ -1048,7 +1048,7 @@ func validateCommandArguments(
 				t.Params().At(i).Type().String(),
 				tstring,
 			)
-		} else if isEmptyInterface(args[i]) && !isEmptyInterface(t.Params().At(i).Type()) {
+		} else if IsEmptyInterface(args[i]) && !IsEmptyInterface(t.Params().At(i).Type()) {
 			ctx.errorf(
 				typeCmd,
 				ErrorUnknownType,
@@ -1064,8 +1064,8 @@ func validateCommandArguments(
 	return typeCmd, false
 }
 
-// isEmptyInterface reports whether t is the empty interface (i.e. `any` / `interface{}`).
-func isEmptyInterface(t types.Type) bool {
+// IsEmptyInterface reports whether t is the empty interface (i.e. `any` / `interface{}`).
+func IsEmptyInterface(t types.Type) bool {
 	if t == nil {
 		return false
 	}
@@ -1076,7 +1076,7 @@ func isEmptyInterface(t types.Type) bool {
 // typesCompatible reports whether a value of type got is assignable to a parameter
 // of type want. When either side is the empty interface (any), we always accept.
 func typesCompatible(want, got types.Type) bool {
-	if isEmptyInterface(want) || isEmptyInterface(got) {
+	if IsEmptyInterface(want) || IsEmptyInterface(got) {
 		return true
 	}
 	if want == nil || got == nil {

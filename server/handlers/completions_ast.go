@@ -447,32 +447,49 @@ func pipeFilteredItemsT(
 			return append(items, builtinItems(wordRange)...)
 		}
 		for name, fn := range funcs {
-			if funcReturnsKind(name, argKind) && funcAcceptsPipeInput(fn, pipeInputType) {
-				items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
+			accepts, concrete := funcAcceptsPipeInput(fn, pipeInputType)
+			if !accepts || !funcReturnsKind(name, argKind) {
+				continue
 			}
+			item := newItem(name, protocol.CompletionItemKindFunction, wordRange)
+			sortText := pipeSortPrefix(concrete) + name
+			item.SortText = &sortText
+			items = append(items, item)
 		}
 		return items
 	}
 	for name, fn := range funcs {
-		if funcAcceptsKind(name, effectiveKind) && funcReturnsKind(name, argKind) &&
-			funcAcceptsPipeInput(fn, pipeInputType) {
-			items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
+		accepts, concrete := funcAcceptsPipeInput(fn, pipeInputType)
+		if !funcAcceptsKind(name, effectiveKind) || !funcReturnsKind(name, argKind) || !accepts {
+			continue
 		}
+		item := newItem(name, protocol.CompletionItemKindFunction, wordRange)
+		sortText := pipeSortPrefix(concrete) + name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	return items
 }
 
-func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) bool {
+// Appends to the name so that functions that accept a concrete type are presented before those that only accept interface{}.
+func pipeSortPrefix(concrete bool) string {
+	if concrete {
+		return "0_"
+	}
+	return "1_"
+}
+
+func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) (accepts bool, concrete bool) {
 	if pipeInputType == nil {
-		return true
+		return true, true
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
-		return false
+		return false, false
 	}
 	params := sig.Params()
 	if params.Len() == 0 {
-		return false
+		return false, false
 	}
 
 	last := params.At(params.Len() - 1).Type()
@@ -481,7 +498,10 @@ func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) bool {
 			last = slice.Elem()
 		}
 	}
-	return types.AssignableTo(pipeInputType, last)
+	if !types.AssignableTo(pipeInputType, last) {
+		return false, false
+	}
+	return true, !serverTypes.IsEmptyInterface(last)
 }
 
 // dotItemsT returns dot, fields, and methods of the dot type at cur.
@@ -672,6 +692,7 @@ func fieldCompletionItems(
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(fields))
+	funcs := serverTypes.GlobalFuncs()
 	for _, f := range fields {
 		if argKind != outputAny && argKind != outputUntyped &&
 			!basicTypeMatchesKind(f.Type, argKind) {
@@ -680,8 +701,10 @@ func fieldCompletionItems(
 		item := newDetailItem(
 			prefix+f.Name, f.TypeName, protocol.CompletionItemKindField, wordRange,
 		)
-		sortText := "0_" + f.Name
-		item.SortText = &sortText
+		if _, ok := funcs[f.Name]; !ok {
+			sortText := "0_" + f.Name
+			item.SortText = &sortText
+		}
 		items = append(items, item)
 	}
 	return items
@@ -716,6 +739,7 @@ func methodCompletionItems(
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(methods))
+	funcs := serverTypes.GlobalFuncs()
 	for _, m := range methods {
 		if !methodIsUsable(m) || !methodAcceptsInput(m, inputType, pipeKind) {
 			continue
@@ -727,8 +751,10 @@ func methodCompletionItems(
 		item := newDetailItem(
 			prefix+m.Name, m.ReturnName, protocol.CompletionItemKindMethod, wordRange,
 		)
-		sortText := "1_" + m.Name
-		item.SortText = &sortText
+		if _, ok := funcs[m.Name]; !ok {
+			sortText := "1_" + m.Name
+			item.SortText = &sortText
+		}
 		items = append(items, item)
 	}
 	return items

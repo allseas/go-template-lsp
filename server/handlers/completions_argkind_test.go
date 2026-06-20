@@ -49,6 +49,17 @@ func TestArgKindCompletions(t *testing.T) {
 
 var argKindCompletionTestCases = []completionTestCase{
 	{
+		name:        "sort func test",
+		src:         `{{ .CustomerName |  }}`,
+		subStr:      "}}",
+		occurrence:  0,
+		offsetAdj:   -1,
+		isInvoked:   true,
+		withType:    true,
+		contains:    []string{"len", "shout"},
+		notContains: []string{".Amt"},
+	},
+	{
 		name:        "int func arg - int methods suggested, string excluded",
 		src:         `{{ repeat .Address. }}`,
 		subStr:      ".",
