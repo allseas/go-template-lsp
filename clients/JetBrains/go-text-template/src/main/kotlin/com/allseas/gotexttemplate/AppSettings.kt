@@ -32,7 +32,7 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
             ),
         var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
-        var chainServer: ChainLevel = ChainLevel.FULL,
+        var chainServer: ChainLevel = ChainLevel.STEP,
     )
 
     enum class DiagnosticSeverity(
@@ -72,7 +72,7 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
         ;
 
         companion object {
-            fun fromValue(value: String): ChainLevel = entries.firstOrNull { it.value == value } ?: FULL
+            fun fromValue(value: String): ChainLevel = entries.firstOrNull { it.value == value } ?: STEP
         }
     }
 

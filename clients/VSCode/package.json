@@ -143,7 +143,7 @@
                         "full",
                         "step"
                     ],
-                    "default": "full",
+                    "default": "step",
                     "description": "Change nested field configuration"
                 },
                 "goTmplSupport.trace.server": {
