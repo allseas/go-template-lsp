@@ -1,6 +1,6 @@
 # Go Text Template Support
 
-You are running version **1.0.0**!
+You are running version **1.1.0**!
 
 - Semantic syntax highlighting
 - Auto completions (variables, built-in functions, user-defined functions, chained field accesses)
