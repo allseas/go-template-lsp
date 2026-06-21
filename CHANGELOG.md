@@ -15,6 +15,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [1.1.0] - 2026-06-21
+
+### Added
+
+- Completions for field access can be set to `full` mode, showing the full path to the field with a matching type. The previous behaviour with only showing one field property at a time is still the default and is named `step` mode.
+- Completions for user global functions are type-aware.
+- Diagnostic error when using `with` on a non-struct.
+
+### Changed
+
+- Functions that are suggested are ordered, showing the concrete-typed ones first.
+
+### Removed
+
+- ErrorTypeInvalidIf, since almost any `if` is valid.
+
+### Fixed
+
+- Hover on field access is correct when paired with a variable.
+- Root variable `$` is set to *any* type correctly.
+- Removed duplicate diagnostic message on incorrect function.
+- Third bracket used to appear sometimes in JetBrains when typing `{{}}`.
+- `else` was incorrectly highlighted as a keyword, even when in plain text.
+- Inline defined user global functions gave an `undefined functions` diagnostic.
+- Template type checking would sometimes fail if the type was the same.
+
+JetBrains:
+
+- The IDE would give random suggestions when there were none from the language server.
+
 ## [1.0.0] - 2026-06-17
 
 ### Added
