@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Third bracket used to appear sometimes in JetBrains when typing `{{}}`.
 - `else` was incorrectly highlighted as a keyword, even when in plain text.
 - Inline defined user global functions gave an `undefined functions` diagnostic.
+- Template type checking would sometimes fail if the type was the same.
+
+JetBrains:
+
+- The IDE would give random suggestions when there were none from the language server.
 
 ## [1.0.0] - 2026-06-17
 
