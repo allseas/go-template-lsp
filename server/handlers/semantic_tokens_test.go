@@ -879,3 +879,73 @@ func TestElseInTextNotHighlighted(t *testing.T) {
 		})
 	}
 }
+
+// absToken holds an LSP semantic token decoded to absolute (line, char) co-ordinates.
+type absToken struct {
+	line, char, length, tokenType, modifiers uint32
+}
+
+// decodeAbsTokens converts the flat LSP uint32 wire encoding (5 values per token:
+// deltaLine, deltaChar, length, tokenType, tokenModifiers) to absolute positions.
+func decodeAbsTokens(data []uint32) []absToken {
+	var out []absToken
+	var absLine, absChar uint32
+	for i := 0; i+4 < len(data); i += 5 {
+		if data[i] > 0 {
+			absLine += data[i]
+			absChar = data[i+1]
+		} else {
+			absChar += data[i+1]
+		}
+		out = append(out, absToken{absLine, absChar, data[i+2], data[i+3], data[i+4]})
+	}
+	return out
+}
+
+// TestPlainTextKeywordsNotHighlighted is a regression test for two bugs that
+// caused plain-text occurrences of "else" and "template" to be emitted as
+// keyword tokens.
+func TestPlainTextKeywordsNotHighlighted(t *testing.T) {
+	tests := []struct {
+		name          string
+		src           string
+		forbiddenLine uint32 // no ttKeyword token must land on this line
+	}{
+		{
+			name:          "else in plain text before if-else block",
+			src:           "else\n{{if true}}body{{else}}other{{end}}",
+			forbiddenLine: 0,
+		},
+		{
+			name:          "template in plain text before block action",
+			src:           "template\n{{block \"t\" .}}content{{end}}",
+			forbiddenLine: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uri := "file:///regression-plaintext-" + tc.name + ".tmpl"
+			setDocFromSource(t, uri, tc.src)
+			defer store.Delete(uri)
+
+			result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			for _, tok := range decodeAbsTokens(result.Data) {
+				if tok.tokenType == ttKeyword {
+					assert.NotEqual(
+						t,
+						tc.forbiddenLine,
+						tok.line,
+						"keyword token incorrectly emitted at line %d char %d (plain text); expected none on line %d",
+						tok.line,
+						tok.char,
+						tc.forbiddenLine,
+					)
+				}
+			}
+		})
+	}
+}
