@@ -153,7 +153,7 @@ func (s *documentStore) Set(uri, text string) {
 		typed = typedTrees[tree.Name]
 	}
 
-	s.docs[uri] = &document{
+	doc := &document{
 		text:        text,
 		tree:        tree,
 		trees:       treeSet,
@@ -162,6 +162,12 @@ func (s *documentStore) Set(uri, text string) {
 		typedTrees:  typedTrees,
 		failedHints: failedHints,
 	}
+	for _, tt := range doc.typedTrees {
+		if tt != nil {
+			types.SetEndsForTree(*tt, types.Pos(len(doc.text)), &doc.text)
+		}
+	}
+	s.docs[uri] = doc
 }
 
 // buildTypedTree returns the analysed (typed) tree if the parse tree exists.

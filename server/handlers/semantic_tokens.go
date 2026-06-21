@@ -243,15 +243,21 @@ func walkSemanticNode(node serverTypes.Node, text string, tokens *[]rawToken) {
 	}
 }
 
-// walkTemplateNode emits tokens for a {{template}} action.
-// TemplateNode.Position() points at the template name, not the keyword, so
-// "template" is located by searching backwards in the source from the name.
-// The template name itself is emitted as a ttString token.
+// walkTemplateNode emits tokens for a {{template}} or {{block}} action.
+// TemplateNode.Position() points at the template name, not the keyword, so the
+// keyword is located by searching within the current action's delimiter
 func walkTemplateNode(n *serverTypes.TemplateNode, text string, tokens *[]rawToken) {
 	namePos := int(n.Position())
 	if namePos > 0 {
-		if kwStart := strings.LastIndex(text[:namePos], "template"); kwStart >= 0 {
-			emitToken(tokens, kwStart, len("template"), ttKeyword, 0)
+		// Restrict the keyword search to inside the opening {{ ... delimiter.
+		if lastLDelim := strings.LastIndex(text[:namePos], "{{"); lastLDelim >= 0 {
+			between := text[lastLDelim:namePos]
+			for _, kw := range []string{"template", "block"} {
+				if idx := strings.Index(between, kw); idx >= 0 {
+					emitToken(tokens, lastLDelim+idx, len(kw), ttKeyword, 0)
+					break
+				}
+			}
 		}
 	}
 	if namePos >= 0 && namePos < len(text) {
