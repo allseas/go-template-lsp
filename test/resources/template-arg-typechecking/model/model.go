@@ -21,11 +21,7 @@ type Company struct {
 }
 
 // Item is used as the input type for the "item" template block in the
-// range/template-call fixtures. It deliberately contains a field of a named
-// type (Person) so that the underlying struct of two separately-loaded Item
-// instances is not structurally identical -- this exposes the
-// cached-vs-uncached LoadTypeFromHint identity bug, which would otherwise be
-// masked by types.ConvertibleTo when the struct only has basic-typed fields.
+// range/template-call fixtures. It contains a non basic type, as that is handled by ConvertibleTo already
 type Item struct {
 	Name string
 	Tag  Person
