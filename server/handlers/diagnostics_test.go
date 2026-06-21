@@ -407,6 +407,36 @@ func TestCollectDiagnostics_TemplateArgTypeCheck(t *testing.T) {
 			diagMessages(diags),
 		)
 	})
+
+	t.Run("range rebinds dot to element type for template call", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/range-template-call.tmpl")
+		store.Set(uri("range-template-call.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("range-template-call.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("range-template-call.tmpl"))
+		_, ok := findDiagnosticContaining(diags, "expects argument of type")
+		require.False(
+			t,
+			ok,
+			"expected no type-mismatch diagnostic when {{template \"item\" .}} runs inside {{range .Items}}, got: %v",
+			diagMessages(diags),
+		)
+	})
+
+	t.Run("template call outside range emits type-mismatch diagnostic", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/direct-template-call.tmpl")
+		store.Set(uri("direct-template-call.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("direct-template-call.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("direct-template-call.tmpl"))
+		_, ok := findDiagnosticContaining(diags, "expects argument of type")
+		require.True(
+			t,
+			ok,
+			"expected type-mismatch diagnostic when passing Order to template \"item\" outside a range, got: %v",
+			diagMessages(diags),
+		)
+	})
 }
 
 func TestCollectDiagnostics_HintLoadFailure(t *testing.T) {

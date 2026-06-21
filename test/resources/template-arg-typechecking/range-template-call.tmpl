@@ -1,0 +1,18 @@
+{{- /*gotype: text-template-server/src/model.Order*/ -}}
+{{- /*
+  range-template-call.tmpl
+  Demonstrates that {{range .Items}} rebinds dot to the slice's element type
+  (model.Item), so {{template "item" .}} inside the range passes a value of
+  the type the target block expects -- no diagnostic should fire.
+*/ -}}
+
+{{- define "item" -}}
+{{- /*gotype: text-template-server/src/model.Item*/ -}}
+{{ .Name }}
+{{- end -}}
+
+{{ .Address }}
+{{ range .Items }}
+    {{ . }}
+    {{ template "item" . }}
+{{ end }}
