@@ -1,8 +1,8 @@
 package funcs
+
 // Package funcs provides template functions exposed via a FuncMap.
 // The //tmpl:func "global" annotation tells the GoTemplate LSP to pick these
 // up automatically - they will appear in completions and pass diagnostics.
-package funcs
 
 import (
 	"fmt"
@@ -43,22 +43,17 @@ func NumberInText(x int) string {
 	return "One"
 }
 
-func Repeat(s string, n int) string {
-	return "Abc"
-}
-
 //tmpl:func "global"
 func TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"upper":          Upper,
 		"lower":          Lower,
-		"repeat":         Repeat,
+		"shout":          Upper,
 		"indent":         Indent,
 		"formatCurrency": FormatCurrency,
 		"yesNo":          YesNo,
 		"numberString":   NumberInText,
 		"repeat":         Repeat,
-		"kebabCase": Upper,
-		"siemensLayout": nil
+		"kebabCase":      Upper,
 	}
 }

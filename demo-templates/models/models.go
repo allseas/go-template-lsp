@@ -55,6 +55,10 @@ type Order struct {
 	Paid         bool
 }
 
+func (o Order) Format(fmt string) string {
+	return ""
+} 
+
 // DisplayName returns a human-readable label for the order.
 func (o Order) DisplayName() string {
 	return fmt.Sprintf("%s (%s)", o.CustomerName, o.ID)

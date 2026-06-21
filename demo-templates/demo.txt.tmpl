@@ -1,0 +1,24 @@
+{{- /*gotype: demo/models.Order*/ -}}
+
+{{define "item"}}
+    {{- /*gotype: demo/models.Item*/ -}}  
+  - {{.Label}} (qty {{.Qty}}) = {{printf "%.2f" .Total}}{{if .IsExpensive}} [expensive]{{end}}
+{{end}}
+
+{{block "header" .}}
+    {{shout "order summary"}}
+{{end}}
+
+{{repeat "=" 20}}
+ID:       {{.ID}}
+Customer: {{.DisplayName}}
+Address:  {{.Address.Line}} ({{if .Address.IsLocal}}local{{else}}intl{{end}})
+
+Items ({{.ItemCount}}):
+{{range .Items}}
+    {{template "item" .}}
+{{end}}
+
+{{repeat "-" 20}}
+Total: {{ .Format "$" }}
+{{if .IsLargeOrder}}{{shout "big order!"}}{{end}}
