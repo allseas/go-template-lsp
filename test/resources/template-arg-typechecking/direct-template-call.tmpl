@@ -1,0 +1,15 @@
+{{- /*gotype: text-template-server/src/model.Order*/ -}}
+{{- /*
+  direct-template-call.tmpl
+  Same setup as range-template-call.tmpl, but the {{template "item" .}} call is
+  at the outer scope where dot is model.Order rather than model.Item -- a
+  type-mismatch diagnostic should fire (Order is genuinely not Item).
+*/ -}}
+
+{{- define "item" -}}
+{{- /*gotype: text-template-server/src/model.Item*/ -}}
+{{ .Name }}
+{{- end -}}
+
+{{ .Address }}
+{{ template "item" . }}

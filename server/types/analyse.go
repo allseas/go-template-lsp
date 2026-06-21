@@ -250,8 +250,10 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 				)
 			}
 			if argType != nil && argType != expectedType &&
+				!types.Identical(argType, expectedType) &&
 				!types.AssignableTo(argType, expectedType) &&
-				!types.ConvertibleTo(argType, expectedType) {
+				!types.ConvertibleTo(argType, expectedType) &&
+				argType.String() != expectedType.String() { // fallback to string comparison to handle loading a package multiple times
 				ctx.errorf(
 					t,
 					ErrorTypeInvalidTemplateArg,

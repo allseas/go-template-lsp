@@ -19,3 +19,22 @@ type Company struct {
 	Name    string
 	Country string
 }
+
+// Item is used as the input type for the "item" template block in the
+// range/template-call fixtures. It deliberately contains a field of a named
+// type (Person) so that the underlying struct of two separately-loaded Item
+// instances is not structurally identical -- this exposes the
+// cached-vs-uncached LoadTypeFromHint identity bug, which would otherwise be
+// masked by types.ConvertibleTo when the struct only has basic-typed fields.
+type Item struct {
+	Name string
+	Tag  Person
+}
+
+// Order is a top-level dot type with a slice of Item, used to exercise the
+// interaction between {{range}} (which rebinds dot to the element type) and
+// {{template}} (which type-checks its argument against the target's gotype).
+type Order struct {
+	Address string
+	Items   []Item
+}
