@@ -23,8 +23,8 @@
     "benchmark:allseas": "npm run benchmark:allseas -w clients/VSCode",
     "package:jetbrains": "npm run build:server && cd clients/JetBrains/go-text-template && ./gradlew clean buildPlugin --no-build-cache --no-configuration-cache && find ./build/distributions | grep '.zip' | xargs -i mv {} ../../../go-template-jetbrains.zip",
     "package:jetbrains:allseas": "npm run build:server:allseas && cd clients/JetBrains/go-text-template && ./gradlew clean buildPlugin --no-build-cache --no-configuration-cache && find ./build/distributions | grep '.zip' | xargs -i mv {} ../../../go-template-jetbrains.zip",
-    "package:both": "npm run package:vscode & npm run package:jetbrains",
-    "package:both:allseas": "npm run package:vscode:allseas & npm run package:jetbrains:allseas"
+    "package:both": "npm run package:vscode & p1=$!; npm run package:jetbrains & p2=$!; wait $p1; r1=$?; wait $p2; r2=$?; exit $((r1 | r2))",
+    "package:both:allseas": "npm run package:vscode:allseas & p1=$!; npm run package:jetbrains:allseas & p2=$!; wait $p1; r1=$?; wait $p2; r2=$?; exit $((r1 | r2))"
   },
   "keywords": [],
   "author": "",
