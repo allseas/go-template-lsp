@@ -1528,4 +1528,156 @@ var analyseTestCases = []analyseTestCase{
 		pkg:            nil,
 		expectedErrors: []TError{},
 	},
+	// ----- regression: with over pointer-to-struct (unalias) -----
+	{
+		// {{ with .Ptr }}{{ end }}  -- .Ptr is *MockDot; should not emit
+		// ErrorTypeInvalidWith. Body dot becomes *MockDot.
+		name: "with over pointer-to-struct emits no diagnostic",
+		parseTree: tree("test", list(withN(
+			pipe(nil, coms(com(field("Ptr")))),
+			list(),
+		))),
+		resTree: ttree("test", tlist(mockPtrDotType, twithN(
+			tpipe(
+				types.NewPointer(mockDotType),
+				nil,
+				tcoms(tcom(
+					types.NewPointer(mockDotType),
+					tfield(types.NewPointer(mockDotType), "Ptr"),
+				)),
+			),
+			tlist(types.NewPointer(mockDotType)),
+		))),
+		funcs:          funcs,
+		dotType:        mockPtrDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	// ----- regression: with over `any` does not emit InvalidWith -----
+	{
+		// {{ with .BadField }}{{ end }}  -- .BadField is unknown (any).
+		// Should emit only ErrorTypeInvalidField, NOT ErrorTypeInvalidWith.
+		// Body dot becomes anyType.
+		name: "with over any does not emit InvalidWith",
+		parseTree: tree("test", list(withN(
+			pipe(nil, coms(com(field("BadField")))),
+			list(),
+		))),
+		resTree: ttree("test", tlist(mockDotType, twithN(
+			tpipe(anyType(), nil, tcoms(tcom(anyType(), tfield(anyType(), "BadField")))),
+			tlist(anyType()),
+		))),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+		},
+	},
+	// ----- regression: variable reassignment any/concrete does not error -----
+	{
+		// {{ $v := .BadField }}{{ $v = "hello" }}
+		// $v is bound to any (BadField is unknown), then reassigned to a
+		// concrete string. Reassignment must not emit a type-mismatch.
+		// Only the InvalidField from BadField is expected.
+		name: "reassign concrete to any-bound variable emits no mismatch",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$v")), coms(com(field("BadField")))),
+			actassign(decls(varn("$v")), coms(com(str("hello")))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			tactpipe(
+				anyType(),
+				tdecls(tvarn("$v", anyType())),
+				tcoms(tcom(anyType(), tfield(anyType(), "BadField"))),
+			),
+			tactassign(
+				types.Typ[types.String],
+				tdecls(tvarn("$v", types.Typ[types.String])),
+				tcoms(tcom(types.Typ[types.String], tstr("hello"))),
+			),
+		)),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+		},
+	},
+	{
+		// {{ $v := "hello" }}{{ $v = .BadField }}
+		// Reverse direction: concrete-bound var reassigned to any. Also
+		// must not emit a type mismatch.
+		name: "reassign any to concrete-bound variable emits no mismatch",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$v")), coms(com(str("hello")))),
+			actassign(decls(varn("$v")), coms(com(field("BadField")))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			tactpipe(
+				types.Typ[types.String],
+				tdecls(tvarn("$v", types.Typ[types.String])),
+				tcoms(tcom(types.Typ[types.String], tstr("hello"))),
+			),
+			tactassign(
+				anyType(),
+				tdecls(tvarn("$v", anyType())),
+				tcoms(tcom(anyType(), tfield(anyType(), "BadField"))),
+			),
+		)),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+		},
+	},
+	// ----- regression: template invocation with any does not error -----
+	{
+		// {{ template "child" .BadField }}
+		// "child" expects MockDot, .BadField is any. Should emit
+		// ErrorUnknownType (warning) and ErrorTypeInvalidField, NOT
+		// ErrorTypeInvalidTemplateArg.
+		name: "template invocation: any arg to concrete-param template is a warning",
+		parseTree: tree("test", list(
+			tmpl("child", pipe(nil, coms(com(field("BadField"))))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			ttmpl("child", tpipe(
+				anyType(),
+				nil,
+				tcoms(tcom(anyType(), tfield(anyType(), "BadField"))),
+			)),
+		)),
+		funcs:              funcs,
+		dotType:            mockDotType,
+		pkg:                mockPkg,
+		templateInputTypes: map[string]types.Type{"child": mockDotType},
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+			{typ: ErrorUnknownType},
+		},
+	},
+	{
+		// {{ template "child" . }}
+		// "child" expects any, dot is MockDot. Concrete-to-any must not
+		// emit InvalidTemplateArg (and should also not emit a warning
+		// because losing precision toward `any` is not the user's problem).
+		name: "template invocation: concrete arg to any-param template is silent",
+		parseTree: tree("test", list(
+			tmpl("child", pipe(nil, coms(com(&parse.DotNode{})))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			ttmpl("child", tpipe(
+				mockDotType,
+				nil,
+				tcoms(tcom(mockDotType, &DotNode{typ: mockDotType})),
+			)),
+		)),
+		funcs:              funcs,
+		dotType:            mockDotType,
+		pkg:                mockPkg,
+		templateInputTypes: map[string]types.Type{"child": anyType()},
+		expectedErrors:     []TError{},
+	},
 }

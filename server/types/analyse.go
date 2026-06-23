@@ -243,7 +243,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if IsEmptyInterface(argType) || IsEmptyInterface(expectedType) {
+			if IsEmptyInterface(argType) {
 				ctx.errorf(
 					t,
 					ErrorUnknownType,
@@ -251,7 +251,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 					n.Name,
 					expectedType.String(),
 				)
-			} else if argType != nil && argType != expectedType &&
+			} else if !IsEmptyInterface(expectedType) && argType != nil && argType != expectedType &&
 				!types.Identical(argType, expectedType) &&
 				!types.AssignableTo(argType, expectedType) &&
 				!types.ConvertibleTo(argType, expectedType) &&
@@ -423,12 +423,20 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 		ctx.dotType = anyType()
 	} else {
 		ctx.dotType = v
-		// override the range var if it was set
+		// override the range var if it was set. The scope entries appended
+		// by analysePipe are *copies* of these Decls, so update them too.
 		if len(r.Pipe.Decl) == 1 {
 			r.Pipe.Decl[0].typ = v
+			if n := len(ctx.vars); n >= 1 {
+				ctx.vars[n-1].typ = v
+			}
 		} else if len(r.Pipe.Decl) == 2 {
 			r.Pipe.Decl[0].typ = k
 			r.Pipe.Decl[1].typ = v
+			if n := len(ctx.vars); n >= 2 {
+				ctx.vars[n-2].typ = k
+				ctx.vars[n-1].typ = v
+			}
 		}
 	}
 	r.List = analyseList(n.List, r, ctx)
@@ -861,14 +869,28 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 					)
 				}
 			}
-			ctx.vars = append(ctx.vars, typePipe.Decl[0])
+			// Append a *copy* so later reassignments mutate the scope entry,
+			// not the original declaration AST node.
+			ctx.vars = append(ctx.vars, &VariableNode{
+				NodeType: NodeVariable,
+				Ident:    typePipe.Decl[0].Ident,
+				typ:      typePipe.Decl[0].typ,
+			})
 		}
 
 		if len(typePipe.Decl) == 2 {
 			typePipe.Decl[1].typ = typePipe.typ
-			ctx.vars = append(ctx.vars, typePipe.Decl[0])
 			typePipe.Decl[0].typ = types.Typ[types.Int] // unsigned int for index
-			ctx.vars = append(ctx.vars, typePipe.Decl[1])
+			ctx.vars = append(ctx.vars, &VariableNode{
+				NodeType: NodeVariable,
+				Ident:    typePipe.Decl[0].Ident,
+				typ:      typePipe.Decl[0].typ,
+			})
+			ctx.vars = append(ctx.vars, &VariableNode{
+				NodeType: NodeVariable,
+				Ident:    typePipe.Decl[1].Ident,
+				typ:      typePipe.Decl[1].typ,
+			})
 
 			if typePipe.Decl[0].Ident[0] == typePipe.Decl[1].Ident[0] {
 				ctx.errorf(
@@ -897,6 +919,9 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 						)
 					}
 					ctx.vars[i].typ = typePipe.typ
+					// Reflect the new type on the reassignment's own LHS so
+					// hover on it shows the post-assignment type.
+					typePipe.Decl[0].typ = typePipe.typ
 					return typePipe
 				}
 			}
