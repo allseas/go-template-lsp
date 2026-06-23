@@ -7,9 +7,9 @@
         "vscode": "^1.116.0"
     },
     "repository": {
-        "url": "",
-        "directory": "",
-        "type": ""
+        "url": "https://github.com/allseas/go-template-lsp",
+        "directory": "clients/VSCode",
+        "type": "git"
     },
     "categories": [
         "Programming Languages"
