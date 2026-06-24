@@ -44,7 +44,6 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		input: "{{/*gotype: Type1*/}}\n{{/*gotype: Type2*/}}",
 		wantHints: []TypeHint{
 			{Line: 1, Type: "Type1"},
-			{Line: 2, Type: "Type2"},
 		},
 	},
 	{
@@ -52,7 +51,6 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		input: "{{/*gotype: A*/}} {{/*gotype: B*/}}",
 		wantHints: []TypeHint{
 			{Line: 1, Type: "A"},
-			{Line: 1, Type: "B"},
 		},
 	},
 	{

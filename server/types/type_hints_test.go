@@ -3,18 +3,50 @@ package types
 import (
 	"go/token"
 	"go/types"
-	"strings"
+	"sort"
 	"testing"
+	parse "text-template-parser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 )
 
+func parseTreeSet(t *testing.T, text string) map[string]*parse.Tree {
+	t.Helper()
+	root := parse.New("t")
+	root.Mode = parse.ParsePartial | parse.SkipFuncCheck | parse.ParseComments
+	treeSet := map[string]*parse.Tree{}
+	_, err := root.Parse(text, "{{", "}}", treeSet)
+	require.NoError(t, err)
+	return treeSet
+}
+
+func findTreeHints(t *testing.T, text string) []TypeHint {
+	t.Helper()
+	treeSet := parseTreeSet(t, text)
+	m := FindTreeHints(text, treeSet)
+
+	hints := make([]TypeHint, 0, len(m))
+	for _, h := range m {
+		hints = append(hints, h)
+	}
+	sort.Slice(hints, func(i, j int) bool {
+		if hints[i].Line != hints[j].Line {
+			return hints[i].Line < hints[j].Line
+		}
+		return hints[i].Type < hints[j].Type
+	})
+	if len(hints) == 0 {
+		return nil
+	}
+	return hints
+}
+
 func TestParseTypeHints(t *testing.T) {
 	for _, tc := range parseTypeHintTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			hints := ParseTypeHints(strings.NewReader(tc.input))
+			hints := findTreeHints(t, tc.input)
 			assert.Equal(t, tc.wantHints, hints)
 		})
 	}

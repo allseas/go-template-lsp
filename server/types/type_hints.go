@@ -2,58 +2,20 @@
 package types
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"go/token"
 	"go/types"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+	parse "text-template-parser"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/tools/go/packages"
 )
-
-// ParseDefineTypeHints scans template text for {{define "name"}} blocks and returns
-// a map from template name to the first gotype hint found at the top of that block.
-// It searches within the first 512 bytes after the opening {{define}} delimiter
-// so only hints placed near the top of the block are matched.
-func ParseDefineTypeHints(text string) map[string]string {
-	// Match {{define "name"}} or {{define `name`}} with optional trimming dashes/whitespace.
-	defineRe := regexp.MustCompile("\\{\\{-?\\s*define\\s+(?:\"([^\"]+)\"|`([^`]+)`)\\s*-?\\}\\}")
-	gotypeRe := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
-
-	result := make(map[string]string)
-	matches := defineRe.FindAllStringSubmatchIndex(text, -1)
-	for i, m := range matches {
-		var name string
-		if m[2] != -1 {
-			name = text[m[2]:m[3]] // double-quoted name
-		} else if m[4] != -1 {
-			name = text[m[4]:m[5]] // backtick-quoted name
-		}
-		if name == "" {
-			continue
-		}
-		// Bound the search at the start of the next {{define}} tag so we don't
-		// accidentally pick up a gotype hint that belongs to the next block.
-		start := m[1]
-		end := len(text)
-		if i+1 < len(matches) {
-			end = matches[i+1][0]
-		}
-		snippet := text[start:end]
-		if gm := gotypeRe.FindStringSubmatch(snippet); gm != nil {
-			result[name] = gm[1]
-		}
-	}
-	return result
-}
 
 // TypeHint represents a `gotype:` type hint found in a template file.
 type TypeHint struct {
@@ -61,34 +23,64 @@ type TypeHint struct {
 	Type string
 }
 
-// ParseTypeHints find the first match of the type hint
-func ParseTypeHints(f io.Reader) []TypeHint {
-	// Regex to capture a gotype hint inside a Go template comment.
-	// Supports optional trimming dashes and whitespace around delimiters, e.g.:
-	// {{/*gotype: Type*/}}, {{- /* gotype: pkg.Type */ -}}, {{/*gotype: path/to/pkg.Type*/}} etc.
-	// Notes:
-	// - Allow package paths with "/" before the final ".Type" segment.
-	// - Still capture the entire token so we can later reduce to the final type name.
-	re := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
-	var hints []TypeHint
-
-	scanner := bufio.NewScanner(f)
-	lineNo := 0
-	gotypeBytes := []byte("gotype:")
-	for scanner.Scan() {
-		lineNo++
-		line := scanner.Bytes()
-		if !bytes.Contains(line, gotypeBytes) {
+func treeAt(offset int, trees map[string]*parse.Tree) *parse.Tree {
+	var best *parse.Tree
+	var bestSpan int
+	for _, t := range trees {
+		if t == nil || t.Root == nil {
 			continue
 		}
-		matches := re.FindAllSubmatch(line, -1)
-		for _, m := range matches {
-			if len(m) >= 2 {
-				hints = append(hints, TypeHint{Line: lineNo, Type: string(m[1])})
-			}
+		start := int(t.Root.Position())
+		end := int(t.End)
+		if start > offset || offset >= end {
+			continue
+		}
+		if span := end - start; best == nil || span < bestSpan {
+			best, bestSpan = t, span
 		}
 	}
-	return hints
+	if best != nil {
+		return best
+	}
+	return trees["t"]
+}
+
+// FindTreeHints scans the template text for `gotype:` hints in comments and returns a map of template names to their corresponding type hints.
+// Tree root is the special case, as it contains all the other templates within it, therefore we have to remove the sub templates before passing it into ParseTypeHints.
+func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHint {
+	result := make(map[string]TypeHint)
+
+	re := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
+
+	lineNo := 0
+	lineStart := 0
+	for i := 0; i <= len(text); i++ {
+		if i < len(text) && text[i] != '\n' {
+			continue
+		}
+		line := strings.TrimSuffix(text[lineStart:i], "\r")
+		lineNo++
+
+		if strings.Contains(line, "gotype:") {
+			for _, m := range re.FindAllStringSubmatchIndex(line, -1) {
+				if len(m) < 4 {
+					continue
+				}
+				owner := treeAt(lineStart+m[0], trees)
+				if owner == nil {
+					continue
+				}
+				if _, exists := result[owner.Name]; exists {
+					continue
+				}
+				result[owner.Name] = TypeHint{Line: lineNo, Type: line[m[2]:m[3]]}
+			}
+		}
+
+		lineStart = i + 1
+	}
+
+	return result
 }
 
 // TypeField is a resolved field from a struct type.

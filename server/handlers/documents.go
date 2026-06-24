@@ -3,8 +3,6 @@ package handlers
 
 import (
 	"path/filepath"
-	"regexp"
-	"strings"
 	"sync"
 	parse "text-template-parser"
 	"text-template-server/types"
@@ -34,7 +32,7 @@ type document struct {
 	// typedTrees is the per-tree analysed (typed) tree, paired with loadedTypes.
 	typedTrees map[string]*types.Tree
 	// failedHints maps tree name to the error message when its gotype hint failed to load from all dirs.
-	failedHints map[string]string
+	failedHints map[types.TypeHint]string
 }
 
 type documentStore struct {
@@ -53,6 +51,7 @@ var store = &documentStore{
 func (s *documentStore) Set(uri, text string) {
 	tree, treeSet, err := parseTemplate(uri, text)
 
+	treeHints := types.FindTreeHints(text, treeSet)
 	// Try the LSP workspace root first (legacy behaviour), then fall back to
 	// the directory containing the .tmpl file itself. This means a user can
 	// open a parent folder as the workspace and still get type resolution as
@@ -60,11 +59,11 @@ func (s *documentStore) Set(uri, text string) {
 	loadDirs := []string{WorkspaceRoot, uriDir(uri)}
 
 	loadedTypes := make(map[string]*types.Tree)
-	failedHints := make(map[string]string)
-	for name, tr := range treeSet {
-		isRoot := tree != nil && tr == tree
-		hint := hintTypeForTree(text, tr, isRoot)
-		if hint == "" {
+	failedHints := make(map[types.TypeHint]string)
+	for name := range treeSet {
+		hint := treeHints[name]
+		log.Debug().Str("name", name).Str("hint", hint.Type).Msg("found gotype hint")
+		if hint.Type == "" {
 			continue
 		}
 		var lastErr error
@@ -72,9 +71,8 @@ func (s *documentStore) Set(uri, text string) {
 			if dir == "" {
 				continue
 			}
-			loaded, lerr := types.CachedLoadTypeFromHint(hint, dir)
+			loaded, lerr := types.CachedLoadTypeFromHint(hint.Type, dir)
 			if lerr != nil {
-				log.Debug().Str("hint", hint).Str("dir", dir).Err(lerr).Msg("type hint load failed")
 				lastErr = lerr
 				continue
 			}
@@ -83,26 +81,27 @@ func (s *documentStore) Set(uri, text string) {
 			break
 		}
 		if lastErr != nil {
-			failedHints[name] = lastErr.Error()
+			failedHints[hint] = lastErr.Error()
 		}
 	}
 
 	// Load gotype hints from {{define}} blocks before taking the lock (type loading can be slow).
-	var newTemplateTypes map[string]gotypes.Type
+	newTemplateTypes := make(map[string]gotypes.Type)
+
 	if WorkspaceRoot != "" {
-		defineHints := types.ParseDefineTypeHints(text)
-		if len(defineHints) > 0 {
-			newTemplateTypes = make(map[string]gotypes.Type, len(defineHints))
-			for name, hint := range defineHints {
-				if loaded, lerr := types.LoadTypeFromHint(hint, WorkspaceRoot); lerr == nil {
-					newTemplateTypes[name] = loaded.DotType
-				} else {
-					log.Warn().
-						Str("template", name).
-						Str("hint", hint).
-						Err(lerr).
-						Msg("define block type hint load failed")
-				}
+		for name, hint := range treeHints {
+			if name == "" {
+				continue
+			}
+
+			if loaded, err := types.LoadTypeFromHint(hint.Type, WorkspaceRoot); err == nil {
+				newTemplateTypes[name] = loaded.DotType
+			} else {
+				log.Warn().
+					Str("template", name).
+					Str("hint", hint.Type).
+					Err(err).
+					Msg("type hint load failed")
 			}
 		}
 	}
@@ -372,89 +371,6 @@ func tryParse(text string) (*parse.Tree, map[string]*parse.Tree, error) {
 		return nil, nil, err
 	}
 	return t, treeSet, nil
-}
-
-// hintTypeForTree returns the gotype hint string for the given tree.
-func hintTypeForTree(text string, tree *parse.Tree, isRoot bool) string {
-	if isRoot {
-		return firstHintIn(firstLineOf(text))
-	}
-	if tree == nil {
-		return ""
-	}
-	line := findDefineLine(text, tree.Name)
-	if line <= 0 {
-		return ""
-	}
-	return firstHintIn(getLine(text, line+1))
-}
-
-func firstHintIn(line string) string {
-	if line == "" {
-		return ""
-	}
-	hints := types.ParseTypeHints(strings.NewReader(line))
-	if len(hints) == 0 {
-		return ""
-	}
-	return hints[0].Type
-}
-
-var defineRe = regexp.MustCompile(`\{\{-?\s*define\s+"([^"]*)"\s*-?\}\}`)
-
-// findDefineLine returns the 1-based line number of the {{define "name"}}
-// directive in text, or -1 if not found.
-func findDefineLine(text, name string) int {
-	for _, m := range defineRe.FindAllStringSubmatchIndex(text, -1) {
-		// m: [start, end, nameStart, nameEnd]
-		if len(m) < 4 {
-			continue
-		}
-		got := text[m[2]:m[3]]
-		if got != name {
-			continue
-		}
-		line := 1
-		for i := 0; i < m[0]; i++ {
-			if text[i] == '\n' {
-				line++
-			}
-		}
-		return line
-	}
-	return -1
-}
-
-// getLine returns the 1-based line of text, without its trailing newline.
-func getLine(text string, line int) string {
-	if line <= 0 {
-		return ""
-	}
-	start := 0
-	cur := 1
-	for cur < line && start < len(text) {
-		nl := strings.IndexByte(text[start:], '\n')
-		if nl < 0 {
-			return ""
-		}
-		start += nl + 1
-		cur++
-	}
-	if start >= len(text) {
-		return ""
-	}
-	end := strings.IndexByte(text[start:], '\n')
-	if end < 0 {
-		return text[start:]
-	}
-	return text[start : start+end]
-}
-
-func firstLineOf(text string) string {
-	if i := strings.IndexByte(text, '\n'); i >= 0 {
-		return text[:i]
-	}
-	return text
 }
 
 // Remove deletes a document from the store, typically called when a file is closed in the editor.
