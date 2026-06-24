@@ -60,6 +60,8 @@ const (
 	ErrorTypeUnknownRangeType
 	// ErrorTypeEmptyDefineName Define block has an empty name
 	ErrorTypeEmptyDefineName
+	// ErrorTypeVariableReassigned A variable is reassigned to a value of a different concrete type. The new binding shadows the previous one on the variable stack rather than mutating it.
+	ErrorTypeVariableReassigned
 	// Add more error types as needed
 )
 
@@ -78,6 +80,7 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorHintLoadFailure:        "hintLoadFailure",
 	ErrorTypeUnknownRangeType:   "unknownRangeType",
 	ErrorTypeEmptyDefineName:    "emptyDefineName",
+	ErrorTypeVariableReassigned: "variableReassigned",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
@@ -243,7 +246,11 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if IsEmptyInterface(argType) || IsEmptyInterface(expectedType) {
+			if !IsEmptyInterface(expectedType) && IsEmptyInterface(argType) {
+				// Template parameter is concrete but argument type is
+				// unknown (any). We can't verify the call, so warn only.
+				// The reverse (concrete arg to any param) is fine: losing
+				// precision toward `any` is not the user's problem.
 				ctx.errorf(
 					t,
 					ErrorUnknownType,
@@ -251,7 +258,8 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 					n.Name,
 					expectedType.String(),
 				)
-			} else if argType != nil && argType != expectedType &&
+			} else if argType != nil && !IsEmptyInterface(argType) && !IsEmptyInterface(expectedType) &&
+				argType != expectedType &&
 				!types.Identical(argType, expectedType) &&
 				!types.AssignableTo(argType, expectedType) &&
 				!types.ConvertibleTo(argType, expectedType) &&
@@ -881,7 +889,15 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 
 	} else {
 		if len(typePipe.Decl) == 1 {
-			// find the variable in the context and update its type
+			// find the variable in the context and rebind it. We never
+			// mutate the existing binding's type because the binding's
+			// VariableNode is shared with the original declaration's
+			// Decl[0] (and with prior reassignments), so mutation would
+			// retroactively change earlier nodes' apparent type. Instead
+			// we push a new binding (a shadowing copy) onto the variable
+			// stack with the new type. When both the old and new types
+			// are concrete and differ, also emit a warning so the user
+			// is aware that the variable changed type.
 			for i := len(ctx.vars) - 1; i >= 0; i-- {
 				if ctx.vars[i].Ident[0] == typePipe.Decl[0].Ident[0] {
 					if ctx.vars[i].typ != nil && typePipe.typ != nil &&
@@ -889,14 +905,33 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 						!types.Identical(ctx.vars[i].typ, typePipe.typ) {
 						ctx.errorf(
 							typePipe.Decl[0],
-							ErrorTypeInvalidCommand,
-							"type mismatch: variable %s already has type %s, cannot assign type %s",
+							ErrorTypeVariableReassigned,
+							"variable %s changes type from %s to %s",
 							ctx.vars[i].Ident[0],
 							ctx.vars[i].typ.String(),
 							typePipe.typ.String(),
 						)
+					} else if ctx.vars[i].typ != nil && typePipe.typ != nil &&
+						!IsEmptyInterface(ctx.vars[i].typ) && IsEmptyInterface(typePipe.typ) {
+						// Reassigning a concrete-typed variable to a value
+						// of unknown type loses precision; emit an info so
+						// the user can investigate the source of the any.
+						ctx.errorf(
+							typePipe.Decl[0],
+							ErrorUnknownType,
+							"variable %s loses type information: was %s, reassigned to a value of unknown type",
+							ctx.vars[i].Ident[0],
+							ctx.vars[i].typ.String(),
+						)
 					}
-					ctx.vars[i].typ = typePipe.typ
+					typePipe.Decl[0].typ = typePipe.typ
+					ctx.vars = append(ctx.vars, &VariableNode{
+						NodeType: NodeVariable,
+						Pos:      typePipe.Decl[0].Pos,
+						Ident:    typePipe.Decl[0].Ident,
+						typ:      typePipe.typ,
+						parent:   typePipe.Decl[0].parent,
+					})
 					return typePipe
 				}
 			}

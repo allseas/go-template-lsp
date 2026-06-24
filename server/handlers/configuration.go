@@ -98,6 +98,7 @@ var (
 			types.ErrorHintLoadFailure:        DiagnosticSeverityWarning,
 			types.ErrorTypeUnknownRangeType:   DiagnosticSeverityWarning,
 			types.ErrorTypeEmptyDefineName:    DiagnosticSeverityWarning,
+			types.ErrorTypeVariableReassigned: DiagnosticSeverityWarning,
 		},
 		EnableAutocompletion: true,
 		PipeChainCompletion:  "step",

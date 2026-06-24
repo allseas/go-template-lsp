@@ -1606,9 +1606,10 @@ var analyseTestCases = []analyseTestCase{
 	},
 	{
 		// {{ $v := "hello" }}{{ $v = .BadField }}
-		// Reverse direction: concrete-bound var reassigned to any. Also
-		// must not emit a type mismatch.
-		name: "reassign any to concrete-bound variable emits no mismatch",
+		// Reverse direction: concrete-bound var reassigned to any. Must
+		// not emit a type mismatch (warning), but should emit an info
+		// (ErrorUnknownType) because the variable loses type precision.
+		name: "reassign any to concrete-bound variable emits info, not mismatch",
 		parseTree: tree("test", list(
 			actpipe(decls(varn("$v")), coms(com(str("hello")))),
 			actassign(decls(varn("$v")), coms(com(field("BadField")))),
@@ -1630,6 +1631,7 @@ var analyseTestCases = []analyseTestCase{
 		pkg:     mockPkg,
 		expectedErrors: []TError{
 			{typ: ErrorTypeInvalidField},
+			{typ: ErrorUnknownType},
 		},
 	},
 	// ----- regression: template invocation with any does not error -----
