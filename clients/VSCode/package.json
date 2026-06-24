@@ -117,7 +117,8 @@
                         "syntaxError": "error",
                         "hintLoadFailure": "warning",
                         "unknownRangeType": "warning",
-                        "emptyDefineName": "warning"
+                        "emptyDefineName": "warning",
+                        "variableReassigned": "warning"
                     },
                     "additionalProperties": {
                         "type": "string",

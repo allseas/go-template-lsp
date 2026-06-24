@@ -53,6 +53,7 @@ class ProjectSettingsConfigurable(
                         "hintLoadFailure" to "Type hint load failure",
                         "unknownRangeType" to "Unknown range type",
                         "emptyDefineName" to "Empty define name",
+                        "variableReassigned" to "Variable reassigned to different type",
                     )
                 for ((key, label) in diagnosticEntries) {
                     val k = key
