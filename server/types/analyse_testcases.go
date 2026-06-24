@@ -588,7 +588,7 @@ var analyseTestCases = []analyseTestCase{
 		resTree: ttree(
 			"test",
 			tlist(
-				anyType(),
+				AnyType(),
 				tactpipe(
 					types.Typ[types.String],
 					nil,
@@ -641,7 +641,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncD")),
 			com(ident("FuncA")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(42)),
 			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
 			tcom(types.Typ[types.Int], tident("FuncA", funcs["FuncA"].Type())),
@@ -848,7 +848,7 @@ var analyseTestCases = []analyseTestCase{
 			com(num(2)),
 			com(ident("FuncB"), num(1)),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(2)),
 			tcom(types.Typ[types.String], tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
 		)))),
@@ -865,7 +865,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncB"), num(1)),
 			com(ident("FuncA")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(5)),
 			tcom(types.Typ[types.String], tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
 			tcom(types.Typ[types.Int], tident("FuncA", funcs["FuncA"].Type())),
@@ -996,7 +996,7 @@ var analyseTestCases = []analyseTestCase{
 		// "hello"  -- a bare text node in the root list.
 		name:      "text node",
 		parseTree: tree("test", list(text("hello"))),
-		resTree:   ttree("test", tlist(anyType(), ttext("hello"))),
+		resTree:   ttree("test", tlist(AnyType(), ttext("hello"))),
 		funcs:     funcs,
 		// TextNode itself has no type; ListNode dot type stays nil with no dotType.
 		expectedErrors: []TError{},
@@ -1005,7 +1005,7 @@ var analyseTestCases = []analyseTestCase{
 		// {{ true }}  -- boolean literal as an action.
 		name:      "bool node literal",
 		parseTree: tree("test", list(actpipe(nil, coms(com(boolN(true)))))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.Bool], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Bool], nil, tcoms(
 			tcom(types.Typ[types.Bool], tboolN(true)),
 		)))),
 		funcs:          funcs,
@@ -1015,7 +1015,7 @@ var analyseTestCases = []analyseTestCase{
 		// {{ nil }}  -- nil literal as an action; typed as untyped nil.
 		name:      "nil node literal",
 		parseTree: tree("test", list(actpipe(nil, coms(com(nilN()))))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.UntypedNil], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.UntypedNil], nil, tcoms(
 			tcom(types.Typ[types.UntypedNil], tnilN()),
 		)))),
 		funcs:          funcs,
@@ -1035,7 +1035,7 @@ var analyseTestCases = []analyseTestCase{
 				nil,
 				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
 			),
-			tlist(anyType()),
+			tlist(AnyType()),
 		))),
 		funcs:   funcs,
 		dotType: mockDotType,
@@ -1051,7 +1051,7 @@ var analyseTestCases = []analyseTestCase{
 			pipe(nil, coms(com(num(5)))),
 			list(actpipe(nil, coms(com(&parse.DotNode{})))),
 		))),
-		resTree: ttree("test", tlist(anyType(), trangeN(
+		resTree: ttree("test", tlist(AnyType(), trangeN(
 			tpipe(
 				types.Typ[types.Int],
 				nil,
@@ -1073,7 +1073,7 @@ var analyseTestCases = []analyseTestCase{
 		// {{ "hi" }}  -- string literal as an action.
 		name:      "string node literal",
 		parseTree: tree("test", list(actpipe(nil, coms(com(str("hi")))))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.String], tstr("hi")),
 		)))),
 		funcs:          funcs,
@@ -1083,7 +1083,7 @@ var analyseTestCases = []analyseTestCase{
 		// {{/* a comment */}}  -- comment node in the root list; carries no type.
 		name:           "comment node",
 		parseTree:      tree("test", list(comment("/* a comment */"))),
-		resTree:        ttree("test", tlist(anyType(), tcomment("/* a comment */"))),
+		resTree:        ttree("test", tlist(AnyType(), tcomment("/* a comment */"))),
 		funcs:          funcs,
 		expectedErrors: []TError{},
 	},
@@ -1095,7 +1095,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncA"), num(42)),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(
 				types.Typ[types.Int],
 				tident("FuncA", funcs["FuncA"].Type()),
@@ -1116,7 +1116,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncB"), num(1), str("hi")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(
 				types.Typ[types.String],
 				tident("FuncB", funcs["FuncB"].Type()),
@@ -1138,7 +1138,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncB"), str("hi"), num(2)),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(
 				types.Typ[types.String],
 				tident("FuncB", funcs["FuncB"].Type()),
@@ -1160,7 +1160,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncB"), str("x"), str("y")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(
 				types.Typ[types.String],
 				tident("FuncB", funcs["FuncB"].Type()),
@@ -1184,7 +1184,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncA"), str("x"), str("y")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(
 				types.Typ[types.Int],
 				tident("FuncA", funcs["FuncA"].Type()),
@@ -1206,7 +1206,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncB"), num(1), num(2), num(3)),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(
 				types.Typ[types.String],
 				tident("FuncB", funcs["FuncB"].Type()),
@@ -1230,7 +1230,7 @@ var analyseTestCases = []analyseTestCase{
 			com(str("hello")),
 			com(ident("FuncD")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.String], tstr("hello")),
 			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
 		)))),
@@ -1251,7 +1251,7 @@ var analyseTestCases = []analyseTestCase{
 			com(str("x")),
 			com(ident("FuncB"), num(1)),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.String], tstr("x")),
 			tcom(
 				types.Typ[types.String],
@@ -1275,7 +1275,7 @@ var analyseTestCases = []analyseTestCase{
 			com(num(1)),
 			com(ident("FuncB"), num(1), num(2)),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(1)),
 			tcom(
 				types.Typ[types.String],
@@ -1386,8 +1386,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("VoidFn"), str("x")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(anyType(), nil, tcoms(
-			tcom(anyType(), tident("VoidFn", funcs["VoidFn"].Type()), tstr("x")),
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tident("VoidFn", funcs["VoidFn"].Type()), tstr("x")),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -1401,8 +1401,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(field("Columns")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(anyType(), nil, tcoms(
-			tcom(anyType(), tfield(anyType(), "Columns")),
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tfield(AnyType(), "Columns")),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -1416,8 +1416,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(field("BadField")),
 		)))),
-		resTree: ttree("test", tlist(mockDotType, tactpipe(anyType(), nil, tcoms(
-			tcom(anyType(), tfield(anyType(), "BadField")),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tfield(AnyType(), "BadField")),
 		)))),
 		funcs:   funcs,
 		dotType: mockDotType,
@@ -1434,7 +1434,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncPrintf")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.String], tident("FuncPrintf", funcs["FuncPrintf"].Type())),
 		)))),
 		funcs:   funcs,
@@ -1474,7 +1474,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncD")),
 		)))),
 		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(
-			tcom(anyType(), tfield(anyType(), "BadField")),
+			tcom(AnyType(), tfield(AnyType(), "BadField")),
 			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
 		)))),
 		funcs:   funcs,
@@ -1490,8 +1490,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("inlineFn")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(anyType(), nil, tcoms(
-			tcom(anyType(), tident("inlineFn", anyType())),
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tident("inlineFn", AnyType())),
 		)))),
 		funcs:          map[string]*types.Func{"inlineFn": nil},
 		dotType:        nil,
@@ -1503,8 +1503,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("noSuchFunc")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(anyType(), nil, tcoms(
-			tcom(anyType(), tident("noSuchFunc", anyType())),
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tident("noSuchFunc", AnyType())),
 		)))),
 		funcs:   map[string]*types.Func{},
 		dotType: nil,
@@ -1519,9 +1519,9 @@ var analyseTestCases = []analyseTestCase{
 			com(str("hello")),
 			com(ident("inlineFn")),
 		)))),
-		resTree: ttree("test", tlist(anyType(), tactpipe(anyType(), nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
 			tcom(types.Typ[types.String], tstr("hello")),
-			tcom(anyType(), tident("inlineFn", anyType())),
+			tcom(AnyType(), tident("inlineFn", AnyType())),
 		)))),
 		funcs:          map[string]*types.Func{"inlineFn": nil},
 		dotType:        nil,
@@ -1564,8 +1564,8 @@ var analyseTestCases = []analyseTestCase{
 			list(),
 		))),
 		resTree: ttree("test", tlist(mockDotType, twithN(
-			tpipe(anyType(), nil, tcoms(tcom(anyType(), tfield(anyType(), "BadField")))),
-			tlist(anyType()),
+			tpipe(AnyType(), nil, tcoms(tcom(AnyType(), tfield(AnyType(), "BadField")))),
+			tlist(AnyType()),
 		))),
 		funcs:   funcs,
 		dotType: mockDotType,
@@ -1587,9 +1587,9 @@ var analyseTestCases = []analyseTestCase{
 		)),
 		resTree: ttree("test", tlist(mockDotType,
 			tactpipe(
-				anyType(),
-				tdecls(tvarn("$v", anyType())),
-				tcoms(tcom(anyType(), tfield(anyType(), "BadField"))),
+				AnyType(),
+				tdecls(tvarn("$v", AnyType())),
+				tcoms(tcom(AnyType(), tfield(AnyType(), "BadField"))),
 			),
 			tactassign(
 				types.Typ[types.String],
@@ -1620,9 +1620,9 @@ var analyseTestCases = []analyseTestCase{
 				tcoms(tcom(types.Typ[types.String], tstr("hello"))),
 			),
 			tactassign(
-				anyType(),
-				tdecls(tvarn("$v", anyType())),
-				tcoms(tcom(anyType(), tfield(anyType(), "BadField"))),
+				AnyType(),
+				tdecls(tvarn("$v", AnyType())),
+				tcoms(tcom(AnyType(), tfield(AnyType(), "BadField"))),
 			),
 		)),
 		funcs:   funcs,
@@ -1644,9 +1644,9 @@ var analyseTestCases = []analyseTestCase{
 		)),
 		resTree: ttree("test", tlist(mockDotType,
 			ttmpl("child", tpipe(
-				anyType(),
+				AnyType(),
 				nil,
-				tcoms(tcom(anyType(), tfield(anyType(), "BadField"))),
+				tcoms(tcom(AnyType(), tfield(AnyType(), "BadField"))),
 			)),
 		)),
 		funcs:              funcs,
@@ -1677,7 +1677,7 @@ var analyseTestCases = []analyseTestCase{
 		funcs:              funcs,
 		dotType:            mockDotType,
 		pkg:                mockPkg,
-		templateInputTypes: map[string]types.Type{"child": anyType()},
+		templateInputTypes: map[string]types.Type{"child": AnyType()},
 		expectedErrors:     []TError{},
 	},
 }

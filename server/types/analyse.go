@@ -134,7 +134,7 @@ func NewTree(
 		typ:      dotType,
 	}
 	if dotType == nil {
-		rootVar.typ = anyType()
+		rootVar.typ = AnyType()
 		// empty interface if no dot type is provided
 	}
 	if parseTree.Root != nil {
@@ -180,7 +180,7 @@ func analyseList(listNode *parse.ListNode, parent Node, ctx *analysisCtx) *ListN
 
 	listTyp := ctx.dotType
 	if listTyp == nil {
-		listTyp = anyType()
+		listTyp = AnyType()
 	}
 	typeList := &ListNode{
 		NodeType: NodeList,
@@ -243,7 +243,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if IsEmptyInterface(argType) {
+			if IsEmptyInterface(argType) || IsEmptyInterface(expectedType) {
 				ctx.errorf(
 					t,
 					ErrorUnknownType,
@@ -251,7 +251,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 					n.Name,
 					expectedType.String(),
 				)
-			} else if !IsEmptyInterface(expectedType) && argType != nil && argType != expectedType &&
+			} else if argType != nil && argType != expectedType &&
 				!types.Identical(argType, expectedType) &&
 				!types.AssignableTo(argType, expectedType) &&
 				!types.ConvertibleTo(argType, expectedType) &&
@@ -271,12 +271,12 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	return t
 }
 
-// anyType returns the empty interface (Go's `any`), used as the fall-back type
+// AnyType returns the empty interface (Go's `any`), used as the fall-back type
 // whenever the analyzer cannot deduce a more specific type. Producing `any`
 // instead of `nil` keeps downstream consumers (hover, completions, validators)
 // from having to special-case missing type information; the analyzer emits an
 // ErrorUnknownType diagnostic where the loss of precision is user-relevant.
-func anyType() types.Type {
+func AnyType() types.Type {
 	return types.NewInterfaceType(nil, nil).Complete()
 }
 
@@ -317,7 +317,7 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	}
 	ctx.dotType = w.Pipe.typ
 	if ctx.dotType == nil {
-		ctx.dotType = anyType()
+		ctx.dotType = AnyType()
 	}
 	w.List = analyseList(n.List, w, ctx)
 	ctx.dotType = keepDot
@@ -417,26 +417,18 @@ func analyseRange(n *parse.RangeNode, parent Node, ctx *analysisCtx) Node {
 	k, v := getRangeableType(r.Pipe.typ, ctx)
 	if r.Pipe.typ == nil {
 		ctx.errorf(r.Pipe, ErrorTypeUnknownRangeType, "cannot range over untyped value")
-		ctx.dotType = anyType()
+		ctx.dotType = AnyType()
 	} else if v == nil {
 		ctx.errorf(r.Pipe, ErrorTypeInvalidRange, "cannot range over type %v", r.Pipe.typ)
-		ctx.dotType = anyType()
+		ctx.dotType = AnyType()
 	} else {
 		ctx.dotType = v
-		// override the range var if it was set. The scope entries appended
-		// by analysePipe are *copies* of these Decls, so update them too.
+		// override the range var if it was set
 		if len(r.Pipe.Decl) == 1 {
 			r.Pipe.Decl[0].typ = v
-			if n := len(ctx.vars); n >= 1 {
-				ctx.vars[n-1].typ = v
-			}
 		} else if len(r.Pipe.Decl) == 2 {
 			r.Pipe.Decl[0].typ = k
 			r.Pipe.Decl[1].typ = v
-			if n := len(ctx.vars); n >= 2 {
-				ctx.vars[n-2].typ = k
-				ctx.vars[n-1].typ = v
-			}
 		}
 	}
 	r.List = analyseList(n.List, r, ctx)
@@ -525,7 +517,7 @@ func analyseDot(n *parse.DotNode, parent Node, ctx *analysisCtx) Node {
 		typ:      ctx.dotType,
 	}
 	if d.typ == nil {
-		d.typ = anyType()
+		d.typ = AnyType()
 		ctx.errorf(
 			d,
 			ErrorUnknownType,
@@ -718,7 +710,7 @@ func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) N
 		Pos:      Pos(n.Position()),
 		Ident:    n.Ident,
 		parent:   parent,
-		typ:      anyType(),
+		typ:      AnyType(),
 	}
 
 	name := n.Ident
@@ -739,7 +731,7 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 		Pos:      Pos(n.Position()),
 		Ident:    n.Ident,
 		parent:   parent,
-		typ:      anyType(),
+		typ:      AnyType(),
 	}
 	// Look up base variable in context
 	var baseType types.Type
@@ -782,7 +774,7 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		Ident:    n.Ident,
 		parent:   parent,
 		dotType:  ctx.dotType,
-		typ:      anyType(),
+		typ:      AnyType(),
 	}
 
 	if len(n.Ident) == 0 {
@@ -847,7 +839,7 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 	}
 	typePipe.typ = getNodeType(typePipe.Cmds[len(typePipe.Cmds)-1])
 	if typePipe.typ == nil {
-		typePipe.typ = anyType()
+		typePipe.typ = AnyType()
 	}
 
 	// Convert declarations
@@ -869,28 +861,14 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 					)
 				}
 			}
-			// Append a *copy* so later reassignments mutate the scope entry,
-			// not the original declaration AST node.
-			ctx.vars = append(ctx.vars, &VariableNode{
-				NodeType: NodeVariable,
-				Ident:    typePipe.Decl[0].Ident,
-				typ:      typePipe.Decl[0].typ,
-			})
+			ctx.vars = append(ctx.vars, typePipe.Decl[0])
 		}
 
 		if len(typePipe.Decl) == 2 {
 			typePipe.Decl[1].typ = typePipe.typ
+			ctx.vars = append(ctx.vars, typePipe.Decl[0])
 			typePipe.Decl[0].typ = types.Typ[types.Int] // unsigned int for index
-			ctx.vars = append(ctx.vars, &VariableNode{
-				NodeType: NodeVariable,
-				Ident:    typePipe.Decl[0].Ident,
-				typ:      typePipe.Decl[0].typ,
-			})
-			ctx.vars = append(ctx.vars, &VariableNode{
-				NodeType: NodeVariable,
-				Ident:    typePipe.Decl[1].Ident,
-				typ:      typePipe.Decl[1].typ,
-			})
+			ctx.vars = append(ctx.vars, typePipe.Decl[1])
 
 			if typePipe.Decl[0].Ident[0] == typePipe.Decl[1].Ident[0] {
 				ctx.errorf(
@@ -919,9 +897,6 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 						)
 					}
 					ctx.vars[i].typ = typePipe.typ
-					// Reflect the new type on the reassignment's own LHS so
-					// hover on it shows the post-assignment type.
-					typePipe.Decl[0].typ = typePipe.typ
 					return typePipe
 				}
 			}
@@ -960,7 +935,7 @@ func analyseCommand(
 		Pos:      Pos(cmdNode.Position()),
 		Args:     make([]Node, len(cmdNode.Args)),
 		parent:   parent,
-		typ:      anyType(),
+		typ:      AnyType(),
 	}
 
 	for i, arg := range cmdNode.Args {
