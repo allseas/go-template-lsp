@@ -6,10 +6,6 @@ import (
 	parse "text-template-parser"
 )
 
-// anyType is the empty interface type (i.e. `any` / `interface{}`), reused
-// across test cases as the expected type for unresolved nodes.
-var anyType = types.NewInterfaceType(nil, nil).Complete()
-
 type analyseNodePanicTestCase struct {
 	name      string
 	node      parse.Node
@@ -25,13 +21,14 @@ var analyseNodePanicTestCases = []analyseNodePanicTestCase{
 }
 
 type analyseTestCase struct {
-	name           string
-	parseTree      parse.Tree
-	funcs          map[string]*types.Func
-	dotType        *types.Named
-	pkg            *types.Package
-	resTree        Tree
-	expectedErrors []TError
+	name               string
+	parseTree          parse.Tree
+	funcs              map[string]*types.Func
+	dotType            *types.Named
+	pkg                *types.Package
+	templateInputTypes map[string]types.Type
+	resTree            Tree
+	expectedErrors     []TError
 }
 
 func signature(paramTypes []types.Type, resultTypes []types.Type) *types.Signature {
@@ -126,6 +123,17 @@ var mockSeqDotType = func() *types.Named {
 	}
 	structType := types.NewStruct(fields, nil)
 	typeName := types.NewTypeName(0, mockPkg, "MockSeqDot", nil)
+	return types.NewNamed(typeName, structType, nil)
+}()
+
+// mockPtrDotType is a dot type whose `Ptr` field is *MockDot, used to test
+// `with` over a pointer-to-struct.
+var mockPtrDotType = func() *types.Named {
+	fields := []*types.Var{
+		types.NewVar(0, mockPkg, "Ptr", types.NewPointer(mockDotType)),
+	}
+	structType := types.NewStruct(fields, nil)
+	typeName := types.NewTypeName(0, mockPkg, "MockPtrDot", nil)
 	return types.NewNamed(typeName, structType, nil)
 }()
 
@@ -231,6 +239,32 @@ func pipe(decls []*parse.VariableNode, coms []*parse.CommandNode) *parse.PipeNod
 		Line:     1,
 		Decl:     decls,
 		Cmds:     coms,
+	}
+}
+
+// pipeAssign builds a parse PipeNode with IsAssign=true ($v = expr style).
+func pipeAssign(decls []*parse.VariableNode, coms []*parse.CommandNode) *parse.PipeNode {
+	p := pipe(decls, coms)
+	p.IsAssign = true
+	return p
+}
+
+// actassign builds an ActionNode whose Pipe is a reassignment ($v = expr).
+func actassign(decls []*parse.VariableNode, coms []*parse.CommandNode) *parse.ActionNode {
+	return &parse.ActionNode{
+		NodeType: parse.NodeAction,
+		Pipe:     pipeAssign(decls, coms),
+		Line:     1,
+	}
+}
+
+// tmpl builds a {{template "name" pipe}} parse node.
+func tmpl(name string, p *parse.PipeNode) *parse.TemplateNode {
+	return &parse.TemplateNode{
+		NodeType: parse.NodeTemplate,
+		Line:     1,
+		Name:     name,
+		Pipe:     p,
 	}
 }
 
@@ -387,6 +421,23 @@ func tactpipe(typ types.Type, decls []*VariableNode, coms []*CommandNode) *Actio
 	}
 }
 
+// tactassign mirrors actassign for the expected typed tree.
+func tactassign(typ types.Type, decls []*VariableNode, coms []*CommandNode) *ActionNode {
+	a := tactpipe(typ, decls, coms)
+	a.Pipe.IsAssign = true
+	return a
+}
+
+// ttmpl mirrors tmpl for the expected typed tree.
+func ttmpl(name string, p *PipeNode) *TemplateNode {
+	return &TemplateNode{
+		NodeType: NodeTemplate,
+		Line:     1,
+		Name:     name,
+		Pipe:     p,
+	}
+}
+
 func tpipe(typ types.Type, decls []*VariableNode, coms []*CommandNode) *PipeNode {
 	return &PipeNode{
 		NodeType: NodePipe,
@@ -537,7 +588,7 @@ var analyseTestCases = []analyseTestCase{
 		resTree: ttree(
 			"test",
 			tlist(
-				nil,
+				AnyType(),
 				tactpipe(
 					types.Typ[types.String],
 					nil,
@@ -590,7 +641,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncD")),
 			com(ident("FuncA")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(42)),
 			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
 			tcom(types.Typ[types.Int], tident("FuncA", funcs["FuncA"].Type())),
@@ -797,7 +848,7 @@ var analyseTestCases = []analyseTestCase{
 			com(num(2)),
 			com(ident("FuncB"), num(1)),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(2)),
 			tcom(types.Typ[types.String], tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
 		)))),
@@ -814,7 +865,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncB"), num(1)),
 			com(ident("FuncA")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(5)),
 			tcom(types.Typ[types.String], tident("FuncB", funcs["FuncB"].Type()), tnum(1)),
 			tcom(types.Typ[types.Int], tident("FuncA", funcs["FuncA"].Type())),
@@ -945,7 +996,7 @@ var analyseTestCases = []analyseTestCase{
 		// "hello"  -- a bare text node in the root list.
 		name:      "text node",
 		parseTree: tree("test", list(text("hello"))),
-		resTree:   ttree("test", tlist(nil, ttext("hello"))),
+		resTree:   ttree("test", tlist(AnyType(), ttext("hello"))),
 		funcs:     funcs,
 		// TextNode itself has no type; ListNode dot type stays nil with no dotType.
 		expectedErrors: []TError{},
@@ -954,7 +1005,7 @@ var analyseTestCases = []analyseTestCase{
 		// {{ true }}  -- boolean literal as an action.
 		name:      "bool node literal",
 		parseTree: tree("test", list(actpipe(nil, coms(com(boolN(true)))))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Bool], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Bool], nil, tcoms(
 			tcom(types.Typ[types.Bool], tboolN(true)),
 		)))),
 		funcs:          funcs,
@@ -964,7 +1015,7 @@ var analyseTestCases = []analyseTestCase{
 		// {{ nil }}  -- nil literal as an action; typed as untyped nil.
 		name:      "nil node literal",
 		parseTree: tree("test", list(actpipe(nil, coms(com(nilN()))))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.UntypedNil], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.UntypedNil], nil, tcoms(
 			tcom(types.Typ[types.UntypedNil], tnilN()),
 		)))),
 		funcs:          funcs,
@@ -984,7 +1035,7 @@ var analyseTestCases = []analyseTestCase{
 				nil,
 				tcoms(tcom(types.Typ[types.String], tfield(types.Typ[types.String], "X"))),
 			),
-			tlist(nil),
+			tlist(AnyType()),
 		))),
 		funcs:   funcs,
 		dotType: mockDotType,
@@ -1000,7 +1051,7 @@ var analyseTestCases = []analyseTestCase{
 			pipe(nil, coms(com(num(5)))),
 			list(actpipe(nil, coms(com(&parse.DotNode{})))),
 		))),
-		resTree: ttree("test", tlist(nil, trangeN(
+		resTree: ttree("test", tlist(AnyType(), trangeN(
 			tpipe(
 				types.Typ[types.Int],
 				nil,
@@ -1022,7 +1073,7 @@ var analyseTestCases = []analyseTestCase{
 		// {{ "hi" }}  -- string literal as an action.
 		name:      "string node literal",
 		parseTree: tree("test", list(actpipe(nil, coms(com(str("hi")))))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.String], tstr("hi")),
 		)))),
 		funcs:          funcs,
@@ -1032,7 +1083,7 @@ var analyseTestCases = []analyseTestCase{
 		// {{/* a comment */}}  -- comment node in the root list; carries no type.
 		name:           "comment node",
 		parseTree:      tree("test", list(comment("/* a comment */"))),
-		resTree:        ttree("test", tlist(nil, tcomment("/* a comment */"))),
+		resTree:        ttree("test", tlist(AnyType(), tcomment("/* a comment */"))),
 		funcs:          funcs,
 		expectedErrors: []TError{},
 	},
@@ -1044,7 +1095,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncA"), num(42)),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(
 				types.Typ[types.Int],
 				tident("FuncA", funcs["FuncA"].Type()),
@@ -1065,7 +1116,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncB"), num(1), str("hi")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(
 				types.Typ[types.String],
 				tident("FuncB", funcs["FuncB"].Type()),
@@ -1087,7 +1138,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncB"), str("hi"), num(2)),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(
 				types.Typ[types.String],
 				tident("FuncB", funcs["FuncB"].Type()),
@@ -1109,7 +1160,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncB"), str("x"), str("y")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(
 				types.Typ[types.String],
 				tident("FuncB", funcs["FuncB"].Type()),
@@ -1133,7 +1184,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncA"), str("x"), str("y")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.Int], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.Int], nil, tcoms(
 			tcom(
 				types.Typ[types.Int],
 				tident("FuncA", funcs["FuncA"].Type()),
@@ -1155,7 +1206,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncB"), num(1), num(2), num(3)),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(
 				types.Typ[types.String],
 				tident("FuncB", funcs["FuncB"].Type()),
@@ -1179,7 +1230,7 @@ var analyseTestCases = []analyseTestCase{
 			com(str("hello")),
 			com(ident("FuncD")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.String], tstr("hello")),
 			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
 		)))),
@@ -1200,7 +1251,7 @@ var analyseTestCases = []analyseTestCase{
 			com(str("x")),
 			com(ident("FuncB"), num(1)),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.String], tstr("x")),
 			tcom(
 				types.Typ[types.String],
@@ -1224,7 +1275,7 @@ var analyseTestCases = []analyseTestCase{
 			com(num(1)),
 			com(ident("FuncB"), num(1), num(2)),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.Int], tnum(1)),
 			tcom(
 				types.Typ[types.String],
@@ -1335,8 +1386,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("VoidFn"), str("x")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
-			tcom(nil, tident("VoidFn", funcs["VoidFn"].Type()), tstr("x")),
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tident("VoidFn", funcs["VoidFn"].Type()), tstr("x")),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -1350,8 +1401,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(field("Columns")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(anyType, nil, tcoms(
-			tcom(anyType, tfield(anyType, "Columns")),
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tfield(AnyType(), "Columns")),
 		)))),
 		funcs:          funcs,
 		dotType:        nil,
@@ -1365,8 +1416,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(field("BadField")),
 		)))),
-		resTree: ttree("test", tlist(mockDotType, tactpipe(anyType, nil, tcoms(
-			tcom(anyType, tfield(anyType, "BadField")),
+		resTree: ttree("test", tlist(mockDotType, tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tfield(AnyType(), "BadField")),
 		)))),
 		funcs:   funcs,
 		dotType: mockDotType,
@@ -1383,7 +1434,7 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("FuncPrintf")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(types.Typ[types.String], nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(types.Typ[types.String], nil, tcoms(
 			tcom(types.Typ[types.String], tident("FuncPrintf", funcs["FuncPrintf"].Type())),
 		)))),
 		funcs:   funcs,
@@ -1423,7 +1474,7 @@ var analyseTestCases = []analyseTestCase{
 			com(ident("FuncD")),
 		)))),
 		resTree: ttree("test", tlist(mockDotType, tactpipe(types.Typ[types.String], nil, tcoms(
-			tcom(anyType, tfield(anyType, "BadField")),
+			tcom(AnyType(), tfield(AnyType(), "BadField")),
 			tcom(types.Typ[types.String], tident("FuncD", funcs["FuncD"].Type())),
 		)))),
 		funcs:   funcs,
@@ -1439,8 +1490,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("inlineFn")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
-			tcom(nil, tident("inlineFn", nil)),
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tident("inlineFn", AnyType())),
 		)))),
 		funcs:          map[string]*types.Func{"inlineFn": nil},
 		dotType:        nil,
@@ -1452,8 +1503,8 @@ var analyseTestCases = []analyseTestCase{
 		parseTree: tree("test", list(actpipe(nil, coms(
 			com(ident("noSuchFunc")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
-			tcom(nil, tident("noSuchFunc", nil)),
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
+			tcom(AnyType(), tident("noSuchFunc", AnyType())),
 		)))),
 		funcs:   map[string]*types.Func{},
 		dotType: nil,
@@ -1468,13 +1519,167 @@ var analyseTestCases = []analyseTestCase{
 			com(str("hello")),
 			com(ident("inlineFn")),
 		)))),
-		resTree: ttree("test", tlist(nil, tactpipe(nil, nil, tcoms(
+		resTree: ttree("test", tlist(AnyType(), tactpipe(AnyType(), nil, tcoms(
 			tcom(types.Typ[types.String], tstr("hello")),
-			tcom(nil, tident("inlineFn", nil)),
+			tcom(AnyType(), tident("inlineFn", AnyType())),
 		)))),
 		funcs:          map[string]*types.Func{"inlineFn": nil},
 		dotType:        nil,
 		pkg:            nil,
 		expectedErrors: []TError{},
+	},
+	// ----- regression: with over pointer-to-struct (unalias) -----
+	{
+		// {{ with .Ptr }}{{ end }}  -- .Ptr is *MockDot; should not emit
+		// ErrorTypeInvalidWith. Body dot becomes *MockDot.
+		name: "with over pointer-to-struct emits no diagnostic",
+		parseTree: tree("test", list(withN(
+			pipe(nil, coms(com(field("Ptr")))),
+			list(),
+		))),
+		resTree: ttree("test", tlist(mockPtrDotType, twithN(
+			tpipe(
+				types.NewPointer(mockDotType),
+				nil,
+				tcoms(tcom(
+					types.NewPointer(mockDotType),
+					tfield(types.NewPointer(mockDotType), "Ptr"),
+				)),
+			),
+			tlist(types.NewPointer(mockDotType)),
+		))),
+		funcs:          funcs,
+		dotType:        mockPtrDotType,
+		pkg:            mockPkg,
+		expectedErrors: []TError{},
+	},
+	// ----- regression: with over `any` does not emit InvalidWith -----
+	{
+		// {{ with .BadField }}{{ end }}  -- .BadField is unknown (any).
+		// Should emit only ErrorTypeInvalidField, NOT ErrorTypeInvalidWith.
+		// Body dot becomes anyType.
+		name: "with over any does not emit InvalidWith",
+		parseTree: tree("test", list(withN(
+			pipe(nil, coms(com(field("BadField")))),
+			list(),
+		))),
+		resTree: ttree("test", tlist(mockDotType, twithN(
+			tpipe(AnyType(), nil, tcoms(tcom(AnyType(), tfield(AnyType(), "BadField")))),
+			tlist(AnyType()),
+		))),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+		},
+	},
+	// ----- regression: variable reassignment any/concrete does not error -----
+	{
+		// {{ $v := .BadField }}{{ $v = "hello" }}
+		// $v is bound to any (BadField is unknown), then reassigned to a
+		// concrete string. Reassignment must not emit a type-mismatch.
+		// Only the InvalidField from BadField is expected.
+		name: "reassign concrete to any-bound variable emits no mismatch",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$v")), coms(com(field("BadField")))),
+			actassign(decls(varn("$v")), coms(com(str("hello")))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			tactpipe(
+				AnyType(),
+				tdecls(tvarn("$v", AnyType())),
+				tcoms(tcom(AnyType(), tfield(AnyType(), "BadField"))),
+			),
+			tactassign(
+				types.Typ[types.String],
+				tdecls(tvarn("$v", types.Typ[types.String])),
+				tcoms(tcom(types.Typ[types.String], tstr("hello"))),
+			),
+		)),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+		},
+	},
+	{
+		// {{ $v := "hello" }}{{ $v = .BadField }}
+		// Reverse direction: concrete-bound var reassigned to any. Must
+		// not emit a type mismatch (warning), but should emit an info
+		// (ErrorUnknownType) because the variable loses type precision.
+		name: "reassign any to concrete-bound variable emits info, not mismatch",
+		parseTree: tree("test", list(
+			actpipe(decls(varn("$v")), coms(com(str("hello")))),
+			actassign(decls(varn("$v")), coms(com(field("BadField")))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			tactpipe(
+				types.Typ[types.String],
+				tdecls(tvarn("$v", types.Typ[types.String])),
+				tcoms(tcom(types.Typ[types.String], tstr("hello"))),
+			),
+			tactassign(
+				AnyType(),
+				tdecls(tvarn("$v", AnyType())),
+				tcoms(tcom(AnyType(), tfield(AnyType(), "BadField"))),
+			),
+		)),
+		funcs:   funcs,
+		dotType: mockDotType,
+		pkg:     mockPkg,
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+			{typ: ErrorUnknownType},
+		},
+	},
+	// ----- regression: template invocation with any does not error -----
+	{
+		// {{ template "child" .BadField }}
+		// "child" expects MockDot, .BadField is any. Should emit
+		// ErrorUnknownType (warning) and ErrorTypeInvalidField, NOT
+		// ErrorTypeInvalidTemplateArg.
+		name: "template invocation: any arg to concrete-param template is a warning",
+		parseTree: tree("test", list(
+			tmpl("child", pipe(nil, coms(com(field("BadField"))))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			ttmpl("child", tpipe(
+				AnyType(),
+				nil,
+				tcoms(tcom(AnyType(), tfield(AnyType(), "BadField"))),
+			)),
+		)),
+		funcs:              funcs,
+		dotType:            mockDotType,
+		pkg:                mockPkg,
+		templateInputTypes: map[string]types.Type{"child": mockDotType},
+		expectedErrors: []TError{
+			{typ: ErrorTypeInvalidField},
+			{typ: ErrorUnknownType},
+		},
+	},
+	{
+		// {{ template "child" . }}
+		// "child" expects any, dot is MockDot. Concrete-to-any must not
+		// emit InvalidTemplateArg (and should also not emit a warning
+		// because losing precision toward `any` is not the user's problem).
+		name: "template invocation: concrete arg to any-param template is silent",
+		parseTree: tree("test", list(
+			tmpl("child", pipe(nil, coms(com(&parse.DotNode{})))),
+		)),
+		resTree: ttree("test", tlist(mockDotType,
+			ttmpl("child", tpipe(
+				mockDotType,
+				nil,
+				tcoms(tcom(mockDotType, &DotNode{typ: mockDotType})),
+			)),
+		)),
+		funcs:              funcs,
+		dotType:            mockDotType,
+		pkg:                mockPkg,
+		templateInputTypes: map[string]types.Type{"child": AnyType()},
+		expectedErrors:     []TError{},
 	},
 }

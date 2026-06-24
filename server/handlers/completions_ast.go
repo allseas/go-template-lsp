@@ -514,7 +514,8 @@ func dotItemsT(
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	items := []protocol.CompletionItem{}
-	if inputType != nil || (pipeKind != outputAny && pipeKind != outputUntyped) {
+	if (inputType != nil && !serverTypes.IsEmptyInterface(inputType)) ||
+		(pipeKind != outputAny && pipeKind != outputUntyped) {
 		return items
 	}
 	prefix := ""
@@ -712,15 +713,19 @@ func fieldCompletionItems(
 
 // methodAcceptsInput checks whether the function can accept the input
 func methodAcceptsInput(m serverTypes.MethodType, inputType types.Type, pipeKind outputKind) bool {
-	if inputType != nil {
+	if inputType != nil && !serverTypes.IsEmptyInterface(inputType) {
 		for _, p := range m.Params {
-			if types.Identical(p.Type, inputType) {
+			if types.Identical(p.Type, inputType) || serverTypes.IsEmptyInterface(p.Type) ||
+				serverTypes.IsEmptyInterface(inputType) {
 				return true
 			}
 		}
 		return false
 	}
 	if pipeKind != outputAny && pipeKind != outputUntyped {
+		if len(m.Params) == 0 {
+			return false
+		}
 		lastParam := m.Params[len(m.Params)-1]
 		return basicTypeMatchesKind(lastParam.Type, pipeKind)
 	}
