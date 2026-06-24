@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"text-template-server/types"
 
 	parse "text-template-parser"
 
@@ -137,6 +138,72 @@ func TestDocumentStore(t *testing.T) {
 	})
 }
 
+// ai
+func TestDocumentHintFoundBeyondFirstLine(t *testing.T) {
+	t.Run("root hint several lines into the document", func(t *testing.T) {
+		src := "Some preamble text\n" +
+			"more preamble\n" +
+			"{{- /*gotype: cg/model.Root*/ -}}\n" +
+			"hello {{ . }}\n"
+
+		tree, treeSet, err := tryParse(src)
+		assert.NoError(t, err)
+		assert.NotNil(t, tree)
+
+		hints := types.FindTreeHints(src, treeSet)
+		hint, ok := hints[tree.Name]
+		assert.True(t, ok, "expected a hint to be found for the root tree")
+		assert.Equal(t, "cg/model.Root", hint.Type)
+
+		wantLine := strings.Count(src[:strings.Index(src, "gotype:")], "\n") + 1
+		assert.Equal(
+			t,
+			wantLine,
+			hint.Line,
+			"hint line should reflect its actual line in the document, not just line 1",
+		)
+	})
+
+	t.Run("define-block hint several lines into the define body", func(t *testing.T) {
+		src := "{{- define \"A\" -}}\n" +
+			"line one of A\n" +
+			"line two of A\n" +
+			"{{- /*gotype: cg/model.A*/ -}}\n" +
+			"line four of A\n" +
+			"{{- /*gotype: cg/model.B*/ -}}\n" +
+			"{{- end -}}\n"
+
+		tree, treeSet, err := tryParse(src)
+		assert.NoError(t, err)
+		assert.NotNil(t, tree)
+		assert.Contains(t, treeSet, "A")
+		assert.NotContains(t, treeSet, "B")
+
+		hints := types.FindTreeHints(src, treeSet)
+		hintA, ok := hints["A"]
+		assert.True(t, ok, "expected a hint to be found for define A")
+		assert.Equal(t, "cg/model.A", hintA.Type)
+
+		wantLine := strings.Count(src[:strings.Index(src, "gotype:")], "\n") + 1
+		assert.Equal(
+			t,
+			wantLine,
+			hintA.Line,
+			"hint line should reflect its actual line within the document",
+		)
+
+		// The hint sits inside define A's span, so the root tree must not
+		// also pick it up.
+		rootHint, hasRoot := hints[tree.Name]
+		assert.False(
+			t,
+			hasRoot && rootHint.Type != "",
+			"root should not pick up define A's hint, got: %+v",
+			rootHint,
+		)
+	})
+}
+
 func TestDocumentMultipleDefines(t *testing.T) {
 	// ai
 	src := "{{- define \"A\"}}\n" +
@@ -157,12 +224,10 @@ func TestDocumentMultipleDefines(t *testing.T) {
 	assert.Contains(t, treeSet, tree.Name)
 
 	// per-tree type hint lookup
-	rootHint := hintTypeForTree(src, tree, true)
-	hintA := hintTypeForTree(src, treeSet["A"], false)
-	hintB := hintTypeForTree(src, treeSet["B"], false)
-	assert.Equal(t, "", rootHint, "no hint expected on first line of file")
-	assert.Equal(t, "cg/model.A", hintA)
-	assert.Equal(t, "cg/model.B", hintB)
+	hints := types.FindTreeHints(src, treeSet)
+	assert.Equal(t, "", hints[tree.Name].Type, "no hint expected on first line of file")
+	assert.Equal(t, "cg/model.A", hints["A"].Type)
+	assert.Equal(t, "cg/model.B", hints["B"].Type)
 
 	doc := &document{text: src, tree: tree, trees: treeSet}
 
@@ -207,9 +272,9 @@ func TestDocumentRootHintOnFirstLine(t *testing.T) {
 	tree, treeSet, err := tryParse(src)
 	assert.NoError(t, err)
 	assert.NotNil(t, tree)
-	hint := hintTypeForTree(src, tree, true)
-	assert.Equal(t, "cg/model.Root", hint)
-	_ = treeSet
+
+	hints := types.FindTreeHints(src, treeSet)
+	assert.Equal(t, "cg/model.Root", hints[tree.Name].Type)
 }
 
 // TestTreeAtMultiDefinesWithRoot verifies the treeAt logic for the canonical
