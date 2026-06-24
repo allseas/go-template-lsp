@@ -96,6 +96,12 @@ func (s *documentStore) Set(uri, text string) {
 
 			if loaded, err := types.LoadTypeFromHint(hint.Type, WorkspaceRoot); err == nil {
 				newTemplateTypes[name] = loaded.DotType
+			} else {
+				log.Warn().
+					Str("template", name).
+					Str("hint", hint.Type).
+					Err(err).
+					Msg("type hint load failed")
 			}
 		}
 	}
