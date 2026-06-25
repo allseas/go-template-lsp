@@ -1,0 +1,93 @@
+{{- /*gotype: text-template-server/src/model.Order*/ -}}
+{{/* ============================================================
+     HOVER FUNCTIONS PLAYGROUND
+     Open test/resources/typehints-tests/ as the LSP workspace root,
+     then hover every symbol below. The file is organised by the
+     kind of "function" being hovered. Thank you ai for providing this
+     test.
+     ============================================================ */}}
+
+{{/* -------- 1. Built-in actions / keywords -------- */}}
+{{ if .Paid }}paid{{ else if .IsLargeOrder }}big{{ else }}unpaid{{ end }}
+{{ range .Items }}{{ .Name }}{{ end }}
+{{ with .Address }}{{ .City }}{{ end }}
+{{ define "greeting" }}hi {{ . }}{{ end }}
+{{ template "greeting" .CustomerName }}
+{{ block "footer" . }}-- end --{{ end }}
+
+{{/* -------- 2. Built-in functions -------- */}}
+{{ and .Paid .IsLargeOrder }}            {{/* hover `and`  */}}
+{{ or  .Paid .IsLargeOrder }}            {{/* hover `or`   */}}
+{{ not .Paid }}                          {{/* hover `not`  */}}
+{{ len .Items }}                         {{/* hover `len`  */}}
+{{ len .CustomerName }}                  {{/* hover `len` on string */}}
+{{ index .Items 0 }}                     {{/* hover `index` */}}
+{{ slice .Items 0 2 }}                   {{/* hover `slice` */}}
+{{ slice .CustomerName 0 3 }}            {{/* hover `slice` on string */}}
+
+{{/* -------- 3. Built-in formatting funcs -------- */}}
+{{ print   "a" "b" "c" }}                {{/* hover `print`   */}}
+{{ printf  "%s = %d" .ID .ItemCount }}   {{/* hover `printf`  */}}
+{{ println "line" }}                     {{/* hover `println` */}}
+
+{{/* -------- 4. Built-in escapers -------- */}}
+{{ html      .CustomerName }}            {{/* hover `html`     */}}
+{{ js        .CustomerName }}            {{/* hover `js`       */}}
+{{ urlquery  .CustomerName }}            {{/* hover `urlquery` */}}
+
+{{/* -------- 5. Built-in comparison funcs -------- */}}
+{{ eq .Paid true }}                      {{/* hover `eq` */}}
+{{ ne .ID  "" }}                         {{/* hover `ne` */}}
+{{ lt .TotalAmount 100.0 }}              {{/* hover `lt` */}}
+{{ le .TotalAmount 100.0 }}              {{/* hover `le` */}}
+{{ gt .TotalAmount 100.0 }}              {{/* hover `gt` */}}
+{{ ge .TotalAmount 100.0 }}              {{/* hover `ge` */}}
+
+{{/* -------- 6. `call` built-in (invoke a function value) -------- */}}
+{{ $fn := .DisplayName }}                {{/* method value */}}
+{{ call .DisplayName }}                  {{/* hover `call` */}}
+
+{{/* -------- 7. User-defined funcs (see funcs.go, //tmpl:func "global") -------- */}}
+{{ upper     .CustomerName }}            {{/* hover `upper`     */}}
+{{ lower     .CustomerName }}            {{/* hover `lower`     */}}
+{{ repeat    "ab" 3 }}                   {{/* hover `repeat`    */}}
+{{ kebabCase "Hello World" }}            {{/* hover `kebabCase` */}}
+{{ sprintf   "id=%s" .ID }}              {{/* hover `sprintf`   */}}
+{{ shout     "wow" }}                    {{/* hover `shout`     */}}
+
+{{/* -------- 8. Method calls on the dot context -------- */}}
+{{ .DisplayName }}                       {{/* Order.DisplayName  -> string  */}}
+{{ .ItemCount }}                         {{/* Order.ItemCount    -> int     */}}
+{{ .IsLargeOrder }}                      {{/* Order.IsLargeOrder -> bool    */}}
+{{ .Summary }}                           {{/* Order.Summary      -> (string, error) */}}
+{{ .Format "$" }}                        {{/* Order.Format(string) string  */}}
+{{ .Oper 42 }}                           {{/* Order.Oper(int) int          */}}
+{{ .Address.Line }}                      {{/* Address.Line       -> string  */}}
+{{ .Address.IsLocal }}                   {{/* Address.IsLocal    -> bool    */}}
+{{ .Address.ZipCode }}                   {{/* Address.ZipCode    -> string  */}}
+{{ .Address.Copy }}                      {{/* Address.Copy       -> Address */}}
+
+{{/* -------- 9. Field accesses -------- */}}
+{{ .ID }}                                {{/* string  */}}
+{{ .CustomerName }}                      {{/* string  */}}
+{{ .Email }}                             {{/* string  */}}
+{{ .Items }}                             {{/* []Item  */}}
+{{ .Address }}                           {{/* Address */}}
+{{ .Address.Street }}                    {{/* string  */}}
+{{ .Address.City }}                      {{/* string  */}}
+{{ .TotalAmount }}                       {{/* float64 */}}
+{{ .Paid }}                              {{/* bool    */}}
+{{ .Tree.Left.Right.Trr }}               {{/* nested pointer chain */}}
+
+{{/* -------- 10. Variables and reassignment -------- */}}
+{{ $i      := 0 }}                       {{/* var $i int        */}}
+{{ $name   := .CustomerName }}           {{/* var $name string  */}}
+{{ $items  := .Items }}                  {{/* var $items []Item */}}
+{{ $addr   := .Address }}                {{/* var $addr Address */}}
+{{ $i = add $i 1 }}                      {{/* hover $i stays int */}}
+{{ range $idx, $it := $items }}
+  {{ $sku  := $it.SKU }}
+  {{ $tot  := $it.Total }}
+  {{ printf "%d: %s = %.2f" $idx $sku $tot }}
+{{ end }}
+

@@ -174,7 +174,11 @@ func TestExtAnalyseNode_DispatchesTable(t *testing.T) {
 	pt := parseAllseasTemplate(t, `{{block "fmt" .}}body{{end}}`)
 	tableParse := pt.Root.Nodes[0].(*parse.TableNode)
 
-	ctx := &analysisCtx{funcs: map[string]*types.Func{}, vars: []*VariableNode{}, dotType: types.Typ[types.String]}
+	ctx := &analysisCtx{
+		funcs:   map[string]*types.Func{},
+		vars:    []*VariableNode{},
+		dotType: types.Typ[types.String],
+	}
 	got, ok := extAnalyseNode(tableParse, nil, ctx).(*TableNode)
 	if !ok {
 		t.Fatalf("extAnalyseNode: wrong return type")
@@ -199,7 +203,11 @@ func TestExtAnalyseNode_PanicsOnUnknown(t *testing.T) {
 			t.Fatalf("panic: got %v, want %q", r, want)
 		}
 	}()
-	ctx := &analysisCtx{funcs: map[string]*types.Func{}, vars: []*VariableNode{}, dotType: types.Typ[types.String]}
+	ctx := &analysisCtx{
+		funcs:   map[string]*types.Func{},
+		vars:    []*VariableNode{},
+		dotType: types.Typ[types.String],
+	}
 	extAnalyseNode(node, nil, ctx)
 }
 
