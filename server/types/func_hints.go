@@ -306,18 +306,52 @@ func resolveFuncObj(name string, expr ast.Expr, info *types.Info) *types.Func {
 		return nil
 	}
 	switch v := expr.(type) {
-	case *ast.Ident:
-		fn, _ := info.ObjectOf(v).(*types.Func)
-		return fn
-	case *ast.SelectorExpr:
-		fn, _ := info.ObjectOf(v.Sel).(*types.Func)
-		return fn
+	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr:
+		return resolveCalleeFunc(expr, info)
 	case *ast.FuncLit:
 		sig, _ := info.TypeOf(v).(*types.Signature)
 		if sig == nil {
 			return nil
 		}
 		return types.NewFunc(token.NoPos, nil, name, sig)
+	case *ast.CallExpr:
+		// e.g. `"bigBox": buildBigBox(lineWidth)` — the FuncMap value is the
+		// result of calling a factory. Use the factory's position for
+		// go-to-definition and the call expression's result type as the
+		// effective template-function signature.
+		callee := resolveCalleeFunc(v.Fun, info)
+		sig, _ := info.TypeOf(v).(*types.Signature)
+		if sig == nil {
+			return callee
+		}
+		var (
+			pos token.Pos
+			pkg *types.Package
+		)
+		if callee != nil {
+			pos = callee.Pos()
+			pkg = callee.Pkg()
+		}
+		return types.NewFunc(pos, pkg, name, sig)
+	}
+	return nil
+}
+
+// resolveCalleeFunc resolves an expression that names a function to its
+// *types.Func. Handles plain identifiers, selectors, and generic
+// instantiations (e.g. `sequence[int]`).
+func resolveCalleeFunc(expr ast.Expr, info *types.Info) *types.Func {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		fn, _ := info.ObjectOf(e).(*types.Func)
+		return fn
+	case *ast.SelectorExpr:
+		fn, _ := info.ObjectOf(e.Sel).(*types.Func)
+		return fn
+	case *ast.IndexExpr:
+		return resolveCalleeFunc(e.X, info)
+	case *ast.IndexListExpr:
+		return resolveCalleeFunc(e.X, info)
 	}
 	return nil
 }
