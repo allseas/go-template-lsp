@@ -244,7 +244,7 @@ func getFieldIdentIdx(target *types.FieldNode, offset int) int {
 		if i > 0 {
 			fieldOffset++ // skip the separator '.'
 		}
-		if offset >= fieldOffset && offset < fieldOffset+len(ident) {
+		if offset >= fieldOffset && offset <= fieldOffset+len(ident) {
 			targetIdx = i
 			break
 		}
@@ -260,7 +260,7 @@ func getVariableIdentIdx(target *types.VariableNode, offset int) int {
 	pos := int(target.Pos)
 	for i, ident := range target.Ident {
 		end := pos + len(ident)
-		if offset >= pos && offset < end {
+		if offset >= pos && offset <= end {
 			return i
 		}
 		pos = end + 1 // +1 for the '.' separator

@@ -117,3 +117,25 @@ func (o Order) badReturn() (string, int, error) {
 func (o Order) wrongSecond() (string, int) {
 	return "", 0
 }
+
+// ChainRoot and the types below form a deep nested chain used to exercise
+// renaming a middle segment of an expression like .Address.Info.Desc.Info1.
+type ChainRoot struct {
+	Address ChainAddress
+}
+
+// ChainAddress is the second link in the ChainRoot chain.
+type ChainAddress struct {
+	Info ChainInfo
+}
+
+// ChainInfo is the third link; its field name "Info" is the rename target.
+type ChainInfo struct {
+	Desc ChainDesc
+}
+
+// ChainDesc is the leaf struct. Info1 is intentionally similar to "Info" to
+// guard against accidental substring/name-based matching during rename.
+type ChainDesc struct {
+	Info1 string
+}
