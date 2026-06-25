@@ -38,6 +38,7 @@ func setupHandlers() {
 		WorkspaceDidChangeConfiguration: handlers.ConfigChanged,
 		WorkspaceDidChangeWatchedFiles:  handlers.DidChangeWatchedFiles,
 		TextDocumentReferences:          handlers.References,
+		TextDocumentRename:              handlers.Rename,
 		TextDocumentHover:               handlers.Hover,
 		TextDocumentSemanticTokensFull:  handlers.SemanticTokensFull,
 		TextDocumentDocumentSymbol:      handlers.DocumentSymbols,
