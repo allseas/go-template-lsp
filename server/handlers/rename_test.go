@@ -46,7 +46,12 @@ func chainRootType(t *testing.T) *serverTypes.Tree {
 	}
 }
 
-func setRenameDoc(t *testing.T, uri string, tc renameTestCase, orderType, chainType *serverTypes.Tree) {
+func setRenameDoc(
+	t *testing.T,
+	uri string,
+	tc renameTestCase,
+	orderType, chainType *serverTypes.Tree,
+) {
 	t.Helper()
 	switch tc.typeKind {
 	case "source":
