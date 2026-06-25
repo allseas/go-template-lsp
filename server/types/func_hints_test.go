@@ -2,6 +2,7 @@ package types
 
 import (
 	"go/ast"
+	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
@@ -265,4 +266,172 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// TestLoadGlobalFuncs_BuilderFactory verifies that FuncMap entries whose value
+// is a call expression (e.g. `"box": BuildBox(4)`) resolve to a *types.Func
+// whose signature is the *returned* function and whose position points to the
+// factory function for go-to-definition.
+func TestLoadGlobalFuncs_BuilderFactory(t *testing.T) {
+	t.Cleanup(func() { SetGlobalFuncEntries(nil) })
+
+	funcs, err := LoadGlobalFuncs("../../test/resources/funcmap-tests")
+	require.NoError(t, err)
+
+	fn := funcs["box"]
+	require.NotNil(t, fn, "box (builder factory) should resolve to a *types.Func")
+
+	// Name is taken from the FuncMap key, not the factory.
+	assert.Equal(t, "box", fn.Name())
+
+	// Signature must be the factory's *result* type: func(string) string.
+	sig, ok := fn.Type().(*types.Signature)
+	require.True(t, ok, "box should have a *types.Signature")
+	require.Equal(t, 1, sig.Params().Len(), "box should take one parameter")
+	assert.Equal(t, "string", sig.Params().At(0).Type().String())
+	require.Equal(t, 1, sig.Results().Len(), "box should return one value")
+	assert.Equal(t, "string", sig.Results().At(0).Type().String())
+
+	// Package must be the factory's package, not nil.
+	require.NotNil(t, fn.Pkg(), "box should carry the factory's package")
+	assert.Equal(t, "funcs", fn.Pkg().Name())
+
+	// Position must point at the factory (BuildBox) so go-to-definition lands
+	// on real source rather than token.NoPos.
+	entry, ok := GetGlobalFuncEntry("box")
+	require.True(t, ok, "box entry should be cached")
+	require.NotNil(t, entry.Fset)
+	require.True(t, entry.Func.Pos().IsValid(), "factory position must be valid")
+	pos := entry.Fset.Position(entry.Func.Pos())
+	assert.Contains(
+		t,
+		filepath.ToSlash(pos.Filename),
+		"funcmap-tests/funcs/funcs.go",
+		"factory position should point at funcs.go",
+	)
+}
+
+// TestLoadGlobalFuncs_GenericInstantiation verifies that FuncMap entries whose
+// value is a generic instantiation (IndexExpr / IndexListExpr) resolve to the
+// underlying generic *types.Func.
+func TestLoadGlobalFuncs_GenericInstantiation(t *testing.T) {
+	funcs, err := LoadGlobalFuncs("../../test/resources/funcmap-tests")
+	require.NoError(t, err)
+
+	// Single type parameter -> *ast.IndexExpr in the FuncMap value.
+	if fn := funcs["sequenceI"]; assert.NotNil(
+		t,
+		fn,
+		"sequenceI (generic, single type param) should resolve",
+	) {
+		assert.Equal(t, "Sequence", fn.Name(),
+			"generic instantiation should resolve to the underlying generic function")
+		require.NotNil(t, fn.Pkg())
+		assert.Equal(t, "funcs", fn.Pkg().Name())
+	}
+
+	// Multiple type parameters -> *ast.IndexListExpr in the FuncMap value.
+	if fn := funcs["pairSI"]; assert.NotNil(
+		t,
+		fn,
+		"pairSI (generic, multiple type params) should resolve",
+	) {
+		assert.Equal(t, "Pair", fn.Name(),
+			"generic instantiation should resolve to the underlying generic function")
+		require.NotNil(t, fn.Pkg())
+		assert.Equal(t, "funcs", fn.Pkg().Name())
+	}
+}
+
+// TestResolveCalleeFunc_GenericInstantiation exercises resolveCalleeFunc
+// directly on parsed-and-typechecked source so the IndexExpr / IndexListExpr
+// branches are covered without depending on the workspace fixture.
+func TestResolveCalleeFunc_GenericInstantiation(t *testing.T) {
+	src := `package x
+
+import "text/template"
+
+func Sequence[T any](xs ...T) []T { return xs }
+func Pair[A, B any](a A, b B) [2]any { return [2]any{a, b} }
+
+//tmpl:func "global"
+func G() template.FuncMap {
+	return template.FuncMap{
+		"sequenceI": Sequence[int],
+		"pairSI":    Pair[string, int],
+	}
+}
+`
+	file, info, fset := typecheckSingleFile(t, src)
+
+	out := map[string]GlobalFuncEntry{}
+	collectGlobalFuncs(file, info, fset, out)
+
+	if e, ok := out["sequenceI"]; assert.True(t, ok, "sequenceI must be collected") {
+		require.NotNil(t, e.Func, "IndexExpr must resolve to a *types.Func")
+		assert.Equal(t, "Sequence", e.Func.Name())
+	}
+	if e, ok := out["pairSI"]; assert.True(t, ok, "pairSI must be collected") {
+		require.NotNil(t, e.Func, "IndexListExpr must resolve to a *types.Func")
+		assert.Equal(t, "Pair", e.Func.Name())
+	}
+}
+
+// TestResolveFuncObj_CallExprFallback covers the case where a CallExpr's
+// result type is not a signature (e.g. the factory returns something else).
+// In that fallback path resolveFuncObj must return the callee directly so the
+// entry still has a valid definition position.
+func TestResolveFuncObj_CallExprFallback(t *testing.T) {
+	src := `package x
+
+import "text/template"
+
+// MakeName returns a plain string, not a function. The FuncMap entry below is
+// semantically broken, but resolveFuncObj must not panic and should fall back
+// to the callee so go-to-definition still works.
+func MakeName() string { return "nope" }
+
+//tmpl:func "global"
+func G() template.FuncMap {
+	return template.FuncMap{
+		"broken": MakeName(),
+	}
+}
+`
+	file, info, fset := typecheckSingleFile(t, src)
+
+	out := map[string]GlobalFuncEntry{}
+	collectGlobalFuncs(file, info, fset, out)
+
+	e, ok := out["broken"]
+	require.True(t, ok, "broken must still be collected")
+	require.NotNil(t, e.Func, "fallback must return the callee *types.Func")
+	assert.Equal(t, "MakeName", e.Func.Name())
+}
+
+// typecheckSingleFile parses and type-checks src as a single-file package and
+// returns the pieces needed to drive the FuncMap collectors.
+func typecheckSingleFile(
+	t *testing.T,
+	src string,
+) (*ast.File, *types.Info, *token.FileSet) {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "x.go", src, parser.ParseComments)
+	require.NoError(t, err)
+
+	info := &types.Info{
+		Types:      map[ast.Expr]types.TypeAndValue{},
+		Defs:       map[*ast.Ident]types.Object{},
+		Uses:       map[*ast.Ident]types.Object{},
+		Implicits:  map[ast.Node]types.Object{},
+		Selections: map[*ast.SelectorExpr]*types.Selection{},
+		Scopes:     map[ast.Node]*types.Scope{},
+	}
+	conf := types.Config{Importer: importer.Default()}
+	_, err = conf.Check("x", fset, []*ast.File{file}, info)
+	require.NoError(t, err)
+
+	return file, info, fset
 }
