@@ -402,7 +402,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "and"}),
+				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "and"}, nil),
 			},
 		},
 		expectingError: false,
@@ -418,7 +418,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "not"}),
+				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "not"}, nil),
 			},
 		},
 		expectingError: false,
@@ -434,7 +434,7 @@ var hoverTestCases = []hoverTestCase{
 		expectedHover: &protocol.Hover{
 			Contents: protocol.MarkupContent{
 				Kind:  protocol.MarkupKindMarkdown,
-				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "ge"}),
+				Value: MessageIdentifier(&serverTypes.IdentifierNode{Ident: "ge"}, nil),
 			},
 		},
 		expectingError: false,

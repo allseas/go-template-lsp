@@ -77,7 +77,7 @@ func hoverMessage(target types.Node, _ *document) string {
 	case *types.FieldNode:
 		return MessageField(t, t.ValueType())
 	case *types.IdentifierNode:
-		return MessageIdentifier(t)
+		return MessageIdentifier(t, t.ValueType())
 	case *types.NilNode:
 		return MessageNil(t)
 	case *types.VariableNode:

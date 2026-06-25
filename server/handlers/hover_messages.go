@@ -119,20 +119,52 @@ func MessageField(n *serverTypes.FieldNode, typ types.Type) string {
 	return ""
 }
 
-// MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name.
-func MessageIdentifier(n *serverTypes.IdentifierNode) string {
+// MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name and (when known) the resolved Go type.
+func MessageIdentifier(n *serverTypes.IdentifierNode, typ types.Type) string {
 	const identifierMessage = "```go\n%s\n```\nRepresents an identifier in a command or action."
+	const identifierMessageTyped = "```go\n%s %s\n```\nFunction call with return type."
 
 	// TODO: add more special messages
 	specialMessages := map[string]string{
-		"and": "```go\nand\n```\nA built-in function that returns the first argument if it is false, and the last argument otherwise.",
-		"len": "```go\nlen\n```\nA built-in function that returns the length of its argument.",
-		"not": "```go\nnot\n```\nA built-in function that returns the boolean negation of its argument.",
-		"or":  "```go\nor\n```\nA built-in function that returns the first argument if it is true, and the last argument otherwise.",
+		// Logical
+		"and": "```go\nand(arg0 any, args ...any) any\n```\nReturns the first empty argument, or the last argument if none are empty. Short-circuits; result is one of the args (not a bool).",
+		"or":  "```go\nor(arg0 any, args ...any) any\n```\nReturns the first non-empty argument, or the last argument if all are empty. Short-circuits; result is one of the args (not a bool).",
+		"not": "```go\nnot(arg any) bool\n```\nReturns the boolean negation of its argument. `true` when empty (false / 0 / nil / zero-length), `false` otherwise.",
+
+		// Length / indexing
+		"len":   "```go\nlen(item any) int\n```\nReturns the integer length of a string, array, slice, map, or channel.",
+		"index": "```go\nindex(item any, indices ...any) any\n```\nReturns the result of indexing into `item` with the given keys, e.g. `index x 1 2 3` is `x[1][2][3]`.",
+		"slice": "```go\nslice(item any, indices ...any) any\n```\nSlices a string, array, slice, or pointer-to-array. With 1-3 indices, behaves like `item[i:]`, `item[i:j]`, or `item[i:j:k]`.",
+
+		// Formatting
+		"print":   "```go\nprint(args ...any) string\n```\nFormats its arguments using default formats and returns the resulting string. Spaces are added between operands when neither is a string.",
+		"printf":  "```go\nprintf(format string, args ...any) string\n```\nFormats its arguments according to the format string and returns the resulting string.",
+		"println": "```go\nprintln(args ...any) string\n```\nFormats its arguments using default formats and returns the resulting string. Spaces are always added between operands and a newline is appended.",
+
+		// Escapers
+		"html":     "```go\nhtml(args ...any) string\n```\nReturns the escaped HTML equivalent of the textual representation of its arguments.",
+		"js":       "```go\njs(args ...any) string\n```\nReturns the escaped JavaScript equivalent of the textual representation of its arguments.",
+		"urlquery": "```go\nurlquery(args ...any) string\n```\nReturns the escaped value of the textual representation of its arguments, suitable for embedding in a URL query.",
+
+		// Comparison (return bool; first arg's kind determines the rest)
+		"eq": "```go\neq(arg1 any, arg2 ...any) bool\n```\nReports whether `arg1 == argN` for any of the provided arguments.",
+		"ne": "```go\nne(arg1, arg2 any) bool\n```\nReports whether `arg1 != arg2`.",
+		"lt": "```go\nlt(arg1, arg2 any) bool\n```\nReports whether `arg1 <  arg2`.",
+		"le": "```go\nle(arg1, arg2 any) bool\n```\nReports whether `arg1 <= arg2`.",
+		"gt": "```go\ngt(arg1, arg2 any) bool\n```\nReports whether `arg1 >  arg2`.",
+		"ge": "```go\nge(arg1, arg2 any) bool\n```\nReports whether `arg1 >= arg2`.",
+
+		// Invocation
+		"call": "```go\ncall(fn any, args ...any) any\n```\nCalls `fn` (a function value) with the given args. The function must return either one value, or one value plus an error.",
 	}
 
 	if msg, ok := specialMessages[n.Ident]; ok {
 		return withLink(msg)
+	}
+
+	typStr := formatType(typ)
+	if typStr != "" {
+		return withLink(fmt.Sprintf(identifierMessageTyped, n.Ident, typStr))
 	}
 	return withLink(fmt.Sprintf(identifierMessage, n.Ident))
 }
