@@ -158,7 +158,7 @@ to start the server process.
 
 ## Troubleshooting
 
-### "Could not find server binary"
+### "Could not find server binary / Could not start the server"
 
 If the server fails to start with a `FileNotFoundException: Could not find ...`:
 
@@ -171,6 +171,6 @@ If the server fails to start with a `FileNotFoundException: Could not find ...`:
      Silicon). On Unix-like systems make sure it is executable (`chmod +x`).
    - The path must point at the binary file itself, not the containing folder
 2. **Contact the IT / Tooling team.** If a matching binary is not available or the
-   custom path still does not work, reach out to the IT/Tooling team for a build
-   appropriate to your environment.
+   custom path still does not work, then it could be the issue related to permissions on a work laptop, 
+   reach out to the IT/Tooling team for a build appropriate to your environment.
 
