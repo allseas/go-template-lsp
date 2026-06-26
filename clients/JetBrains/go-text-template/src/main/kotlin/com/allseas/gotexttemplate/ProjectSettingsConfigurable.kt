@@ -4,6 +4,7 @@ import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.dsl.builder.bindItem
+import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import javax.swing.JList
 
@@ -86,6 +87,13 @@ class ProjectSettingsConfigurable(
                     comboBox(listOf(null) + AppSettings.TraceLevel.entries, NullableTraceLevelRenderer())
                         .bindItem(settings.state::traceServerOverride)
                         .comment("Leave empty to use the application-level default")
+                }
+                row("Server binary path:") {
+                    textField()
+                        .bindText(
+                            { settings.state.serverPathOverride ?: "" },
+                            { settings.state.serverPathOverride = it.ifEmpty { null } },
+                        ).comment("Leave empty to use the application-level default")
                 }
             }
         }

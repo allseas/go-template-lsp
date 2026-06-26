@@ -14,13 +14,31 @@ class TextTemplateLspServerConnectionProvider(
     project: Project,
 ) : ProcessStreamConnectionProvider() {
     init {
-        val binary = getBinary()
+        val binary = getBinary(project)
         commands = listOf(binary.absolutePath, "--stdio")
         val testWorkingDir = System.getProperty("lsp.working.directory")
         workingDirectory = testWorkingDir ?: project.basePath
     }
 
-    private fun getBinary(): File {
+    private fun getBinary(project: Project): File {
+        val configuredPath =
+            System.getProperty("lsp.server.path")
+                ?: ProjectSettings.getInstance(project).getEffectiveState().serverPath
+        val normalizedPath =
+            configuredPath
+                .trim()
+                .removeSurrounding("\"")
+                .trim()
+                .filter { it.code >= 0x20 && it.category != CharCategory.FORMAT }
+        if (normalizedPath.isNotBlank()) {
+            val configuredFile = File(normalizedPath)
+            if (!configuredFile.exists()) {
+                throw FileNotFoundException("Could not find server binary at configured path: $normalizedPath")
+            }
+            configuredFile.setExecutable(true)
+            return configuredFile
+        }
+
         val pluginId = PluginId.getId("com.allseas.go-text-template") // Should match exactly with plugin.xml
         val pluginPath: Path? = PluginManagerCore.getPlugin(pluginId)?.pluginPath
 
