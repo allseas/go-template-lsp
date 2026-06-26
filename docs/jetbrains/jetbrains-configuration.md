@@ -132,3 +132,45 @@ override fun createSettings(): Any {
     }
 }
 ```
+
+## Server Binary Path
+
+By default the plugin launches the language server binary bundled inside the
+installed plugin (`<pluginPath>/server/gotmpl-server<platform>`), automatically
+choosing the right binary for the current OS/architecture.
+
+A custom server binary path can be configured, following the same
+application-level / project-level override pattern as the other settings:
+
+| Level       | Setting field             | UI location                                            |
+|-------------|---------------------------|--------------------------------------------------------|
+| Application | `serverPath`              | Settings → Go Text Template Support → Advanced         |
+| Project     | `serverPathOverride`      | Project Settings → Go Text Template Support → Advanced  |
+
+Resolution order in `TextTemplateLspServerConnectionProvider.getBinary()`:
+
+1. The configured setting (project override → application default).
+2. The binary bundled with the plugin.
+
+Leave the field empty to use the bundled binary. Unlike the feature options,
+`serverPath` is **not** sent to the server in `createSettings()` - it is only used
+to start the server process.
+
+## Troubleshooting
+
+### "Could not find server binary"
+
+If the server fails to start with a `FileNotFoundException: Could not find ...`:
+
+1. **Use a custom binary path.** Extract a server binary for your platform from
+   the distribution zip into a folder you control, then set the
+   **Server binary path** option (Settings → Go Text Template Support → Advanced)
+   to the full path of that binary, restart of the server might be needed.
+   - Pick the binary matching your platform/architecture, e.g. `gotmpl-server.exe`
+     (Windows), `gotmpl-server` (Linux), `gotmpl-server-darwin-arm64` (macOS Apple
+     Silicon). On Unix-like systems make sure it is executable (`chmod +x`).
+   - The path must point at the binary file itself, not the containing folder
+2. **Contact the IT / Tooling team.** If a matching binary is not available or the
+   custom path still does not work, reach out to the IT/Tooling team for a build
+   appropriate to your environment.
+
