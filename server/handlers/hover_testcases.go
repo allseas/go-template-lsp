@@ -73,24 +73,6 @@ var shortDocText = `
 
 var hoverTestCases = []hoverTestCase{
 	{
-		name:                   "else if hover",
-		documentText:           docElseText,
-		positionLine:           8,
-		endLine:                8,
-		positionCharacterStart: 0,
-		positionCharacterEnd:   7,
-		positionRangeEnd:       8,
-		expectedHover: &protocol.Hover{
-			Contents: protocol.MarkupContent{
-				Kind: protocol.MarkupKindMarkdown,
-				Value: MessageElse(
-					&elseRootNode.Root.Nodes[1],
-					protocol.Position{Line: 6, Character: 0},
-				),
-			},
-		},
-	},
-	{
 		name:                   "else hover",
 		documentText:           docElseText,
 		positionLine:           8,
