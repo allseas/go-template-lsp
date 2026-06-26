@@ -4,6 +4,7 @@ package handlers
 import (
 	"fmt"
 	"go/types"
+	"strings"
 	serverTypes "text-template-server/types"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -162,6 +163,10 @@ func MessageIdentifier(n *serverTypes.IdentifierNode, typ types.Type) string {
 		return withLink(msg)
 	}
 
+	if entry, ok := serverTypes.GetGlobalFuncEntry(n.Ident); ok {
+		return MessageGlobalFunc(n.Ident, entry)
+	}
+
 	typStr := formatType(typ)
 	if typStr != "" {
 		return withLink(fmt.Sprintf(identifierMessageTyped, n.Ident, typStr))
@@ -219,4 +224,31 @@ func MessageNil(_ *serverTypes.NilNode) string {
 
 func withLink(str string) string {
 	return str + "\n***\n[text/template reference](https://pkg.go.dev/text/template)"
+}
+
+// MessageGlobalFunc renders a hover message for a user-defined global
+// template function. It shows the -function's signature and, when available, its doc comment.
+// Intentionally omits the text/template reference link.
+func MessageGlobalFunc(name string, entry serverTypes.GlobalFuncEntry) string {
+	sigStr := name
+	if entry.Func != nil {
+		if sig, ok := entry.Func.Type().(*types.Signature); ok {
+			s := types.TypeString(sig, func(p *types.Package) string {
+				if p == nil {
+					return ""
+				}
+				return p.Name()
+			})
+			// TypeString of a signature looks like `func(x int) string`;
+			// swap the `func` prefix for the template-visible name.
+			sigStr = name + strings.TrimPrefix(s, "func")
+		}
+	}
+	msg := fmt.Sprintf("```go\n%s\n```", sigStr)
+	if entry.Doc != "" {
+		msg += "\n" + entry.Doc
+	} else {
+		msg += "\nUser-defined template function. Add a doc comment to its Go declaration to see it here."
+	}
+	return msg
 }

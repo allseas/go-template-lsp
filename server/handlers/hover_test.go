@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"go/token"
 	"go/types"
 	"testing"
 
@@ -117,4 +118,88 @@ func TestMessageVariableChainedIdent(t *testing.T) {
 	assert.Contains(t, msg, "float64")
 	assert.NotContains(t, msg, "var $order float64",
 		"should show full chain, not just the base variable name")
+}
+
+// newSigFunc builds a synthetic *types.Func with the given parameter and
+// result types so we can exercise MessageGlobalFunc without loading a real
+// Go workspace.
+func newSigFunc(name string, params, results []types.Type) *types.Func {
+	mk := func(ts []types.Type) *types.Tuple {
+		vars := make([]*types.Var, len(ts))
+		for i, t := range ts {
+			vars[i] = types.NewVar(token.NoPos, nil, "", t)
+		}
+		return types.NewTuple(vars...)
+	}
+	sig := types.NewSignatureType(nil, nil, nil, mk(params), mk(results), false)
+	return types.NewFunc(token.NoPos, nil, name, sig)
+}
+
+func TestMessageGlobalFunc_WithSignatureAndDoc(t *testing.T) {
+	fn := newSigFunc(
+		"upper",
+		[]types.Type{types.Typ[types.String]},
+		[]types.Type{types.Typ[types.String]},
+	)
+	entry := serverTypes.GlobalFuncEntry{Func: fn, Doc: "Upper returns s upper-cased."}
+
+	got := MessageGlobalFunc("upper", entry)
+
+	assert.Contains(t, got, "```go\nupper(string) string\n```")
+	assert.Contains(t, got, "Upper returns s upper-cased.")
+	assert.NotContains(t, got, "text/template reference")
+}
+
+func TestMessageGlobalFunc_NoDoc(t *testing.T) {
+	fn := newSigFunc(
+		"shout",
+		[]types.Type{types.Typ[types.String]},
+		[]types.Type{types.Typ[types.String]},
+	)
+	got := MessageGlobalFunc("shout", serverTypes.GlobalFuncEntry{Func: fn})
+
+	assert.Contains(t, got, "```go\nshout(string) string\n```")
+	assert.Contains(t, got, "User-defined template function")
+	assert.NotContains(t, got, "text/template reference")
+}
+
+func TestMessageGlobalFunc_NoSignature(t *testing.T) {
+	got := MessageGlobalFunc("mystery", serverTypes.GlobalFuncEntry{})
+	assert.Contains(t, got, "```go\nmystery\n```")
+	assert.Contains(t, got, "User-defined template function")
+}
+
+func TestMessageIdentifier_PrefersGlobalFuncOverGeneric(t *testing.T) {
+	t.Cleanup(func() { serverTypes.SetGlobalFuncEntries(nil) })
+
+	fn := newSigFunc(
+		"upper",
+		[]types.Type{types.Typ[types.String]},
+		[]types.Type{types.Typ[types.String]},
+	)
+	serverTypes.SetGlobalFuncEntries(map[string]serverTypes.GlobalFuncEntry{
+		"upper": {Func: fn, Doc: "Upper returns s upper-cased."},
+	})
+
+	got := MessageIdentifier(&serverTypes.IdentifierNode{Ident: "upper"}, nil)
+
+	assert.Contains(t, got, "upper(string) string")
+	assert.Contains(t, got, "Upper returns s upper-cased.")
+	assert.NotContains(t, got, "Represents an identifier in a command or action.")
+	assert.NotContains(t, got, "text/template reference")
+}
+
+func TestMessageIdentifier_BuiltinsStillTakePrecedence(t *testing.T) {
+	t.Cleanup(func() { serverTypes.SetGlobalFuncEntries(nil) })
+
+	// Even if a user re-registered `and` (which ComputeGlobalFuncs would
+	// drop), the builtin special message must win.
+	serverTypes.SetGlobalFuncEntries(map[string]serverTypes.GlobalFuncEntry{
+		"and": {Doc: "should not appear"},
+	})
+
+	got := MessageIdentifier(&serverTypes.IdentifierNode{Ident: "and"}, nil)
+
+	assert.Contains(t, got, "Returns the first empty argument")
+	assert.NotContains(t, got, "should not appear")
 }
