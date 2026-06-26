@@ -1,0 +1,67 @@
+name: server
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "server/**"
+      - ".github/workflows/server.yml"
+  pull_request:
+    paths:
+      - "server/**"
+      - ".github/workflows/server.yml"
+
+concurrency:
+  group: server-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linting:
+    runs-on: ubuntu-latest
+    container:
+      image: golangci/golangci-lint:v2.11.4-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Running Golangci-lint
+        working-directory: server
+        run: golangci-lint run --timeout=5m
+
+  testing:
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.26.2-alpine3.23
+    env:
+      GOPATH: ${{ github.workspace }}/.go
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: .go/pkg/mod/
+          key: ${{ runner.os }}-go-${{ hashFiles('server/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Running Tests
+        working-directory: server
+        run: |
+          go mod download
+          go test ./... -coverprofile=coverage.out
+          grep -v -E '/(parse|types)/node\.go:' coverage.out > coverage.filtered.out
+          mv coverage.filtered.out coverage.out
+          COVER_OUTPUT=$(go tool cover -func=coverage.out)
+          echo "$COVER_OUTPUT"
+          COVERAGE=$(echo "$COVER_OUTPUT" | grep '^total:' | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          awk "BEGIN { if (${COVERAGE} < 80) { print \"Coverage ${COVERAGE}% is below the required 80%\"; exit 1 } }"
+      - name: Running Allseas Tests
+        working-directory: server
+        run: |
+          go test ./... -coverprofile=coverage.out -tags allseas
+          grep -v -E '/(parse|types)/node\.go:' coverage.out > coverage.filtered.out
+          mv coverage.filtered.out coverage.out
+          COVER_OUTPUT=$(go tool cover -func=coverage.out)
+          echo "$COVER_OUTPUT"
+          COVERAGE=$(echo "$COVER_OUTPUT" | grep '^total:' | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          awk "BEGIN { if (${COVERAGE} < 80) { print \"Coverage ${COVERAGE}% is below the required 80%\"; exit 1 } }"
+

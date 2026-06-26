@@ -1,0 +1,30 @@
+name: parse
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "parse/**"
+      - ".github/workflows/parse.yml"
+  pull_request:
+    paths:
+      - "parse/**"
+      - ".github/workflows/parse.yml"
+
+concurrency:
+  group: parse-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testing:
+    runs-on: ubuntu-latest
+    container:
+      image: golang:tip-alpine
+    defaults:
+      run:
+        working-directory: parse
+    steps:
+      - uses: actions/checkout@v4
+      - name: Running Tests
+        run: go test
+

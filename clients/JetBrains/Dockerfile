@@ -8,8 +8,18 @@ RUN apt-get update && apt-get upgrade -y && \
         e2fslibs-dev \
         curl \
         ca-certificates \
+        locales \
         unzip && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    sed -i 's/^# *\(en_US.UTF-8\)/\1/' /etc/locale.gen && \
+    locale-gen en_US.UTF-8
+
+# Use a UTF-8 locale so the JVM can decode non-ASCII filenames (e.g.
+# certificates under /etc/ssl/certs). Without this, IntelliJ tests log a
+# noisy java.nio.file.InvalidPathException from LinuxTrustedCertificatesUtil.
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8
 
 # Set JAVA_HOME
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
