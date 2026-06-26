@@ -17,6 +17,7 @@ class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
         var enableAutocompletionOverride: Boolean? = null,
         var traceServerOverride: AppSettings.TraceLevel? = null,
         var chainServerOverride: AppSettings.ChainLevel? = null,
+        var serverPathOverride: String? = null,
     )
 
     private var state = State()
@@ -41,6 +42,7 @@ class ProjectSettings : PersistentStateComponent<ProjectSettings.State> {
             enableAutocompletion = state.enableAutocompletionOverride ?: appState.enableAutocompletion,
             traceServer = state.traceServerOverride ?: appState.traceServer,
             chainServer = state.chainServerOverride ?: appState.chainServer,
+            serverPath = state.serverPathOverride?.takeIf { it.isNotBlank() } ?: appState.serverPath,
         )
     }
 

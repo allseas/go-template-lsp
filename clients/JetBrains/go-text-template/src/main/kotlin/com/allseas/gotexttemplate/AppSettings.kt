@@ -29,11 +29,11 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
                 "hintLoadFailure" to "warning",
                 "unknownRangeType" to "warning",
                 "emptyDefineName" to "warning",
-                "variableReassigned" to "warning",
             ),
         var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
-        var chainServer: ChainLevel = ChainLevel.STEP,
+        var chainServer: ChainLevel = ChainLevel.FULL,
+        var serverPath: String = "",
     )
 
     enum class DiagnosticSeverity(
@@ -73,7 +73,7 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
         ;
 
         companion object {
-            fun fromValue(value: String): ChainLevel = entries.firstOrNull { it.value == value } ?: STEP
+            fun fromValue(value: String): ChainLevel = entries.firstOrNull { it.value == value } ?: FULL
         }
     }
 
