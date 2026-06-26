@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 
 	"golang.org/x/tools/go/packages"
@@ -26,6 +27,9 @@ const globalHintName = "global"
 type GlobalFuncEntry struct {
 	// Func is the resolved Go function. Nil for inline literals.
 	Func *types.Func
+	// Doc is documentation for the function, if such exists.
+	// Gives a default message otherwise.
+	Doc string
 	// FuncMapKeyPos is the position of the string key in the FuncMap literal.
 	// Used as a fallback navigation target when Func is nil.
 	FuncMapKeyPos token.Pos
@@ -112,8 +116,9 @@ func LoadGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
 		}
 
 		for _, pkg := range pkgs {
+			funcDocs := buildFuncDocIndex(pkg.Syntax)
 			for _, file := range pkg.Syntax {
-				collectGlobalFuncs(file, pkg.TypesInfo, pkg.Fset, entries)
+				collectGlobalFuncs(file, pkg.TypesInfo, pkg.Fset, funcDocs, entries)
 			}
 		}
 	}
@@ -211,6 +216,7 @@ func collectGlobalFuncs(
 	file *ast.File,
 	info *types.Info,
 	fset *token.FileSet,
+	funcDocs map[token.Pos]string,
 	out map[string]GlobalFuncEntry,
 ) {
 	lits := collectFuncMapLits(file)
@@ -228,7 +234,7 @@ func collectGlobalFuncs(
 			if target == nil {
 				continue
 			}
-			extractFuncMapInto(target, info, fset, out)
+			extractFuncMapInto(target, info, fset, funcDocs, out)
 		}
 	}
 }
@@ -275,6 +281,7 @@ func extractFuncMapInto(
 	cl *ast.CompositeLit,
 	info *types.Info,
 	fset *token.FileSet,
+	funcDocs map[token.Pos]string,
 	out map[string]GlobalFuncEntry,
 ) {
 	for _, elt := range cl.Elts {
@@ -293,8 +300,10 @@ func extractFuncMapInto(
 		if _, seen := out[name]; seen {
 			continue
 		}
+		fn := resolveFuncObj(name, kv.Value, info)
 		out[name] = GlobalFuncEntry{
-			Func:          resolveFuncObj(name, kv.Value, info),
+			Func:          fn,
+			Doc:           docFor(fn, kv, funcDocs),
 			FuncMapKeyPos: bl.Pos(),
 			Fset:          fset,
 		}
@@ -354,4 +363,36 @@ func resolveCalleeFunc(expr ast.Expr, info *types.Info) *types.Func {
 		return resolveCalleeFunc(e.X, info)
 	}
 	return nil
+}
+
+// buildFuncDocIndex indexes top-level FuncDecl doc comments by the
+// position of their Name token. The key matches *types.Func.Pos() for
+// the same declaration, so callers can look up docs by the resolved
+// types.Func of a FuncMap value.
+func buildFuncDocIndex(files []*ast.File) map[token.Pos]string {
+	docs := make(map[token.Pos]string)
+	for _, f := range files {
+		for _, decl := range f.Decls {
+			fd, ok := decl.(*ast.FuncDecl)
+			if !ok || fd.Name == nil || fd.Doc == nil {
+				continue
+			}
+			text := strings.TrimSpace(fd.Doc.Text())
+			if text != "" {
+				docs[fd.Name.Pos()] = text
+			}
+		}
+	}
+	return docs
+}
+
+// docFor returns the doc string for a FuncMap entry. When the value
+// resolves to a FuncDecl in the same package, its doc comment is used.
+// Returns "" when no doc is available; this is intentional so that the
+// hover renderer can omit the doc section cleanly.
+func docFor(fn *types.Func, _ *ast.KeyValueExpr, funcDocs map[token.Pos]string) string {
+	if fn == nil {
+		return ""
+	}
+	return funcDocs[fn.Pos()]
 }

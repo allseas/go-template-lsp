@@ -61,6 +61,36 @@ func TestLoadGlobalFuncs(t *testing.T) {
 	}
 }
 
+// TestLoadGlobalFuncs_CapturesDocs verifies that doc comments on the
+// underlying FuncDecls are captured into GlobalFuncEntry.Doc, and that
+// inline function literals (with no FuncDecl) get an empty doc string
+// rather than crashing. ai assisted
+func TestLoadGlobalFuncs_CapturesDocs(t *testing.T) {
+	t.Cleanup(func() { SetGlobalFuncEntries(nil) })
+
+	_, err := LoadGlobalFuncs("../../test/resources/funcmap-tests")
+	require.NoError(t, err)
+
+	upper, ok := GetGlobalFuncEntry("upper")
+	require.True(t, ok)
+	assert.Equal(t, "Upper returns s upper-cased.", upper.Doc)
+
+	lower, ok := GetGlobalFuncEntry("lower")
+	require.True(t, ok)
+	assert.Equal(t, "Lower returns s lower-cased.", lower.Doc)
+
+	// Inline function literal: no FuncDecl, so doc is empty.
+	shout, ok := GetGlobalFuncEntry("shout")
+	require.True(t, ok)
+	assert.Empty(t, shout.Doc)
+
+	// Factory call: the synthetic *types.Func's Pos() points at the
+	// factory (BuildBox), so we recover BuildBox's doc comment.
+	box, ok := GetGlobalFuncEntry("box")
+	require.True(t, ok)
+	assert.Contains(t, box.Doc, "wraps s in a box")
+}
+
 func TestGlobalFuncsCacheRoundTrip(t *testing.T) {
 	SetGlobalFuncs(nil)
 	t.Cleanup(func() { SetGlobalFuncs(nil) })
@@ -103,7 +133,7 @@ func O() template.FuncMap {
 	require.NoError(t, err)
 
 	out := map[string]GlobalFuncEntry{}
-	collectGlobalFuncs(file, nil, fset, out)
+	collectGlobalFuncs(file, nil, fset, nil, out)
 
 	assert.Contains(t, out, "a")
 	assert.Contains(t, out, "b")
@@ -365,7 +395,7 @@ func G() template.FuncMap {
 	file, info, fset := typecheckSingleFile(t, src)
 
 	out := map[string]GlobalFuncEntry{}
-	collectGlobalFuncs(file, info, fset, out)
+	collectGlobalFuncs(file, info, fset, buildFuncDocIndex([]*ast.File{file}), out)
 
 	if e, ok := out["sequenceI"]; assert.True(t, ok, "sequenceI must be collected") {
 		require.NotNil(t, e.Func, "IndexExpr must resolve to a *types.Func")
@@ -401,7 +431,7 @@ func G() template.FuncMap {
 	file, info, fset := typecheckSingleFile(t, src)
 
 	out := map[string]GlobalFuncEntry{}
-	collectGlobalFuncs(file, info, fset, out)
+	collectGlobalFuncs(file, info, fset, buildFuncDocIndex([]*ast.File{file}), out)
 
 	e, ok := out["broken"]
 	require.True(t, ok, "broken must still be collected")
