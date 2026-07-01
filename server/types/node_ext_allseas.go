@@ -127,3 +127,12 @@ func extSetEndPos(node Node, end Pos, text *string) {
 		endPosTable(t, end, text)
 	}
 }
+
+// extParseNodeChildren returns the direct parse-node children of an extension
+// parse node, letting FindTreeHints descend into TableNode bodies.
+func extParseNodeChildren(node parse.Node) []parse.Node {
+	if t, ok := node.(*parse.TableNode); ok && t.List != nil {
+		return []parse.Node{t.List}
+	}
+	return nil
+}

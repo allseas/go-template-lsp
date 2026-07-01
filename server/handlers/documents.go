@@ -31,8 +31,15 @@ type document struct {
 	loadedTypes map[string]*types.Tree
 	// typedTrees is the per-tree analysed (typed) tree, paired with loadedTypes.
 	typedTrees map[string]*types.Tree
-	// failedHints maps tree name to the error message when its gotype hint failed to load from all dirs.
-	failedHints map[types.TypeHint]string
+	// failedHints maps tree name to the hint that failed to load and the
+	// resulting error message.
+	failedHints map[string]failedHint
+}
+
+// failedHint pairs a gotype hint with the error produced when loading it.
+type failedHint struct {
+	Hint types.TypeHint
+	Err  string
 }
 
 type documentStore struct {
@@ -59,11 +66,11 @@ func (s *documentStore) Set(uri, text string) {
 	loadDirs := []string{WorkspaceRoot, uriDir(uri)}
 
 	loadedTypes := make(map[string]*types.Tree)
-	failedHints := make(map[types.TypeHint]string)
+	failedHints := make(map[string]failedHint)
 	for name := range treeSet {
 		hint := treeHints[name]
-		log.Debug().Str("name", name).Str("hint", hint.Type).Msg("found gotype hint")
-		if hint.Type == "" {
+		log.Debug().Str("name", name).Str("hint", hint.Text).Msg("found gotype hint")
+		if hint.Text == "" {
 			continue
 		}
 		var lastErr error
@@ -71,7 +78,7 @@ func (s *documentStore) Set(uri, text string) {
 			if dir == "" {
 				continue
 			}
-			loaded, lerr := types.CachedLoadTypeFromHint(hint.Type, dir)
+			loaded, lerr := types.CachedLoadTypeFromHint(hint.Text, dir)
 			if lerr != nil {
 				lastErr = lerr
 				continue
@@ -81,7 +88,7 @@ func (s *documentStore) Set(uri, text string) {
 			break
 		}
 		if lastErr != nil {
-			failedHints[hint] = lastErr.Error()
+			failedHints[name] = failedHint{Hint: hint, Err: lastErr.Error()}
 		}
 	}
 
@@ -94,12 +101,12 @@ func (s *documentStore) Set(uri, text string) {
 				continue
 			}
 
-			if loaded, err := types.LoadTypeFromHint(hint.Type, WorkspaceRoot); err == nil {
+			if loaded, err := types.LoadTypeFromHint(hint.Text, WorkspaceRoot); err == nil {
 				newTemplateTypes[name] = loaded.DotType
 			} else {
 				log.Warn().
 					Str("template", name).
-					Str("hint", hint.Type).
+					Str("hint", hint.Text).
 					Err(err).
 					Msg("type hint load failed")
 			}

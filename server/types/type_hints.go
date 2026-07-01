@@ -17,10 +17,27 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+type typeHintType int
+
+const (
+	typeHintNone typeHintType = iota
+	typeHintStruct
+	typeHintDict
+)
+
 // TypeHint represents a `gotype:` type hint found in a template file.
 type TypeHint struct {
+	Type typeHintType
+	// Text is the raw type reference that follows `gotype:` in the comment.
+	// For struct hints this is the type path (e.g. "example.com/m.Order").
+	// For dict hints this is the raw body between the braces of `dict{...}`.
+	Text string
+	// Dict is populated for dict hints; it maps each declared key to its type
+	// reference (e.g. "Order" -> "example.com/m.Order"). Nil for struct hints.
+	Dict map[string]string
+	// Line is the 1-based line number in the source text at which the hint
+	// appears; 0 when the hint is unset.
 	Line int
-	Type string
 }
 
 func treeAt(offset int, trees map[string]*parse.Tree) *parse.Tree {
@@ -45,42 +62,84 @@ func treeAt(offset int, trees map[string]*parse.Tree) *parse.Tree {
 	return trees["t"]
 }
 
-// FindTreeHints scans the template text for `gotype:` hints in comments and returns a map of template names to their corresponding type hints.
-// Tree root is the special case, as it contains all the other templates within it, therefore we have to remove the sub templates before passing it into ParseTypeHints.
+// FindTreeHints scans each parse tree for a `gotype:` comment and returns a
+// map of template names to the first hint found in that tree.
 func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHint {
 	result := make(map[string]TypeHint)
 
 	re := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
 
-	lineNo := 0
-	lineStart := 0
-	for i := 0; i <= len(text); i++ {
-		if i < len(text) && text[i] != '\n' {
+	for name, tree := range trees {
+		if tree == nil || tree.Root == nil {
 			continue
 		}
-		line := strings.TrimSuffix(text[lineStart:i], "\r")
-		lineNo++
-
-		if strings.Contains(line, "gotype:") {
-			for _, m := range re.FindAllStringSubmatchIndex(line, -1) {
-				if len(m) < 4 {
-					continue
-				}
-				owner := treeAt(lineStart+m[0], trees)
-				if owner == nil {
-					continue
-				}
-				if _, exists := result[owner.Name]; exists {
-					continue
-				}
-				result[owner.Name] = TypeHint{Line: lineNo, Type: line[m[2]:m[3]]}
+		var hint TypeHint
+		inspectParsed(tree.Root, func(node parse.Node) {
+			if hint.Type != typeHintNone {
+				return
 			}
+			c, ok := node.(*parse.CommentNode)
+			if !ok {
+				return
+			}
+			m := re.FindStringSubmatch(c.Text)
+			if len(m) < 2 {
+				return
+			}
+			hint = TypeHint{
+				Type: typeHintStruct,
+				Text: m[1],
+				Line: strings.Count(text[:int(c.Pos)], "\n") + 1,
+			}
+		})
+		if hint.Type != typeHintNone {
+			result[name] = hint
 		}
-
-		lineStart = i + 1
 	}
 
 	return result
+}
+
+func inspectParsed(node parse.Node, f func(node parse.Node)) {
+	if node == nil {
+		return
+	}
+	f(node)
+	for _, child := range parseNodeChildren(node) {
+		inspectParsed(child, f)
+	}
+}
+
+func parseNodeChildren(node parse.Node) []parse.Node {
+	switch n := node.(type) {
+	case *parse.ListNode:
+		return n.Nodes
+	case *parse.IfNode:
+		return parseBranchChildren(n.List, n.ElseList)
+	case *parse.RangeNode:
+		return parseBranchChildren(n.List, n.ElseList)
+	case *parse.WithNode:
+		return parseBranchChildren(n.List, n.ElseList)
+	case *parse.TemplateNode:
+		return nil
+	default:
+		return extParseNodeChildren(node)
+	}
+}
+
+func parseBranchChildren(list, elseList *parse.ListNode) []parse.Node {
+	var out []parse.Node
+	if list != nil {
+		out = append(out, list)
+	}
+	if elseList != nil {
+		out = append(out, elseList)
+	}
+	return out
+}
+
+type DictType struct {
+	types map[string]types.Type
 }
 
 // TypeField is a resolved field from a struct type.

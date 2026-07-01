@@ -130,14 +130,14 @@ func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Di
 	}
 	var diagnostics []protocol.Diagnostic
 
-	for hint, errMsg := range doc.failedHints {
-		offset := gotypeHintOffset(text, hint.Line)
+	for _, fh := range doc.failedHints {
+		offset := gotypeHintOffset(text, fh.Hint.Line)
 		if offset < 0 {
 			continue
 		}
 		rng := expandToFullBracketsFromOffset(offset, text)
 		diagnostics = append(diagnostics, createDiagnostic(
-			"gotype: could not load type: "+errMsg,
+			"gotype: could not load type: "+fh.Err,
 			rng,
 			severity,
 		))
