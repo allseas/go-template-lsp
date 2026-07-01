@@ -46,28 +46,6 @@ type TypeHint struct {
 // body could not be parsed.
 func (h TypeHint) IsMalformed() bool { return h.Type == typeHintMalformedDict }
 
-func treeAt(offset int, trees map[string]*parse.Tree) *parse.Tree {
-	var best *parse.Tree
-	var bestSpan int
-	for _, t := range trees {
-		if t == nil || t.Root == nil {
-			continue
-		}
-		start := int(t.Root.Position())
-		end := int(t.End)
-		if start > offset || offset >= end {
-			continue
-		}
-		if span := end - start; best == nil || span < bestSpan {
-			best, bestSpan = t, span
-		}
-	}
-	if best != nil {
-		return best
-	}
-	return trees["t"]
-}
-
 var (
 	structHintRe = regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
 	dictHintRe   = regexp.MustCompile(`gotype:\s*map\s*\{`)

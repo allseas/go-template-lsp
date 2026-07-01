@@ -523,9 +523,19 @@ func TestCollectDiagnostics_DictHint(t *testing.T) {
 			diagMessages(diags),
 		)
 		_, invalid := findDiagnosticContaining(diags, "invalid field")
-		require.False(t, invalid, "expected no invalid-field diagnostic, got: %v", diagMessages(diags))
+		require.False(
+			t,
+			invalid,
+			"expected no invalid-field diagnostic, got: %v",
+			diagMessages(diags),
+		)
 		_, unknownKey := findDiagnosticContaining(diags, "known keys")
-		require.False(t, unknownKey, "expected no unknown-key diagnostic, got: %v", diagMessages(diags))
+		require.False(
+			t,
+			unknownKey,
+			"expected no unknown-key diagnostic, got: %v",
+			diagMessages(diags),
+		)
 	})
 
 	t.Run("unknown key emits invalid-field diagnostic", func(t *testing.T) {
@@ -551,7 +561,12 @@ func TestCollectDiagnostics_DictHint(t *testing.T) {
 		diags := collectDiagnostics(src, uri("dict-malformed.tmpl"))
 		diag, ok := findDiagnosticContaining(diags, "malformed map hint")
 		require.True(t, ok, "expected malformed-hint diagnostic, got: %v", diagMessages(diags))
-		assert.Equal(t, uint32(0), diag.Range.Start.Line, "diagnostic should sit on the hint comment")
+		assert.Equal(
+			t,
+			uint32(0),
+			diag.Range.Start.Line,
+			"diagnostic should sit on the hint comment",
+		)
 		require.NotNil(t, diag.Severity)
 		assert.Equal(t, protocol.DiagnosticSeverityError, *diag.Severity,
 			"malformed map hint should be an error")
@@ -617,7 +632,12 @@ func TestCollectDiagnostics_DictHint(t *testing.T) {
 		diag, ok := findDiagnosticContaining(diags, "could not load type")
 		require.True(t, ok, "expected hint-load-failure diagnostic, got: %v", diagMessages(diags))
 		assert.Contains(t, diag.Message, "Bad", "diagnostic should name the failing key")
-		assert.Equal(t, uint32(0), diag.Range.Start.Line, "diagnostic should sit on the hint comment")
+		assert.Equal(
+			t,
+			uint32(0),
+			diag.Range.Start.Line,
+			"diagnostic should sit on the hint comment",
+		)
 		require.NotNil(t, diag.Severity)
 		assert.Equal(t, protocol.DiagnosticSeverityWarning, *diag.Severity)
 	})
