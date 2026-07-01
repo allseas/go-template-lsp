@@ -256,10 +256,12 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 			argType := t.Pipe.ValueType()
 			_, expectedIsDict := expectedType.(*DictType)
 			_, argIsDict := argType.(*DictType)
-			if expectedIsDict || argIsDict {
-				// For dicts we compare by String() only: go/types.AssignableTo
-				// and friends are not defined for synthetic dict types.
-				if argType != nil && !IsEmptyInterface(argType) &&
+			switch {
+			case expectedIsDict && argIsDict:
+				// Both sides are dicts: compare by String() (DictType.String
+				// is stable and captures keys + per-key value types). This is
+				// the only case where dict shape is checked exactly.
+				if !IsEmptyInterface(argType) &&
 					argType.String() != expectedType.String() {
 					ctx.errorf(
 						t,
@@ -270,32 +272,40 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 						argType.String(),
 					)
 				}
-			} else if !IsEmptyInterface(expectedType) && IsEmptyInterface(argType) {
-				// Template parameter is concrete but argument type is
-				// unknown (any). We can't verify the call, so warn only.
-				// The reverse (concrete arg to any param) is fine: losing
-				// precision toward `any` is not the user's problem.
-				ctx.errorf(
-					t,
-					ErrorUnknownType,
-					"template %q expects argument of type %s, it's impossible to determine the type of the argument provided",
-					n.Name,
-					expectedType.String(),
-				)
-			} else if argType != nil && !IsEmptyInterface(argType) && !IsEmptyInterface(expectedType) &&
-				argType != expectedType &&
-				!types.Identical(argType, expectedType) &&
-				!types.AssignableTo(argType, expectedType) &&
-				!types.ConvertibleTo(argType, expectedType) &&
-				argType.String() != expectedType.String() { // fallback to string comparison to handle loading a package multiple times
-				ctx.errorf(
-					t,
-					ErrorTypeInvalidTemplateArg,
-					"template %q expects argument of type %s, but got %s",
-					n.Name,
-					expectedType.String(),
-					argType.String(),
-				)
+			default:
+				// If exactly one side is a dict, project it to map[string]any
+				// and fall through to the ordinary go/types comparison. The
+				// tightest static type we can attribute to a dict when the
+				// other side is not itself a dict is map[string]any.
+				effExpected := dictAsMapStringAny(expectedType)
+				effArg := dictAsMapStringAny(argType)
+				if !IsEmptyInterface(effExpected) && IsEmptyInterface(effArg) {
+					// Template parameter is concrete but argument type is
+					// unknown (any). We can't verify the call, so warn only.
+					// The reverse (concrete arg to any param) is fine: losing
+					// precision toward `any` is not the user's problem.
+					ctx.errorf(
+						t,
+						ErrorUnknownType,
+						"template %q expects argument of type %s, it's impossible to determine the type of the argument provided",
+						n.Name,
+						expectedType.String(),
+					)
+				} else if effArg != nil && !IsEmptyInterface(effArg) && !IsEmptyInterface(effExpected) &&
+					effArg != effExpected &&
+					!types.Identical(effArg, effExpected) &&
+					!types.AssignableTo(effArg, effExpected) &&
+					!types.ConvertibleTo(effArg, effExpected) &&
+					effArg.String() != effExpected.String() { // fallback to string comparison to handle loading a package multiple times
+					ctx.errorf(
+						t,
+						ErrorTypeInvalidTemplateArg,
+						"template %q expects argument of type %s, but got %s",
+						n.Name,
+						expectedType.String(),
+						argType.String(),
+					)
+				}
 			}
 		}
 	}
@@ -310,6 +320,23 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 // ErrorUnknownType diagnostic where the loss of precision is user-relevant.
 func AnyType() types.Type {
 	return types.NewInterfaceType(nil, nil).Complete()
+}
+
+// mapStringAnyType returns Go's `map[string]any`. It is the tightest ordinary
+// Go type the analyser can attribute to a `*DictType` value when the other
+// side of a type comparison is not itself a dict: the dict knows its keys and
+// per-key value types, but no real Go type captures both, so for cross-type
+// checks we project down to `map[string]any`.
+func mapStringAnyType() types.Type {
+	return types.NewMap(types.Typ[types.String], AnyType())
+}
+
+// dictAsMapStringAny returns mapStringAnyType() if t is a *DictType, otherwise t.
+func dictAsMapStringAny(t types.Type) types.Type {
+	if _, ok := t.(*DictType); ok {
+		return mapStringAnyType()
+	}
+	return t
 }
 
 // unalias resolves alias types and dereferences pointers recursively, returning
@@ -1202,6 +1229,7 @@ func IsEmptyInterface(t types.Type) bool {
 
 // typesCompatible reports whether a value of type got is assignable to a parameter
 // of type want. When either side is the empty interface (any), we always accept.
+// *DictType is projected to map[string]any for the check (see mapStringAnyType).
 func typesCompatible(want, got types.Type) bool {
 	if IsEmptyInterface(want) || IsEmptyInterface(got) {
 		return true
@@ -1209,6 +1237,8 @@ func typesCompatible(want, got types.Type) bool {
 	if want == nil || got == nil {
 		return false
 	}
+	want = dictAsMapStringAny(want)
+	got = dictAsMapStringAny(got)
 	return types.Identical(want, got) || types.AssignableTo(got, want)
 }
 

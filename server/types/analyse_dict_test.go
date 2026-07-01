@@ -1,9 +1,11 @@
 package types
 
 import (
+	"go/types"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,5 +93,94 @@ func TestAnalyseDict_WithPreservesDictShape(t *testing.T) {
 	)
 	if len(tree.TypeErrors) != 0 {
 		t.Fatalf("expected no errors, got: %v", typeErrorMessages(tree))
+	}
+}
+
+// analyseWithDictAndTemplateInputs parses text and analyses the root tree with
+// the given dict as dot type and a templateInputTypes map for {{template}} arg
+// checking.
+func analyseWithDictAndTemplateInputs(
+	t *testing.T,
+	text string,
+	dict *DictType,
+	inputs map[string]types.Type,
+) *Tree {
+	t.Helper()
+	treeSet := parseTreeSet(t, text)
+	require.NotEmpty(t, treeSet)
+	rt := treeSet["t"]
+	require.NotNil(t, rt)
+	tree := NewTree(*rt, GlobalFuncs(), dict, nil, inputs)
+	return &tree
+}
+
+func TestTypesCompatible_DictProjection(t *testing.T) {
+	dict := dictOfLoaded(t, map[string]string{
+		"Order": "text-template-server/src/model.Order",
+	})
+	mapStringAny := mapStringAnyType()
+	mapStringString := types.NewMap(types.Typ[types.String], types.Typ[types.String])
+
+	assert.True(t, typesCompatible(mapStringAny, dict),
+		"dict should be assignable to map[string]any parameter")
+	assert.True(t, typesCompatible(dict, mapStringAny),
+		"map[string]any should be assignable to a dict parameter (dict projects to map[string]any)")
+	assert.True(t, typesCompatible(dict, dict),
+		"identical dicts must be compatible")
+	assert.False(t, typesCompatible(mapStringString, dict),
+		"dict projects to map[string]any, which is not assignable to map[string]string")
+}
+
+func TestAnalyseDict_TemplateArg_DictAcceptedByMapStringAny(t *testing.T) {
+	dict := dictOfLoaded(t, map[string]string{
+		"Order": "text-template-server/src/model.Order",
+	})
+	tree := analyseWithDictAndTemplateInputs(
+		t,
+		`{{ template "child" . }}`,
+		dict,
+		map[string]types.Type{"child": mapStringAnyType()},
+	)
+	if len(tree.TypeErrors) != 0 {
+		t.Fatalf("expected no errors, got: %v", typeErrorMessages(tree))
+	}
+}
+
+func TestAnalyseDict_TemplateArg_DictToDict_SameShapePasses(t *testing.T) {
+	dict := dictOfLoaded(t, map[string]string{
+		"Order": "text-template-server/src/model.Order",
+	})
+	tree := analyseWithDictAndTemplateInputs(
+		t,
+		`{{ template "child" . }}`,
+		dict,
+		map[string]types.Type{"child": dict},
+	)
+	if len(tree.TypeErrors) != 0 {
+		t.Fatalf("expected no errors, got: %v", typeErrorMessages(tree))
+	}
+}
+
+func TestAnalyseDict_TemplateArg_DictToDict_DifferentShapeFails(t *testing.T) {
+	argDict := dictOfLoaded(t, map[string]string{
+		"Order": "text-template-server/src/model.Order",
+	})
+	expectedDict := dictOfLoaded(t, map[string]string{
+		"Address": "text-template-server/src/model.Address",
+	})
+	tree := analyseWithDictAndTemplateInputs(
+		t,
+		`{{ template "child" . }}`,
+		argDict,
+		map[string]types.Type{"child": expectedDict},
+	)
+	require.Len(t, tree.TypeErrors, 1)
+	if tree.TypeErrors[0].typ != ErrorTypeInvalidTemplateArg {
+		t.Fatalf("expected ErrorTypeInvalidTemplateArg (%d), got %d: %s",
+			ErrorTypeInvalidTemplateArg, tree.TypeErrors[0].typ, tree.TypeErrors[0].Err)
+	}
+	if !strings.Contains(tree.TypeErrors[0].Err, "Address") ||
+		!strings.Contains(tree.TypeErrors[0].Err, "Order") {
+		t.Fatalf("expected message to mention both shapes, got: %s", tree.TypeErrors[0].Err)
 	}
 }
