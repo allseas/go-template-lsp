@@ -1,0 +1,7 @@
+{{define "struct-tpl"}}{{/*gotype: dicthints/model.Order*/}}
+{{ .CustomerName }}
+{{end}}
+
+{{define "dict-tpl"}}{{/*gotype: dict{"Order": dicthints/model.Order}*/}}
+{{ .Order.CustomerName }}
+{{end}}

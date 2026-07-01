@@ -311,6 +311,14 @@ func walkChainType(base types.Type, idents []string) types.Type {
 		if cur == nil {
 			return nil
 		}
+		if d, ok := cur.(*serverTypes.DictType); ok {
+			valueTyp, keyOk := d.LookupDictKey(name)
+			if !keyOk {
+				return nil
+			}
+			cur = valueTyp
+			continue
+		}
 		obj, _, _ := types.LookupFieldOrMethod(cur, true, nil, name)
 		switch o := obj.(type) {
 		case *types.Var:
@@ -528,6 +536,8 @@ func dotItemsT(
 	}
 	if named := toNamed(dotTypeAt(cur)); named != nil {
 		items = append(items, namedItems(named, inputType, pipeKind, argKind, prefix, wordRange)...)
+	} else if dict, ok := dotTypeAt(cur).(*serverTypes.DictType); ok && dict != nil {
+		items = append(items, dictItems(dict, argKind, prefix, wordRange)...)
 	}
 	return items
 }
@@ -540,11 +550,25 @@ func fieldChainItemsT(
 	argKind outputKind,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
+	if dict, ok := t.(*serverTypes.DictType); ok && dict != nil {
+		return dictItems(dict, argKind, "", wordRange)
+	}
 	named := toNamed(t)
 	if named == nil {
 		return []protocol.CompletionItem{}
 	}
 	return namedItems(named, nil, outputAny, argKind, "", wordRange)
+}
+
+// dictItems renders a *DictType's keys as field completion items. Dicts have
+// no methods, so only fieldCompletionItems is used.
+func dictItems(
+	dict *serverTypes.DictType,
+	argKind outputKind,
+	prefix string,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	return fieldCompletionItems(serverTypes.DictTypeFields(dict), argKind, prefix, wordRange)
 }
 
 // namedItems returns the field + filtered method completions for a named type,

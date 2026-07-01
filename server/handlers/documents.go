@@ -78,7 +78,7 @@ func (s *documentStore) Set(uri, text string) {
 			if dir == "" {
 				continue
 			}
-			loaded, lerr := types.CachedLoadTypeFromHint(hint.Text, dir)
+			loaded, lerr := types.CachedLoadHint(hint, dir)
 			if lerr != nil {
 				lastErr = lerr
 				continue
@@ -101,14 +101,20 @@ func (s *documentStore) Set(uri, text string) {
 				continue
 			}
 
-			if loaded, err := types.LoadTypeFromHint(hint.Text, WorkspaceRoot); err == nil {
-				newTemplateTypes[name] = loaded.DotType
-			} else {
+			loaded, err := types.CachedLoadHint(hint, WorkspaceRoot)
+			if err != nil {
 				log.Warn().
 					Str("template", name).
 					Str("hint", hint.Text).
 					Err(err).
 					Msg("type hint load failed")
+				continue
+			}
+			switch {
+			case loaded.DictType != nil:
+				newTemplateTypes[name] = loaded.DictType
+			case loaded.DotType != nil:
+				newTemplateTypes[name] = loaded.DotType
 			}
 		}
 	}
@@ -191,12 +197,18 @@ func buildTypedTree(
 	var dotType gotypes.Type
 	var pkg *gotypes.Package
 	if lt != nil {
-		dotType = lt.DotType
+		switch {
+		case lt.DictType != nil:
+			dotType = lt.DictType
+		case lt.DotType != nil:
+			dotType = lt.DotType
+		}
 		pkg = lt.Pkg
 	}
 	t := types.NewTree(*tree, types.GlobalFuncs(), dotType, pkg, templateInputTypes)
 	if lt != nil {
 		t.DotType = lt.DotType
+		t.DictType = lt.DictType
 		t.Pkg = lt.Pkg
 		t.Fset = lt.Fset
 	}

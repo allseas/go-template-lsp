@@ -496,6 +496,131 @@ func TestCollectDiagnostics_HintLoadFailure(t *testing.T) {
 	})
 }
 
+// TestCollectDiagnostics_DictHint verifies that dict-shaped gotype hints
+// resolve end-to-end through the handler pipeline: valid key access produces
+// no diagnostics, unknown keys are flagged, dict shape survives variable
+// binding and with-blocks, unresolvable entries emit a hint-load-failure, and
+// mixed struct + dict hints in the same document both load successfully.
+func TestCollectDiagnostics_DictHint(t *testing.T) {
+	const resourceDir = "../../test/resources/dict-typehints"
+
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = resourceDir
+
+	uri := func(name string) string { return "file:///" + name }
+
+	t.Run("valid access resolves through dict", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-valid-access.tmpl")
+		store.Set(uri("dict-valid-access.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("dict-valid-access.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("dict-valid-access.tmpl"))
+		_, loadFail := findDiagnosticContaining(diags, "could not load type")
+		require.False(
+			t,
+			loadFail,
+			"expected no hint-load-failure diagnostic, got: %v",
+			diagMessages(diags),
+		)
+		_, invalid := findDiagnosticContaining(diags, "invalid field")
+		require.False(t, invalid, "expected no invalid-field diagnostic, got: %v", diagMessages(diags))
+		_, unknownKey := findDiagnosticContaining(diags, "known keys")
+		require.False(t, unknownKey, "expected no unknown-key diagnostic, got: %v", diagMessages(diags))
+	})
+
+	t.Run("unknown key emits invalid-field diagnostic", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-unknown-key.tmpl")
+		store.Set(uri("dict-unknown-key.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("dict-unknown-key.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("dict-unknown-key.tmpl"))
+		diag, ok := findDiagnosticContaining(diags, "Unknown")
+		require.True(t, ok, "expected diagnostic for Unknown key, got: %v", diagMessages(diags))
+		assert.Contains(t, diag.Message, "known keys")
+		assert.Contains(t, diag.Message, "Order")
+	})
+
+	t.Run("variable binding preserves dict shape", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-var-binding.tmpl")
+		store.Set(uri("dict-var-binding.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("dict-var-binding.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("dict-var-binding.tmpl"))
+		_, loadFail := findDiagnosticContaining(diags, "could not load type")
+		require.False(
+			t,
+			loadFail,
+			"expected no hint-load-failure diagnostic, got: %v",
+			diagMessages(diags),
+		)
+		_, invalid := findDiagnosticContaining(diags, "invalid field")
+		require.False(
+			t,
+			invalid,
+			"expected $d.Order.CustomerName to resolve without errors, got: %v",
+			diagMessages(diags),
+		)
+	})
+
+	t.Run("with block preserves dict shape", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-with-block.tmpl")
+		store.Set(uri("dict-with-block.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("dict-with-block.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("dict-with-block.tmpl"))
+		_, loadFail := findDiagnosticContaining(diags, "could not load type")
+		require.False(
+			t,
+			loadFail,
+			"expected no hint-load-failure diagnostic, got: %v",
+			diagMessages(diags),
+		)
+		_, withErr := findDiagnosticContaining(diags, "cannot use type")
+		require.False(
+			t,
+			withErr,
+			"expected with-block to accept dict, got: %v",
+			diagMessages(diags),
+		)
+		_, invalid := findDiagnosticContaining(diags, "invalid field")
+		require.False(
+			t,
+			invalid,
+			"expected .Order.CustomerName to resolve inside with, got: %v",
+			diagMessages(diags),
+		)
+	})
+
+	t.Run("unresolvable dict entry emits hint-load-failure", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-unresolvable-entry.tmpl")
+		store.Set(uri("dict-unresolvable-entry.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("dict-unresolvable-entry.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("dict-unresolvable-entry.tmpl"))
+		diag, ok := findDiagnosticContaining(diags, "could not load type")
+		require.True(t, ok, "expected hint-load-failure diagnostic, got: %v", diagMessages(diags))
+		assert.Contains(t, diag.Message, "Bad", "diagnostic should name the failing key")
+		assert.Equal(t, uint32(0), diag.Range.Start.Line, "diagnostic should sit on the hint comment")
+		require.NotNil(t, diag.Severity)
+		assert.Equal(t, protocol.DiagnosticSeverityWarning, *diag.Severity)
+	})
+
+	t.Run("struct hint alongside dict hint still loads", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-and-struct.tmpl")
+		store.Set(uri("dict-and-struct.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("dict-and-struct.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("dict-and-struct.tmpl"))
+		_, ok := findDiagnosticContaining(diags, "could not load type")
+		require.False(
+			t,
+			ok,
+			"expected both hints to load; got: %v",
+			diagMessages(diags),
+		)
+	})
+}
+
 func TestCollectDiagnostics_IncorrectWith(t *testing.T) {
 	text := `{{ with "string" }}Hello{{ end }}`
 	diags := collectDiagnostics(text, "file:///test.tmpl")
