@@ -31,7 +31,7 @@ type TypeHint struct {
 	Type typeHintType
 	// Text is the raw type reference that follows `gotype:` in the comment.
 	// For struct hints this is the type path (e.g. "example.com/m.Order").
-	// For dict hints this is the raw body between the braces of `dict{...}`.
+	// For dict hints this is the raw body between the braces of `map{...}`.
 	Text string
 	// Dict is populated for dict hints; it maps each declared key to its type
 	// reference (e.g. "Order" -> "example.com/m.Order"). Nil for struct hints.
@@ -65,7 +65,7 @@ func treeAt(offset int, trees map[string]*parse.Tree) *parse.Tree {
 
 var (
 	structHintRe = regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
-	dictHintRe   = regexp.MustCompile(`gotype:\s*dict\s*\{`)
+	dictHintRe   = regexp.MustCompile(`gotype:\s*map\s*\{`)
 	dictEntryRe  = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*([A-Za-z_][A-Za-z0-9_/.-]*)\s*$`)
 )
 
@@ -109,7 +109,7 @@ func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHin
 	return result
 }
 
-// parseDictHint tries to interpret commentText as `gotype: dict{...}`. It
+// parseDictHint tries to interpret commentText as `gotype: map{...}`. It
 // returns ok=false when the comment does not contain a dict marker at all;
 // when the marker is present but the body is malformed the returned ok is
 // still false so the caller does not fall back to struct parsing.
@@ -208,7 +208,7 @@ func parseBranchChildren(list, elseList *parse.ListNode) []parse.Node {
 	return out
 }
 
-// DictType is a synthetic types.Type representing a `gotype: dict{...}` hint.
+// DictType is a synthetic types.Type representing a `gotype: map{...}` hint.
 // It behaves like a struct with named keys of arbitrary Go types, but is not
 // a real Go type — LookupFieldOrMethod does not work on it. The analyser and
 // completion code type-assert on *DictType to detect it.
@@ -222,11 +222,11 @@ func (d *DictType) Underlying() types.Type { return d }
 // String implements types.Type. Keys are sorted so the output is stable.
 func (d *DictType) String() string {
 	if d == nil {
-		return "dict{}"
+		return "map{}"
 	}
 	keys := d.DictKeys()
 	var b strings.Builder
-	b.WriteString("dict{")
+	b.WriteString("map{")
 	for i, k := range keys {
 		if i > 0 {
 			b.WriteString(", ")
@@ -441,7 +441,7 @@ func LoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
 		ref := hint.Dict[k]
 		lt, err := LoadTypeFromHint(ref, workspaceRoot)
 		if err != nil {
-			return nil, fmt.Errorf("dict key %q (%s): %w", k, ref, err)
+			return nil, fmt.Errorf("map key %q (%s): %w", k, ref, err)
 		}
 		fields[k] = lt.DotType
 		if pkg == nil {

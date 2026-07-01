@@ -12,7 +12,7 @@ import (
 
 // formatType renders a Go type using the package's short name (e.g.
 // `model.Address`) rather than the full import path. Untyped nil renders as
-// just `nil`. Dict-shaped hints render as `dict{Key1, Key2}` (keys only) so
+// just `nil`. Dict-shaped hints render as `map{Key1, Key2}` (keys only) so
 // hover messages stay concise. Returns "" if t is nil.
 func formatType(t types.Type) string {
 	if t == nil {
@@ -22,7 +22,7 @@ func formatType(t types.Type) string {
 		return "nil"
 	}
 	if d, ok := t.(*serverTypes.DictType); ok {
-		return "dict{" + strings.Join(d.DictKeys(), ", ") + "}"
+		return "map{" + strings.Join(d.DictKeys(), ", ") + "}"
 	}
 	// Empty interface (any) means the type is unknown
 	if iface, ok := t.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {

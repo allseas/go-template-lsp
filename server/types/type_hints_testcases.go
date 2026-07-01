@@ -87,7 +87,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	},
 	{
 		name:  "dict hint with a single entry",
-		input: `{{/*gotype: dict{"Order": example.com/m.Order}*/}}`,
+		input: `{{/*gotype: map{"Order": example.com/m.Order}*/}}`,
 		wantHints: []TypeHint{{
 			Type: typeHintDict,
 			Text: `"Order": example.com/m.Order`,
@@ -97,7 +97,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	},
 	{
 		name:  "dict hint with multiple entries",
-		input: `{{/*gotype: dict{"Order": example.com/m.Order, "Address": example.com/m.Address}*/}}`,
+		input: `{{/*gotype: map{"Order": example.com/m.Order, "Address": example.com/m.Address}*/}}`,
 		wantHints: []TypeHint{{
 			Type: typeHintDict,
 			Text: `"Order": example.com/m.Order, "Address": example.com/m.Address`,
@@ -110,7 +110,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	},
 	{
 		name:  "dict hint tolerates extra whitespace around tokens",
-		input: `{{- /* gotype: dict{  "A" : pkg.T ,  "B" : other/pkg.U } */ -}}`,
+		input: `{{- /* gotype: map{  "A" : pkg.T ,  "B" : other/pkg.U } */ -}}`,
 		wantHints: []TypeHint{{
 			Type: typeHintDict,
 			Text: `"A" : pkg.T ,  "B" : other/pkg.U`,
@@ -123,7 +123,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	},
 	{
 		name:  "dict hint on a define block",
-		input: "{{- define \"Tpl\" -}}\n" + `{{- /*gotype: dict{"K": ex.com/m.K}*/ -}}` + "\n{{- end -}}\n",
+		input: "{{- define \"Tpl\" -}}\n" + `{{- /*gotype: map{"K": ex.com/m.K}*/ -}}` + "\n{{- end -}}\n",
 		wantHints: []TypeHint{{
 			Type: typeHintDict,
 			Text: `"K": ex.com/m.K`,
@@ -133,27 +133,27 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	},
 	{
 		name:      "dict hint with an empty body",
-		input:     `{{/*gotype: dict{}*/}}`,
+		input:     `{{/*gotype: map{}*/}}`,
 		wantHints: nil,
 	},
 	{
 		name:      "dict hint missing the closing brace is not accepted",
-		input:     `{{/*gotype: dict{"Order": example.com/m.Order*/}}`,
+		input:     `{{/*gotype: map{"Order": example.com/m.Order*/}}`,
 		wantHints: nil,
 	},
 	{
 		name:      "dict hint with an unquoted key is not accepted",
-		input:     `{{/*gotype: dict{Order: example.com/m.Order}*/}}`,
+		input:     `{{/*gotype: map{Order: example.com/m.Order}*/}}`,
 		wantHints: nil,
 	},
 	{
 		name:      "dict hint with a missing colon is not accepted",
-		input:     `{{/*gotype: dict{"Order" example.com/m.Order}*/}}`,
+		input:     `{{/*gotype: map{"Order" example.com/m.Order}*/}}`,
 		wantHints: nil,
 	},
 	{
 		name:      "dict hint with a missing type reference is not accepted",
-		input:     `{{/*gotype: dict{"Order": }*/}}`,
+		input:     `{{/*gotype: map{"Order": }*/}}`,
 		wantHints: nil,
 	},
 }

@@ -24,7 +24,7 @@ type Tree struct {
 	End        Pos                    // position of the end of the template text; only set after parsing.
 	funcs      map[string]*types.Func // available functions with their signatures
 	DotType    *types.Named           // optional: named type of dot context (from struct-shaped gotype hint)
-	DictType   *DictType              // optional: dict-shaped dot context (from `gotype: dict{...}` hint)
+	DictType   *DictType              // optional: dict-shaped dot context (from `gotype: map{...}` hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
 	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
@@ -682,7 +682,7 @@ func walkFieldChainWithMethodInfo(
 				ctx.errorf(
 					errNode,
 					ErrorTypeInvalidField,
-					"dict has no key %q; known keys: %s",
+					"map has no key %q; known keys: %s",
 					name,
 					strings.Join(d.DictKeys(), ", "),
 				)
