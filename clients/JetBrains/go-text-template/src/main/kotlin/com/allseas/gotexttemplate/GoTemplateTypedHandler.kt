@@ -36,7 +36,7 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
         file: PsiFile,
         fileType: FileType,
     ): Result {
-        if (c != '{') return Result.CONTINUE
+        if (c != '{' && c != '-' && c != '*') return Result.CONTINUE
         if (!isGoTemplateFile(file)) return Result.CONTINUE
         // Leave selection-surrounding to the platform.
         if (editor.selectionModel.hasSelection()) return Result.CONTINUE
@@ -47,11 +47,49 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
 
         val prevChar = if (caret > 0) text[caret - 1] else null
         val nextChar = if (caret < text.length) text[caret] else null
+        val charBeforePrev = if (caret >= 2) text[caret - 2] else null
+        val charAfterNext = if (caret + 1 < text.length) text[caret + 1] else null
+
+        if (c == '-') {
+            // Same double-close bug as "{{": when the caret is sitting between
+            // "{{" and "}}" (i.e. right after we auto-inserted "{{}}"), the
+            // TextMate `{{- -}}` pair adds its own "-}}" on top of the existing
+            // "}}", producing "{{--}}}}". Handle it ourselves so only one pair
+            // is inserted.
+            val insideEmptyDelimiter =
+                prevChar == '{' && charBeforePrev == '{' &&
+                    nextChar == '}' && charAfterNext == '}'
+            if (!insideEmptyDelimiter) return Result.CONTINUE
+
+            // Replace the trailing "}}" with "--}}" so the buffer becomes
+            // "{{--}}" with the caret between the two dashes.
+            document.replaceString(caret, caret + 2, "--}}")
+            editor.caretModel.moveToOffset(caret + 1)
+            PsiDocumentManager.getInstance(project).commitDocument(document)
+            return Result.STOP
+        }
+
+        if (c == '*') {
+            // Same double-close bug for comments: after "{{|}}" the user types
+            // "/" (buffer becomes "{{/|}}"), then "*". The TextMate `{{/*` pair
+            // adds "*/}}" on top of the existing "}}", producing "{{/**/}}}}".
+            val charBeforeBeforePrev = if (caret >= 3) text[caret - 3] else null
+            val insideCommentOpener =
+                prevChar == '/' && charBeforePrev == '{' && charBeforeBeforePrev == '{' &&
+                    nextChar == '}' && charAfterNext == '}'
+            if (!insideCommentOpener) return Result.CONTINUE
+
+            // Replace the trailing "}}" with "**/}}" so the buffer becomes
+            // "{{/**/}}" with the caret between the two stars.
+            document.replaceString(caret, caret + 2, "**/}}")
+            editor.caretModel.moveToOffset(caret + 1)
+            PsiDocumentManager.getInstance(project).commitDocument(document)
+            return Result.STOP
+        }
 
         // Are we completing a fresh "{{" delimiter? Only when the char right
         // before the caret is "{" and the one before that is NOT "{" (so we do
         // not turn "{{" into "{{{...}}}" when typing a third brace).
-        val charBeforePrev = if (caret >= 2) text[caret - 2] else null
         val completingDelimiter = prevChar == '{' && charBeforePrev != '{'
 
         if (completingDelimiter) {
