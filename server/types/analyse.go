@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"strings"
 
 	parse "text-template-parser"
 )
@@ -22,7 +23,8 @@ type Tree struct {
 	Errors     []error                // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
 	End        Pos                    // position of the end of the template text; only set after parsing.
 	funcs      map[string]*types.Func // available functions with their signatures
-	DotType    *types.Named           // optional: type of dot context (from gotype hint)
+	DotType    *types.Named           // optional: named type of dot context (from struct-shaped gotype hint)
+	DictType   *DictType              // optional: dict-shaped dot context (from `gotype: dict{...}` hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
 	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
@@ -246,7 +248,23 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if !IsEmptyInterface(expectedType) && IsEmptyInterface(argType) {
+			_, expectedIsDict := expectedType.(*DictType)
+			_, argIsDict := argType.(*DictType)
+			if expectedIsDict || argIsDict {
+				// For dicts we compare by String() only: go/types.AssignableTo
+				// and friends are not defined for synthetic dict types.
+				if argType != nil && !IsEmptyInterface(argType) &&
+					argType.String() != expectedType.String() {
+					ctx.errorf(
+						t,
+						ErrorTypeInvalidTemplateArg,
+						"template %q expects argument of type %s, but got %s",
+						n.Name,
+						expectedType.String(),
+						argType.String(),
+					)
+				}
+			} else if !IsEmptyInterface(expectedType) && IsEmptyInterface(argType) {
 				// Template parameter is concrete but argument type is
 				// unknown (any). We can't verify the call, so warn only.
 				// The reverse (concrete arg to any param) is fine: losing
@@ -314,13 +332,15 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	keepVars := len(ctx.vars)
 	w.Pipe = analysePipe(n.Pipe, w, ctx)
 	if w.Pipe.typ != nil && !IsEmptyInterface(w.Pipe.typ) {
-		if _, ok := unalias(w.Pipe.typ).Underlying().(*types.Struct); !ok {
-			ctx.errorf(
-				w.Pipe,
-				ErrorTypeInvalidWith,
-				"cannot use type %v in with statement; expected struct type",
-				w.Pipe.typ,
-			)
+		if _, isDict := w.Pipe.typ.(*DictType); !isDict {
+			if _, ok := unalias(w.Pipe.typ).Underlying().(*types.Struct); !ok {
+				ctx.errorf(
+					w.Pipe,
+					ErrorTypeInvalidWith,
+					"cannot use type %v in with statement; expected struct type",
+					w.Pipe.typ,
+				)
+			}
 		}
 	}
 	ctx.dotType = w.Pipe.typ
@@ -656,6 +676,22 @@ func walkFieldChainWithMethodInfo(
 	currentType := base
 	isMethod := make([]bool, len(path))
 	for i, name := range path {
+		if d, ok := currentType.(*DictType); ok {
+			valueTyp, keyOk := d.LookupDictKey(name)
+			if !keyOk {
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidField,
+					"dict has no key %q; known keys: %s",
+					name,
+					strings.Join(d.DictKeys(), ", "),
+				)
+				return types.NewInterfaceType(nil, nil).Complete(), isMethod
+			}
+			currentType = valueTyp
+			isMethod[i] = false
+			continue
+		}
 		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
 		if obj == nil {
 			ctx.errorf(

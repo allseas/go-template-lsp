@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	parse "text-template-parser"
@@ -62,12 +63,16 @@ func treeAt(offset int, trees map[string]*parse.Tree) *parse.Tree {
 	return trees["t"]
 }
 
+var (
+	structHintRe = regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
+	dictHintRe   = regexp.MustCompile(`gotype:\s*dict\s*\{`)
+	dictEntryRe  = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*([A-Za-z_][A-Za-z0-9_/.-]*)\s*$`)
+)
+
 // FindTreeHints scans each parse tree for a `gotype:` comment and returns a
 // map of template names to the first hint found in that tree.
 func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHint {
 	result := make(map[string]TypeHint)
-
-	re := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
 
 	for name, tree := range trees {
 		if tree == nil || tree.Root == nil {
@@ -82,14 +87,18 @@ func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHin
 			if !ok {
 				return
 			}
-			m := re.FindStringSubmatch(c.Text)
-			if len(m) < 2 {
+			line := strings.Count(text[:int(c.Pos)], "\n") + 1
+			// A dict marker takes priority: even if the body is malformed we
+			// must not fall back to struct parsing, otherwise the leading
+			// `dict` identifier would be captured as a struct type name.
+			if dictHintRe.MatchString(c.Text) {
+				if h, ok := parseDictHint(c.Text, line); ok {
+					hint = h
+				}
 				return
 			}
-			hint = TypeHint{
-				Type: typeHintStruct,
-				Text: m[1],
-				Line: strings.Count(text[:int(c.Pos)], "\n") + 1,
+			if h, ok := parseStructHint(c.Text, line); ok {
+				hint = h
 			}
 		})
 		if hint.Type != typeHintNone {
@@ -98,6 +107,67 @@ func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHin
 	}
 
 	return result
+}
+
+// parseDictHint tries to interpret commentText as `gotype: dict{...}`. It
+// returns ok=false when the comment does not contain a dict marker at all;
+// when the marker is present but the body is malformed the returned ok is
+// still false so the caller does not fall back to struct parsing.
+func parseDictHint(commentText string, line int) (TypeHint, bool) {
+	loc := dictHintRe.FindStringIndex(commentText)
+	if loc == nil {
+		return TypeHint{}, false
+	}
+	rest := commentText[loc[1]:]
+	end := strings.Index(rest, "}")
+	if end < 0 {
+		return TypeHint{}, false
+	}
+	body := rest[:end]
+	dict, ok := parseDictBody(body)
+	if !ok {
+		return TypeHint{}, false
+	}
+	return TypeHint{
+		Type: typeHintDict,
+		Text: strings.TrimSpace(body),
+		Dict: dict,
+		Line: line,
+	}, true
+}
+
+// parseDictBody parses the comma-separated `"key": typeref` entries between
+// the braces of a dict hint. An empty body or any malformed entry rejects
+// the whole hint.
+func parseDictBody(body string) (map[string]string, bool) {
+	entries := strings.Split(body, ",")
+	dict := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if strings.TrimSpace(e) == "" {
+			return nil, false
+		}
+		m := dictEntryRe.FindStringSubmatch(e)
+		if m == nil {
+			return nil, false
+		}
+		dict[m[1]] = m[2]
+	}
+	if len(dict) == 0 {
+		return nil, false
+	}
+	return dict, true
+}
+
+func parseStructHint(commentText string, line int) (TypeHint, bool) {
+	m := structHintRe.FindStringSubmatch(commentText)
+	if len(m) < 2 {
+		return TypeHint{}, false
+	}
+	return TypeHint{
+		Type: typeHintStruct,
+		Text: m[1],
+		Line: line,
+	}, true
 }
 
 func inspectParsed(node parse.Node, f func(node parse.Node)) {
@@ -138,8 +208,74 @@ func parseBranchChildren(list, elseList *parse.ListNode) []parse.Node {
 	return out
 }
 
+// DictType is a synthetic types.Type representing a `gotype: dict{...}` hint.
+// It behaves like a struct with named keys of arbitrary Go types, but is not
+// a real Go type — LookupFieldOrMethod does not work on it. The analyser and
+// completion code type-assert on *DictType to detect it.
 type DictType struct {
-	types map[string]types.Type
+	Fields map[string]types.Type
+}
+
+// Underlying implements types.Type; a dict is its own underlying.
+func (d *DictType) Underlying() types.Type { return d }
+
+// String implements types.Type. Keys are sorted so the output is stable.
+func (d *DictType) String() string {
+	if d == nil {
+		return "dict{}"
+	}
+	keys := d.DictKeys()
+	var b strings.Builder
+	b.WriteString("dict{")
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q: %s", k, types.TypeString(d.Fields[k], nil))
+	}
+	b.WriteString("}")
+	return b.String()
+}
+
+// LookupDictKey returns the value type for name, ok=false if absent.
+func (d *DictType) LookupDictKey(name string) (types.Type, bool) {
+	if d == nil {
+		return nil, false
+	}
+	t, ok := d.Fields[name]
+	return t, ok
+}
+
+// DictKeys returns the keys in sorted order for deterministic output.
+func (d *DictType) DictKeys() []string {
+	if d == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(d.Fields))
+	for k := range d.Fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// DictTypeFields projects a *DictType into TypeField rows so completion code
+// can treat dict keys and struct fields uniformly.
+func DictTypeFields(d *DictType) []TypeField {
+	if d == nil {
+		return nil
+	}
+	keys := d.DictKeys()
+	fields := make([]TypeField, 0, len(keys))
+	for _, k := range keys {
+		t := d.Fields[k]
+		fields = append(fields, TypeField{
+			Name:     k,
+			TypeName: types.TypeString(t, nil),
+			Type:     t,
+		})
+	}
+	return fields
 }
 
 // TypeField is a resolved field from a struct type.
@@ -229,6 +365,107 @@ func CachedLoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 	typeHintCacheMu.Unlock()
 
 	return t, nil
+}
+
+// CachedLoadHint dispatches on the hint kind and delegates to the appropriate
+// cached loader. Struct hints go through CachedLoadTypeFromHint; dict hints go
+// through CachedLoadDictFromHint.
+func CachedLoadHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
+	switch hint.Type {
+	case typeHintDict:
+		return CachedLoadDictFromHint(hint, workspaceRoot)
+	case typeHintStruct:
+		return CachedLoadTypeFromHint(hint.Text, workspaceRoot)
+	default:
+		return nil, fmt.Errorf("unknown hint type")
+	}
+}
+
+// dictCacheKey returns a deterministic key for a dict hint independent of map
+// iteration order.
+func dictCacheKey(hint TypeHint, workspaceRoot string) string {
+	keys := make([]string, 0, len(hint.Dict))
+	for k := range hint.Dict {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString("dict\x00")
+	for _, k := range keys {
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(hint.Dict[k])
+		b.WriteByte('\x01')
+	}
+	b.WriteString("\x00")
+	b.WriteString(workspaceRoot)
+	return b.String()
+}
+
+// CachedLoadDictFromHint is the cached counterpart of LoadDictFromHint.
+func CachedLoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
+	key := dictCacheKey(hint, workspaceRoot)
+
+	typeHintCacheMu.RLock()
+	if t, ok := typeHintCache[key]; ok {
+		typeHintCacheMu.RUnlock()
+		return t, nil
+	}
+	typeHintCacheMu.RUnlock()
+
+	t, err := LoadDictFromHint(hint, workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	typeHintCacheMu.Lock()
+	typeHintCache[key] = t
+	typeHintCacheMu.Unlock()
+
+	return t, nil
+}
+
+// LoadDictFromHint loads every value type of a dict hint and returns a Tree
+// whose DictType is populated. DotType is left nil.
+func LoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
+	if hint.Type != typeHintDict {
+		return nil, fmt.Errorf("LoadDictFromHint: hint is not a dict")
+	}
+	if len(hint.Dict) == 0 {
+		return nil, fmt.Errorf("LoadDictFromHint: dict is empty")
+	}
+	fields := make(map[string]types.Type, len(hint.Dict))
+	var pkg *types.Package
+	var fset *token.FileSet
+	for _, k := range sortedKeys(hint.Dict) {
+		ref := hint.Dict[k]
+		lt, err := LoadTypeFromHint(ref, workspaceRoot)
+		if err != nil {
+			return nil, fmt.Errorf("dict key %q (%s): %w", k, ref, err)
+		}
+		fields[k] = lt.DotType
+		if pkg == nil {
+			pkg = lt.Pkg
+		}
+		if fset == nil {
+			fset = lt.Fset
+		}
+	}
+	return &Tree{
+		DictType: &DictType{Fields: fields},
+		Pkg:      pkg,
+		Fset:     fset,
+	}, nil
+}
+
+// sortedKeys returns the keys of m in sorted order.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // LoadTypeFromHint loads the Go package identified by the hint and returns a
