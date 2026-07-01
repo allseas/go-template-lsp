@@ -134,27 +134,27 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	{
 		name:      "dict hint with an empty body",
 		input:     `{{/*gotype: map{}*/}}`,
-		wantHints: nil,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
 	},
 	{
 		name:      "dict hint missing the closing brace is not accepted",
 		input:     `{{/*gotype: map{"Order": example.com/m.Order*/}}`,
-		wantHints: nil,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
 	},
 	{
 		name:      "dict hint with an unquoted key is not accepted",
 		input:     `{{/*gotype: map{Order: example.com/m.Order}*/}}`,
-		wantHints: nil,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
 	},
 	{
 		name:      "dict hint with a missing colon is not accepted",
 		input:     `{{/*gotype: map{"Order" example.com/m.Order}*/}}`,
-		wantHints: nil,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
 	},
 	{
 		name:      "dict hint with a missing type reference is not accepted",
 		input:     `{{/*gotype: map{"Order": }*/}}`,
-		wantHints: nil,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
 	},
 }
 

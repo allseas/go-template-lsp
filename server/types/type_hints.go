@@ -24,6 +24,7 @@ const (
 	typeHintNone typeHintType = iota
 	typeHintStruct
 	typeHintDict
+	typeHintMalformedDict
 )
 
 // TypeHint represents a `gotype:` type hint found in a template file.
@@ -40,6 +41,10 @@ type TypeHint struct {
 	// appears; 0 when the hint is unset.
 	Line int
 }
+
+// IsMalformed reports whether the hint was recognised as a map hint but its
+// body could not be parsed.
+func (h TypeHint) IsMalformed() bool { return h.Type == typeHintMalformedDict }
 
 func treeAt(offset int, trees map[string]*parse.Tree) *parse.Tree {
 	var best *parse.Tree
@@ -94,6 +99,8 @@ func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHin
 			if dictHintRe.MatchString(c.Text) {
 				if h, ok := parseDictHint(c.Text, line); ok {
 					hint = h
+				} else {
+					hint = TypeHint{Type: typeHintMalformedDict, Line: line}
 				}
 				return
 			}
@@ -376,6 +383,8 @@ func CachedLoadHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
 		return CachedLoadDictFromHint(hint, workspaceRoot)
 	case typeHintStruct:
 		return CachedLoadTypeFromHint(hint.Text, workspaceRoot)
+	case typeHintMalformedDict:
+		return nil, fmt.Errorf("malformed map hint")
 	default:
 		return nil, fmt.Errorf("unknown hint type")
 	}

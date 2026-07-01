@@ -118,7 +118,9 @@
                         "hintLoadFailure": "warning",
                         "unknownRangeType": "warning",
                         "emptyDefineName": "warning",
-                        "variableReassigned": "warning"
+                        "variableReassigned": "warning",
+                        "malformedHint": "error",
+                        "invalidDictKey": "information"
                     },
                     "additionalProperties": {
                         "type": "string",

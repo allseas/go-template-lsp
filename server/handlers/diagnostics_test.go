@@ -538,6 +538,23 @@ func TestCollectDiagnostics_DictHint(t *testing.T) {
 		require.True(t, ok, "expected diagnostic for Unknown key, got: %v", diagMessages(diags))
 		assert.Contains(t, diag.Message, "known keys")
 		assert.Contains(t, diag.Message, "Order")
+		require.NotNil(t, diag.Severity)
+		assert.Equal(t, protocol.DiagnosticSeverityInformation, *diag.Severity,
+			"unknown map key should be surfaced as information, not error")
+	})
+
+	t.Run("malformed map hint emits error diagnostic", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-malformed.tmpl")
+		store.Set(uri("dict-malformed.tmpl"), src)
+		t.Cleanup(func() { store.Remove(uri("dict-malformed.tmpl")) })
+
+		diags := collectDiagnostics(src, uri("dict-malformed.tmpl"))
+		diag, ok := findDiagnosticContaining(diags, "malformed map hint")
+		require.True(t, ok, "expected malformed-hint diagnostic, got: %v", diagMessages(diags))
+		assert.Equal(t, uint32(0), diag.Range.Start.Line, "diagnostic should sit on the hint comment")
+		require.NotNil(t, diag.Severity)
+		assert.Equal(t, protocol.DiagnosticSeverityError, *diag.Severity,
+			"malformed map hint should be an error")
 	})
 
 	t.Run("variable binding preserves dict shape", func(t *testing.T) {

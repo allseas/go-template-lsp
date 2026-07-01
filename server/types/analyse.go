@@ -64,6 +64,10 @@ const (
 	ErrorTypeEmptyDefineName
 	// ErrorTypeVariableReassigned A variable is reassigned to a value of a different concrete type. The new binding shadows the previous one on the variable stack rather than mutating it.
 	ErrorTypeVariableReassigned
+	// ErrorTypeMalformedHint A gotype hint's syntax is invalid (e.g. malformed `map{...}` body)
+	ErrorTypeMalformedHint
+	// ErrorTypeInvalidDictKey Key lookup on a map-shaped gotype hint failed
+	ErrorTypeInvalidDictKey
 	// Add more error types as needed
 )
 
@@ -83,6 +87,8 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeUnknownRangeType:   "unknownRangeType",
 	ErrorTypeEmptyDefineName:    "emptyDefineName",
 	ErrorTypeVariableReassigned: "variableReassigned",
+	ErrorTypeMalformedHint:      "malformedHint",
+	ErrorTypeInvalidDictKey:     "invalidDictKey",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
@@ -681,7 +687,7 @@ func walkFieldChainWithMethodInfo(
 			if !keyOk {
 				ctx.errorf(
 					errNode,
-					ErrorTypeInvalidField,
+					ErrorTypeInvalidDictKey,
 					"map has no key %q; known keys: %s",
 					name,
 					strings.Join(d.DictKeys(), ", "),

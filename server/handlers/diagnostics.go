@@ -124,20 +124,28 @@ func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Di
 	if doc == nil || len(doc.failedHints) == 0 {
 		return nil
 	}
-	severity := GetConfig().Diagnostics[types.ErrorHintLoadFailure]
-	if severity == DiagnosticSeverityDisabled {
-		return nil
-	}
+	cfg := GetConfig().Diagnostics
+	loadSev := cfg[types.ErrorHintLoadFailure]
+	malformedSev := cfg[types.ErrorTypeMalformedHint]
 	var diagnostics []protocol.Diagnostic
 
 	for _, fh := range doc.failedHints {
+		severity := loadSev
+		msg := "gotype: could not load type: " + fh.Err
+		if fh.Hint.IsMalformed() {
+			severity = malformedSev
+			msg = "gotype: " + fh.Err
+		}
+		if severity == DiagnosticSeverityDisabled {
+			continue
+		}
 		offset := gotypeHintOffset(text, fh.Hint.Line)
 		if offset < 0 {
 			continue
 		}
 		rng := expandToFullBracketsFromOffset(offset, text)
 		diagnostics = append(diagnostics, createDiagnostic(
-			"gotype: could not load type: "+fh.Err,
+			msg,
 			rng,
 			severity,
 		))

@@ -70,6 +70,10 @@ func (s *documentStore) Set(uri, text string) {
 	for name := range treeSet {
 		hint := treeHints[name]
 		log.Debug().Str("name", name).Str("hint", hint.Text).Msg("found gotype hint")
+		if hint.IsMalformed() {
+			failedHints[name] = failedHint{Hint: hint, Err: "malformed map hint"}
+			continue
+		}
 		if hint.Text == "" {
 			continue
 		}
@@ -98,6 +102,9 @@ func (s *documentStore) Set(uri, text string) {
 	if WorkspaceRoot != "" {
 		for name, hint := range treeHints {
 			if name == "" {
+				continue
+			}
+			if hint.IsMalformed() {
 				continue
 			}
 
