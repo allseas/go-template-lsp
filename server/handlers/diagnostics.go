@@ -67,11 +67,6 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 		}
 	}
 
-	// log.Debug().
-	// 	Int("num diagnostics", len(diagnostics)).
-	// 	Any("diagnostics", diagnostics).
-	// 	Msg("publishDiagnostics")
-
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, &protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Diagnostics: diagnostics,

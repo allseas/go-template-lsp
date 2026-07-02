@@ -488,8 +488,6 @@ func pipeSortPrefix(concrete bool) string {
 }
 
 func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) (accepts bool, concrete bool) {
-	log.Debug().Str("func", fn.Name()).Msg("checking if function accepts pipe input")
-
 	if pipeInputType == nil {
 		// No pipe input to match: concreteness is meaningless, so don't
 		// promote funcs above fields/methods in the sort order.

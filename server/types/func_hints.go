@@ -87,10 +87,6 @@ func GlobalFuncs() map[string]*types.Func {
 	for k, v := range globalFuncsCache {
 		out[k] = v
 	}
-	// for k, v := range globalFuncsEntriesCache {
-	// 	log.Debug().Str("func", k).Msg("globalFuncsEntriesCache")
-	// 	log.Debug().Any("entry", v).Msg("globalFuncsEntriesCache")
-	// }
 	return out
 }
 
