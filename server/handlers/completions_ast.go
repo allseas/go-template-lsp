@@ -395,11 +395,11 @@ func suggest(
 		pipeIn = nil
 		kind = outputAny
 	}
-	inputType := pipeIn
-	if inputType == nil && kind == outputAny {
-		inputType = dotTypeAt(cur)
-	}
-	items := pipeFilteredItemsT(cur, kind, inputType, pipeIn, argKind, wordRange)
+	// Only pipe input drives input-kind filtering. Dot is not automatically
+	// passed as an argument in `{{ func }}`, so falling back to dot's kind
+	// here would drop concrete-param funcs (e.g. box(string)) from a plain
+	// `{{<>}}` while keeping variadic-any ones.
+	items := pipeFilteredItemsT(cur, kind, pipeIn, pipeIn, argKind, wordRange)
 	if pipeIn == nil {
 		items = append(
 			items,
@@ -488,8 +488,12 @@ func pipeSortPrefix(concrete bool) string {
 }
 
 func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) (accepts bool, concrete bool) {
+	log.Debug().Str("func", fn.Name()).Msg("checking if function accepts pipe input")
+
 	if pipeInputType == nil {
-		return true, true
+		// No pipe input to match: concreteness is meaningless, so don't
+		// promote funcs above fields/methods in the sort order.
+		return true, false
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
@@ -798,10 +802,16 @@ func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
 	funcs := serverTypes.GlobalFuncs()
 	items := make([]protocol.CompletionItem, 0, len(funcs)+len(templateActionNames))
 	for name := range funcs {
-		items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
+		item := newItem(name, protocol.CompletionItemKindFunction, wordRange)
+		sortText := "1_" + name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	for _, name := range templateActionNames {
-		items = append(items, newItem(name, protocol.CompletionItemKindKeyword, wordRange))
+		item := newItem(name, protocol.CompletionItemKindKeyword, wordRange)
+		sortText := "1_" + name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	return items
 }

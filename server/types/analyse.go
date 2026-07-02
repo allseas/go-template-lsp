@@ -296,7 +296,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 					!types.Identical(effArg, effExpected) &&
 					!types.AssignableTo(effArg, effExpected) &&
 					!types.ConvertibleTo(effArg, effExpected) &&
-					effArg.String() != effExpected.String() { // fallback to string comparison to handle loading a package multiple times
+					!pointerElemMatches(effArg, effExpected) { // fallback to string comparison to handle loading a package multiple times
 					ctx.errorf(
 						t,
 						ErrorTypeInvalidTemplateArg,
@@ -350,6 +350,21 @@ func unalias(t types.Type) types.Type {
 		}
 		t = p.Elem()
 	}
+}
+
+// pointerElemMatches reports whether arg is *T where T matches expected.
+// Go's text/template auto-dereferences pointer values, so a *T argument is
+// acceptable wherever a T parameter is declared. The reverse (T where *T is
+// expected) is not accepted: templates do not auto-address values.
+func pointerElemMatches(arg, expected types.Type) bool {
+	p, ok := types.Unalias(arg).(*types.Pointer)
+	if !ok {
+		return false
+	}
+	elem := p.Elem()
+	return types.Identical(elem, expected) ||
+		types.AssignableTo(elem, expected) ||
+		elem.String() == expected.String()
 }
 
 func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
