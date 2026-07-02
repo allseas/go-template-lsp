@@ -515,3 +515,80 @@ func TestCompletionAstMultiDefines(t *testing.T) {
 		})
 	}
 }
+
+// completionLabelsAt drives completionAst against the current store state and
+// returns the labels produced at the given byte offset in src.
+func completionLabelsAt(t *testing.T, uri, src string, offset int) []string {
+	t.Helper()
+	pos := offsetToPosition(src, offset)
+	result := completionAst(nil, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     pos,
+		},
+	})
+	require.NotNil(t, result)
+	return labelsFrom(t, result)
+}
+
+// TestCompletionAst_DictHint verifies that dot completion at various positions
+// under a dict gotype hint offers the correct keys/fields end-to-end through
+// the handler pipeline.
+func TestCompletionAst_DictHint(t *testing.T) {
+	enableAutocompletion(t)
+	const resourceDir = "../../test/resources/dict-typehints"
+
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = resourceDir
+
+	uri := func(name string) string { return "file:///" + name }
+
+	t.Run("dot completion offers dict keys", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-keys-completion.tmpl")
+		u := uri("dict-keys-completion.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		// Cursor immediately after the `.` in `{{ . }}` — first occurrence.
+		offset := offsetOf(t, src, "{{ . }}", 0) + len("{{ .")
+		labels := completionLabelsAt(t, u, src, offset)
+
+		assert.Contains(t, labels, "Order")
+		assert.Contains(t, labels, "Address")
+		assert.NotContains(
+			t,
+			labels,
+			"CustomerName",
+			"dict keys, not resolved struct fields, should appear at the top level",
+		)
+	})
+
+	t.Run("chained completion resolves value type", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-keys-completion.tmpl")
+		u := uri("dict-keys-completion.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		// Cursor immediately after `.Order.` in `{{ .Order. }}`.
+		offset := offsetOf(t, src, ".Order.", 0) + len(".Order.")
+		labels := completionLabelsAt(t, u, src, offset)
+
+		assert.Contains(t, labels, "CustomerName")
+		assert.Contains(t, labels, "ID")
+		assert.Contains(t, labels, "Address")
+	})
+
+	t.Run("variable-bound dot offers dict keys", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-var-completion.tmpl")
+		u := uri("dict-var-completion.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		// Cursor immediately after `$d.` in `{{ $d. }}`.
+		offset := offsetOf(t, src, "$d. }}", 0) + len("$d.")
+		labels := completionLabelsAt(t, u, src, offset)
+
+		assert.Contains(t, labels, "Order")
+		assert.Contains(t, labels, "Address")
+	})
+}

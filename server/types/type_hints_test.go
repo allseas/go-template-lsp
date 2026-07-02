@@ -35,7 +35,7 @@ func findTreeHints(t *testing.T, text string) []TypeHint {
 		if hints[i].Line != hints[j].Line {
 			return hints[i].Line < hints[j].Line
 		}
-		return hints[i].Type < hints[j].Type
+		return hints[i].Text < hints[j].Text
 	})
 	if len(hints) == 0 {
 		return nil

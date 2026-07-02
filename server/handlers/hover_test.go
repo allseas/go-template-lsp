@@ -3,6 +3,7 @@ package handlers
 import (
 	"go/token"
 	"go/types"
+	"strings"
 	"testing"
 
 	serverTypes "text-template-server/types"
@@ -202,4 +203,69 @@ func TestMessageIdentifier_BuiltinsStillTakePrecedence(t *testing.T) {
 
 	assert.Contains(t, got, "Returns the first empty argument")
 	assert.NotContains(t, got, "should not appear")
+}
+
+// TestHover_DictHint verifies that hover messages under a dict `gotype:` hint
+// resolve types correctly and render a user-friendly dict context rather than
+// dumping the raw `dict{"K": pkg.T, ...}` string.
+func TestHover_DictHint(t *testing.T) {
+	enableHover(t)
+	const resourceDir = "../../test/resources/dict-typehints"
+
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = resourceDir
+
+	uri := func(name string) string { return "file:///" + name }
+
+	hoverAt := func(t *testing.T, u, src string, offset int) string {
+		t.Helper()
+		result, err := Hover(nil, &protocol.HoverParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: u},
+				Position:     offsetToPosition(src, offset),
+			},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result, "expected non-nil hover result")
+		mc, ok := result.Contents.(protocol.MarkupContent)
+		require.True(t, ok, "expected MarkupContent, got %T", result.Contents)
+		return mc.Value
+	}
+
+	t.Run("chain leaf shows resolved intermediate type, not raw dict", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-valid-access.tmpl")
+		u := uri("dict-valid-access.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		msg := hoverAt(t, u, src, strings.Index(src, "CustomerName")+1)
+		assert.Contains(t, msg, "CustomerName")
+		assert.Contains(t, msg, "string")
+		assert.NotContains(t, msg, `"Order":`,
+			"raw dict string should not leak into hover message")
+	})
+
+	t.Run("dict key shows its resolved type", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-valid-access.tmpl")
+		u := uri("dict-valid-access.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		msg := hoverAt(t, u, src, strings.Index(src, ".Order.")+2)
+		assert.Contains(t, msg, "Order")
+		assert.NotContains(t, msg, `"Order":`,
+			"raw dict string should not leak into hover message")
+	})
+
+	t.Run("variable bound to dict hovers cleanly", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-var-binding.tmpl")
+		u := uri("dict-var-binding.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		msg := hoverAt(t, u, src, strings.Index(src, "$d :="))
+		assert.Contains(t, msg, "$d")
+		assert.NotContains(t, msg, `"Order":`,
+			"raw dict string should not leak into hover message")
+	})
 }

@@ -22,35 +22,35 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	{
 		name:      "single hint",
 		input:     "{{/*gotype: MyType*/}}",
-		wantHints: []TypeHint{{Line: 1, Type: "MyType"}},
+		wantHints: []TypeHint{{Type: typeHintStruct, Text: "MyType", Line: 1}},
 	},
 	{
 		name:      "hint with package path",
 		input:     "{{/*gotype: pkg/sub.MyType*/}}",
-		wantHints: []TypeHint{{Line: 1, Type: "pkg/sub.MyType"}},
+		wantHints: []TypeHint{{Type: typeHintStruct, Text: "pkg/sub.MyType", Line: 1}},
 	},
 	{
 		name:      "hint with trimming dashes and spaces",
 		input:     "{{- /* gotype: Foo */ -}}",
-		wantHints: []TypeHint{{Line: 1, Type: "Foo"}},
+		wantHints: []TypeHint{{Type: typeHintStruct, Text: "Foo", Line: 1}},
 	},
 	{
 		name:      "hint on second line",
 		input:     "first line\n{{/*gotype: Bar*/}}",
-		wantHints: []TypeHint{{Line: 2, Type: "Bar"}},
+		wantHints: []TypeHint{{Type: typeHintStruct, Text: "Bar", Line: 2}},
 	},
 	{
 		name:  "multiple hints on separate lines",
 		input: "{{/*gotype: Type1*/}}\n{{/*gotype: Type2*/}}",
 		wantHints: []TypeHint{
-			{Line: 1, Type: "Type1"},
+			{Type: typeHintStruct, Text: "Type1", Line: 1},
 		},
 	},
 	{
 		name:  "two hints on same line",
 		input: "{{/*gotype: A*/}} {{/*gotype: B*/}}",
 		wantHints: []TypeHint{
-			{Line: 1, Type: "A"},
+			{Type: typeHintStruct, Text: "A", Line: 1},
 		},
 	},
 	{
@@ -69,8 +69,8 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 			"body\n" +
 			"{{- end -}}\n",
 		wantHints: []TypeHint{
-			{Line: 2, Type: "example.com/m.Order"},
-			{Line: 6, Type: "example.com/m.Address"},
+			{Type: typeHintStruct, Text: "example.com/m.Order", Line: 2},
+			{Type: typeHintStruct, Text: "example.com/m.Address", Line: 6},
 		},
 	},
 	{
@@ -82,8 +82,79 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 			"no hint here\n" +
 			"{{- end -}}\n",
 		wantHints: []TypeHint{
-			{Line: 2, Type: "example.com/m.Order"},
+			{Type: typeHintStruct, Text: "example.com/m.Order", Line: 2},
 		},
+	},
+	{
+		name:  "dict hint with a single entry",
+		input: `{{/*gotype: map{"Order": example.com/m.Order}*/}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintDict,
+			Text: `"Order": example.com/m.Order`,
+			Dict: map[string]string{"Order": "example.com/m.Order"},
+			Line: 1,
+		}},
+	},
+	{
+		name:  "dict hint with multiple entries",
+		input: `{{/*gotype: map{"Order": example.com/m.Order, "Address": example.com/m.Address}*/}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintDict,
+			Text: `"Order": example.com/m.Order, "Address": example.com/m.Address`,
+			Dict: map[string]string{
+				"Order":   "example.com/m.Order",
+				"Address": "example.com/m.Address",
+			},
+			Line: 1,
+		}},
+	},
+	{
+		name:  "dict hint tolerates extra whitespace around tokens",
+		input: `{{- /* gotype: map{  "A" : pkg.T ,  "B" : other/pkg.U } */ -}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintDict,
+			Text: `"A" : pkg.T ,  "B" : other/pkg.U`,
+			Dict: map[string]string{
+				"A": "pkg.T",
+				"B": "other/pkg.U",
+			},
+			Line: 1,
+		}},
+	},
+	{
+		name:  "dict hint on a define block",
+		input: "{{- define \"Tpl\" -}}\n" + `{{- /*gotype: map{"K": ex.com/m.K}*/ -}}` + "\n{{- end -}}\n",
+		wantHints: []TypeHint{{
+			Type: typeHintDict,
+			Text: `"K": ex.com/m.K`,
+			Dict: map[string]string{"K": "ex.com/m.K"},
+			Line: 2,
+		}},
+	},
+	{
+		name:      "dict hint with an empty body",
+		input:     `{{/*gotype: map{}*/}}`,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
+	},
+	{
+		name:      "dict hint missing the closing brace is not accepted",
+		input:     `{{/*gotype: map{"Order": example.com/m.Order*/}}`,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
+	},
+	{
+		name:      "dict hint with an unquoted key is not accepted",
+		input:     `{{/*gotype: map{Order: example.com/m.Order}*/}}`,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
+	},
+	{
+		name:      "dict hint with a missing colon is not accepted",
+		input:     `{{/*gotype: map{"Order" example.com/m.Order}*/}}`,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
+	},
+	{
+		name:      "dict hint with a missing type reference is not accepted",
+		input:     `{{/*gotype: map{"Order": }*/}}`,
+		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},
 	},
 }
 
