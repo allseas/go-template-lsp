@@ -499,10 +499,12 @@ func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error)
 			Str("importPath", importPath).
 			Str("dir", workspaceRoot).
 			Msg("LoadTypeFromHint: packages.Load failed")
+		typeHintCacheMu.RUnlock()
 		return nil, fmt.Errorf("packages.Load(%q): %w", importPath, err)
 	}
 	if len(pkgs) == 0 {
 		log.Error().Str("importPath", importPath).Msg("LoadTypeFromHint: no packages found")
+		typeHintCacheMu.RUnlock()
 		return nil, fmt.Errorf("no packages found for import path %q", importPath)
 	}
 
@@ -512,12 +514,12 @@ func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error)
 			Str("importPath", importPath).
 			Str("error", pkg.Errors[0].Msg).
 			Msg("LoadTypeFromHint: package has errors")
+		typeHintCacheMu.RUnlock()
 		return nil, fmt.Errorf("package %q has errors: %v", importPath, pkg.Errors[0])
 	}
-
 	lp := &loadedPackage{pkg: pkg.Types, fset: fset}
 	loadedPackages[key] = lp
-	typeHintCacheMu.Unlock()
+	typeHintCacheMu.RUnlock()
 	return lp, nil
 }
 
