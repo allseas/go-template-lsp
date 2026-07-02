@@ -87,6 +87,10 @@ func GlobalFuncs() map[string]*types.Func {
 	for k, v := range globalFuncsCache {
 		out[k] = v
 	}
+	// for k, v := range globalFuncsEntriesCache {
+	// 	log.Debug().Str("func", k).Msg("globalFuncsEntriesCache")
+	// 	log.Debug().Any("entry", v).Msg("globalFuncsEntriesCache")
+	// }
 	return out
 }
 
@@ -316,7 +320,27 @@ func resolveFuncObj(name string, expr ast.Expr, info *types.Info) *types.Func {
 	}
 	switch v := expr.(type) {
 	case *ast.Ident, *ast.SelectorExpr, *ast.IndexExpr, *ast.IndexListExpr:
-		return resolveCalleeFunc(expr, info)
+		if fn := resolveCalleeFunc(expr, info); fn != nil {
+			return fn
+		}
+		// Fallback: the expression may name a variable (or other non-func
+		// object) whose type is a function signature — e.g.
+		//   writeAuto := buildWriteAuto(...)
+		//   FuncMap{"writeAuto": writeAuto}
+		// Synthesize a *types.Func from that signature so callers get the
+		// right arity/types; point Pos() at the variable for go-to-definition.
+		if sig, _ := info.TypeOf(expr).(*types.Signature); sig != nil {
+			var (
+				pos token.Pos
+				pkg *types.Package
+			)
+			if obj := objectOf(expr, info); obj != nil {
+				pos = obj.Pos()
+				pkg = obj.Pkg()
+			}
+			return types.NewFunc(pos, pkg, name, sig)
+		}
+		return nil
 	case *ast.FuncLit:
 		sig, _ := info.TypeOf(v).(*types.Signature)
 		if sig == nil {
@@ -342,6 +366,23 @@ func resolveFuncObj(name string, expr ast.Expr, info *types.Info) *types.Func {
 			pkg = callee.Pkg()
 		}
 		return types.NewFunc(pos, pkg, name, sig)
+	}
+	return nil
+}
+
+// objectOf returns the declared object an expression refers to, unwrapping
+// generic instantiations. Returns nil if the expression does not name an
+// object (e.g. it's a literal or call).
+func objectOf(expr ast.Expr, info *types.Info) types.Object {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return info.ObjectOf(e)
+	case *ast.SelectorExpr:
+		return info.ObjectOf(e.Sel)
+	case *ast.IndexExpr:
+		return objectOf(e.X, info)
+	case *ast.IndexListExpr:
+		return objectOf(e.X, info)
 	}
 	return nil
 }
