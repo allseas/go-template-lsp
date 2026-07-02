@@ -99,6 +99,8 @@ var (
 			types.ErrorTypeUnknownRangeType:   DiagnosticSeverityWarning,
 			types.ErrorTypeEmptyDefineName:    DiagnosticSeverityWarning,
 			types.ErrorTypeVariableReassigned: DiagnosticSeverityWarning,
+			types.ErrorTypeMalformedHint:      DiagnosticSeverityError,
+			types.ErrorTypeInvalidDictKey:     DiagnosticSeverityInformation,
 		},
 		EnableAutocompletion: true,
 		PipeChainCompletion:  "step",

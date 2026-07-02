@@ -153,14 +153,15 @@ func TestDocumentHintFoundBeyondFirstLine(t *testing.T) {
 		hints := types.FindTreeHints(src, treeSet)
 		hint, ok := hints[tree.Name]
 		assert.True(t, ok, "expected a hint to be found for the root tree")
-		assert.Equal(t, "cg/model.Root", hint.Type)
+		assert.Equal(t, "cg/model.Root", hint.Text)
 
 		wantLine := strings.Count(src[:strings.Index(src, "gotype:")], "\n") + 1
+		gotLine := hint.Line
 		assert.Equal(
 			t,
 			wantLine,
-			hint.Line,
-			"hint line should reflect its actual line in the document, not just line 1",
+			gotLine,
+			"hint position should reflect its actual line in the document, not just line 1",
 		)
 	})
 
@@ -182,14 +183,15 @@ func TestDocumentHintFoundBeyondFirstLine(t *testing.T) {
 		hints := types.FindTreeHints(src, treeSet)
 		hintA, ok := hints["A"]
 		assert.True(t, ok, "expected a hint to be found for define A")
-		assert.Equal(t, "cg/model.A", hintA.Type)
+		assert.Equal(t, "cg/model.A", hintA.Text)
 
 		wantLine := strings.Count(src[:strings.Index(src, "gotype:")], "\n") + 1
+		gotLine := hintA.Line
 		assert.Equal(
 			t,
 			wantLine,
-			hintA.Line,
-			"hint line should reflect its actual line within the document",
+			gotLine,
+			"hint position should reflect its actual line within the document",
 		)
 
 		// The hint sits inside define A's span, so the root tree must not
@@ -197,7 +199,7 @@ func TestDocumentHintFoundBeyondFirstLine(t *testing.T) {
 		rootHint, hasRoot := hints[tree.Name]
 		assert.False(
 			t,
-			hasRoot && rootHint.Type != "",
+			hasRoot && rootHint.Text != "",
 			"root should not pick up define A's hint, got: %+v",
 			rootHint,
 		)
@@ -225,9 +227,9 @@ func TestDocumentMultipleDefines(t *testing.T) {
 
 	// per-tree type hint lookup
 	hints := types.FindTreeHints(src, treeSet)
-	assert.Equal(t, "", hints[tree.Name].Type, "no hint expected on first line of file")
-	assert.Equal(t, "cg/model.A", hints["A"].Type)
-	assert.Equal(t, "cg/model.B", hints["B"].Type)
+	assert.Equal(t, "", hints[tree.Name].Text, "no hint expected on first line of file")
+	assert.Equal(t, "cg/model.A", hints["A"].Text)
+	assert.Equal(t, "cg/model.B", hints["B"].Text)
 
 	doc := &document{text: src, tree: tree, trees: treeSet}
 
@@ -274,7 +276,7 @@ func TestDocumentRootHintOnFirstLine(t *testing.T) {
 	assert.NotNil(t, tree)
 
 	hints := types.FindTreeHints(src, treeSet)
-	assert.Equal(t, "cg/model.Root", hints[tree.Name].Type)
+	assert.Equal(t, "cg/model.Root", hints[tree.Name].Text)
 }
 
 // TestTreeAtMultiDefinesWithRoot verifies the treeAt logic for the canonical

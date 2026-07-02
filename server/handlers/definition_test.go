@@ -780,3 +780,70 @@ func TestDefinitionFuncMapInlineLiteral(t *testing.T) {
 	assert.True(t, strings.HasSuffix(loc.URI, "funcs.go"),
 		"expected URI to point to funcs.go, got %s", loc.URI)
 }
+
+// TestDefinition_DictHint verifies that go-to-definition jumps through a
+// dict-hinted context: `.Order.CustomerName` lands on the Go source for
+// Order.CustomerName, `.Order` lands on the Order type declaration, and a
+// variable-bound dict `$d.Order.CustomerName` behaves the same.
+func TestDefinition_DictHint(t *testing.T) {
+	const resourceDir = "../../test/resources/dict-typehints"
+
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = resourceDir
+
+	uri := func(name string) string { return "file:///" + name }
+
+	definitionAt := func(t *testing.T, u string, pos protocol.Position) protocol.Location {
+		t.Helper()
+		params := &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: u},
+				Position:     pos,
+			},
+		}
+		result, err := Definition(nil, params)
+		require.NoError(t, err)
+		require.NotNil(t, result, "expected non-nil definition result")
+		loc, ok := result.(protocol.Location)
+		require.True(t, ok, "expected protocol.Location, got %T", result)
+		return loc
+	}
+
+	t.Run("chain leaf lands on struct field in model.go", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-valid-access.tmpl")
+		u := uri("dict-valid-access.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		loc := definitionAt(t, u, offsetToPosition(src, strings.Index(src, "CustomerName")+1))
+		assert.True(t, strings.HasSuffix(loc.URI, "model.go"),
+			"expected model.go, got %s", loc.URI)
+		// CustomerName is the 3rd field of Order (0-indexed line 4).
+		assert.Equal(t, uint32(4), loc.Range.Start.Line)
+	})
+
+	t.Run("dict key lands on resolved type declaration", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-valid-access.tmpl")
+		u := uri("dict-valid-access.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		loc := definitionAt(t, u, offsetToPosition(src, strings.Index(src, ".Order.")+2))
+		assert.True(t, strings.HasSuffix(loc.URI, "model.go"),
+			"expected model.go, got %s", loc.URI)
+		// `type Order struct` at line 3 (0-indexed 2).
+		assert.Equal(t, uint32(2), loc.Range.Start.Line)
+	})
+
+	t.Run("variable-bound chain resolves through dict", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-var-binding.tmpl")
+		u := uri("dict-var-binding.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		loc := definitionAt(t, u, offsetToPosition(src, strings.Index(src, "CustomerName")+1))
+		assert.True(t, strings.HasSuffix(loc.URI, "model.go"),
+			"expected model.go, got %s", loc.URI)
+		assert.Equal(t, uint32(4), loc.Range.Start.Line)
+	})
+}

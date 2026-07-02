@@ -38,6 +38,7 @@ This document provides an overview of all features implemented and planned for t
 | Missing whitespace trim detection      | ⏳ (⏳)            | ⏳ (⏳)              | Could    | Suggest whitespace trim operators when needed                             |
 | **Type & Function Hints**              |                  |                    |          |                                                                           |
 | Type hints (`/*gotype: pkg.Type*/`)    | ✅ (✅)            | ✅ (✅)              | Must     | Resolve dot type from Go source for completions, hover, and definition    |
+| Map hints (`/*gotype: map{...}*/`)     | ✅ (✅)            | ✅ (✅)              | Must     | Bind dot to a heterogeneous map of typed values; see [type_hints.md](type_hints.md#map-hints) |
 | Custom function hints (`//tmpl:func`)  | ✅ (✅)            | ✅ (✅)              | Must     | Register user-defined `FuncMap` functions; hot-reloaded on `.go` save     |
 | **Code Actions & Refactoring**         |                  |                    |          |                                                                           |
 | Wrap selection in comment              | ✅ (⏳)            | ✅ (⏳)              | Should   | `{{- /* ... */ -}}`                                                       |

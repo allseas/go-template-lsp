@@ -18,6 +18,7 @@ type Address struct {
 type Company struct {
 	Name    string
 	Country string
+	Owner   *Person
 }
 
 // Item is used as the input type for the "item" template block in the
