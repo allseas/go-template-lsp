@@ -722,6 +722,85 @@ func TestDefinitionVariableChainFieldIdent(t *testing.T) {
 	assert.Equal(t, uint32(39), loc.Range.Start.Line)
 }
 
+func TestDefinitionTemplateInvocation(t *testing.T) {
+	src := "{{ template \"MyTpl\" . }}\n{{ define \"MyTpl\" }}hello{{ end }}"
+	uri := "file:///def-template.tmpl"
+	store.Set(uri, src)
+	defer store.Delete(uri)
+
+	// cursor inside "MyTpl" of the template invocation
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     posOfSubStr(t, src, "MyTpl", 00),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location, got %T", result)
+	assert.Equal(t, uri, loc.URI)
+	// The define block sits on line 1 of the source; the location must reflect
+	// positions in the ORIGINAL document, not in a reconstructed tree string.
+	assert.Equal(t, uint32(1), loc.Range.Start.Line)
+	assert.Equal(t, uint32(20), loc.Range.Start.Character)
+}
+
+func TestDefinitionTemplateInvocationUnknown(t *testing.T) {
+	src := "{{ template \"Missing\" . }}"
+	uri := "file:///def-template-missing.tmpl"
+	store.Set(uri, src)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     posOfSubStr(t, src, "Missing", 0),
+		},
+	}
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestDefinitionTemplateInvocationMultiDefines(t *testing.T) {
+	src := multiDefinesTemplate + "\n{{ template \"OrderTpl\" . }}\n"
+	uri := "file:///def-template-multi.tmpl"
+	loaded := loadModelTypes(t, "Order", "Address")
+	perTree := map[string]*serverTypes.Tree{
+		"t":          loaded["Address"],
+		"OrderTpl":   loaded["Order"],
+		"AddressTpl": loaded["Address"],
+	}
+	setDocMulti(t, uri, src, perTree)
+	defer store.Delete(uri)
+
+	params := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     posOfSubStr(t, src, "\"OrderTpl\" .", 0),
+		},
+	}
+	// nudge cursor onto the name itself
+	params.Position.Character += 2
+
+	result, err := Definition(nil, params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	loc, ok := result.(protocol.Location)
+	require.True(t, ok, "expected protocol.Location, got %T", result)
+	assert.Equal(t, uri, loc.URI)
+	// OrderTpl's {{define}} sits on line 2 of multiDefinesTemplate; the
+	// invocation was appended after, but the definition must point at the
+	// original define block's position in the actual document.
+	assert.Equal(t, uint32(3), loc.Range.Start.Line)
+}
+
 func TestDefinitionFuncMapNamedFunction(t *testing.T) {
 	_, err := serverTypes.LoadGlobalFuncs("../../test/resources/funcmap-tests")
 	require.NoError(t, err)

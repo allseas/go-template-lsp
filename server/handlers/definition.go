@@ -103,12 +103,24 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		return fieldNodeDefinition(loadedType, dotTypeAt(target), target, offset)
 	case *types.IdentifierNode:
 		return definitionIdentifier(target)
+	case *types.TemplateNode:
+		return templateDefinition(target.Name, doc.typedTrees, uri, doc.text)
 	}
 
 	log.Debug().
 		Str("handler", "definition").
 		Any("node", node).
 		Msg("node at position is not a field or identifier")
+	return nil, nil
+}
+
+func templateDefinition(templateName string, typedTrees map[string]*types.Tree, uri protocol.DocumentUri, docText string) (any, error) {
+	if tree, ok := typedTrees[templateName]; ok && tree != nil && tree.Root != nil {
+		return protocol.Location{
+			URI:   uri,
+			Range: nodeRange(tree.Root, docText),
+		}, nil
+	}
 	return nil, nil
 }
 
