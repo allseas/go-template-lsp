@@ -296,7 +296,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 					!types.Identical(effArg, effExpected) &&
 					!types.AssignableTo(effArg, effExpected) &&
 					!types.ConvertibleTo(effArg, effExpected) &&
-					!pointerElemMatches(effArg, effExpected) { // fallback to string comparison to handle loading a package multiple times
+					!pointerElemMatches(effArg, effExpected) {
 					ctx.errorf(
 						t,
 						ErrorTypeInvalidTemplateArg,

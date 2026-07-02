@@ -315,9 +315,15 @@ func goEnv() []string {
 	return os.Environ()
 }
 
+type loadedPackage struct {
+	pkg  *types.Package
+	fset *token.FileSet
+}
+
 var (
 	typeHintCacheMu sync.RWMutex
 	typeHintCache   = make(map[string]*Tree)
+	loadedPackages  = make(map[string]*loadedPackage)
 )
 
 // InvalidateTypeHintCache clears the cached type-hint results
@@ -325,6 +331,7 @@ func InvalidateTypeHintCache() {
 	typeHintCacheMu.Lock()
 	defer typeHintCacheMu.Unlock()
 	typeHintCache = make(map[string]*Tree)
+	loadedPackages = make(map[string]*loadedPackage)
 }
 
 // CachedLoadTypeFromHint is like LoadTypeFromHint but returns the previously
@@ -455,17 +462,19 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
-// LoadTypeFromHint loads the Go package identified by the hint and returns a
-// Tree with DotType and Pkg set.
-func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
-	importPath, typeName := splitTypeHint(hint)
+// loadPackageCached loads (or returns a cached) *types.Package for the given
+// import path. Every hint that resolves to the same package therefore shares
+// one *types.Package instance, so *types.Named identity comparisons work
+// across hints.
+func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error) {
+	key := importPath + "\x00" + workspaceRoot
 
-	log.Debug().
-		Str("hint", hint).
-		Str("importPath", importPath).
-		Str("typeName", typeName).
-		Str("workspaceRoot", workspaceRoot).
-		Msg("LoadTypeFromHint: attempting to load type")
+	typeHintCacheMu.RLock()
+	if lp, ok := loadedPackages[key]; ok {
+		typeHintCacheMu.RUnlock()
+		return lp, nil
+	}
+	typeHintCacheMu.RUnlock()
 
 	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
 	dir := workspaceRoot
@@ -508,7 +517,31 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		return nil, fmt.Errorf("package %q has errors: %v", importPath, pkg.Errors[0])
 	}
 
-	obj := pkg.Types.Scope().Lookup(typeName)
+	lp := &loadedPackage{pkg: pkg.Types, fset: fset}
+	typeHintCacheMu.Lock()
+	loadedPackages[key] = lp
+	typeHintCacheMu.Unlock()
+	return lp, nil
+}
+
+// LoadTypeFromHint loads the Go package identified by the hint and returns a
+// Tree with DotType and Pkg set.
+func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
+	importPath, typeName := splitTypeHint(hint)
+
+	log.Debug().
+		Str("hint", hint).
+		Str("importPath", importPath).
+		Str("typeName", typeName).
+		Str("workspaceRoot", workspaceRoot).
+		Msg("LoadTypeFromHint: attempting to load type")
+
+	lp, err := loadPackageCached(importPath, workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	obj := lp.pkg.Scope().Lookup(typeName)
 	if obj == nil {
 		log.Error().
 			Str("typeName", typeName).
@@ -530,7 +563,7 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		Int("numMethods", named.NumMethods()).
 		Msg("LoadTypeFromHint: type loaded successfully")
 
-	tree := &Tree{DotType: named, Pkg: pkg.Types, Fset: fset}
+	tree := &Tree{DotType: named, Pkg: lp.pkg, Fset: lp.fset}
 	return tree, nil
 }
 

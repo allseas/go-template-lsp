@@ -67,7 +67,7 @@ In this file `.Street` resolves against `Address`, `.CustomerName` and `.ID` res
 The parser produces one `*parse.Tree` per `{{define}}` block plus one for the root, all stored keyed by tree name. On every `didOpen`/`didChange` the server:
 
 1. Iterates every tree and looks up the hint for that tree (`hintTypeForTree`).
-2. Calls `CachedLoadTypeFromHint` for each tree that has a hint, returning a cached `*Tree` if the same hint was already resolved, or invoking `packages.Load` on a cache miss. Results are stored in a per-tree map (`loadedTypes`/`typedTrees`).
+2. Calls `CachedLoadTypeFromHint` for each tree that has a hint, returning a cached `*Tree` if the same hint was already resolved, or falling through to the shared per-package cache (`loadedPackages`) on a miss. Results are stored in a per-tree map (`loadedTypes`/`typedTrees`).
 3. At query time (`hover`, `completion`, `definition`, …), `treeAt(offset)` identifies which tree owns the cursor position, and the correct per-tree type is used - independently of every other block in the same file.
 
 Because multiple `{{define}}` blocks in the same file (or across different files) often reference the same model type, caching is especially beneficial here: a file with three defines pointing to the same package only triggers one `go list` invocation instead of three.
@@ -78,7 +78,7 @@ Because multiple `{{define}}` blocks in the same file (or across different files
 
 **Splitting**: `splitTypeHint` finds the last `.` with no `/` to its right to separate import path from type name. A bare `User` (no dot) uses `.` as the import path.
 
-**Loading**: `CachedLoadTypeFromHint` checks an in-memory cache first. On a miss it calls `packages.Load` with `packages.NeedTypes` and the workspace root, then stores the result. Any load error is logged as a warning; the document is stored without a type. The cache is cleared by `InvalidateTypeHintCache` when any `.go` file in the workspace changes.
+**Loading**: `CachedLoadTypeFromHint` checks an in-memory `*Tree` cache first. On a miss it resolves the underlying package via `loadPackageCached`, which itself keeps a per-`(importPath, workspaceRoot)` cache of `*types.Package` results from `packages.Load` (mode `packages.NeedTypes`). Every hint that resolves to the same import path therefore shares a single `*types.Package` — and consequently a single `*types.Named` per declared type — so `types.Identical` comparisons across hints work as expected. Any load error is logged as a warning; the document is stored without a type. Both caches are cleared by `InvalidateTypeHintCache` when any `.go` file in the workspace changes.
 
 **Fields**: `structFields` collects exported fields as `[]TypeField` (name, type string, raw `types.Type`, `Embedded` flag). `TypeField.Kind()` classifies each as `String`, `Bool`, `Int`, `Float`, `Slice`, `Map`, `Struct`, or `Other`.
 
@@ -142,9 +142,9 @@ flowchart TD
 
 ### Caching
 
-Each value type is loaded through the same `CachedLoadTypeFromHint` used by struct hints, so a map hint listing three types performs at most three `packages.Load` calls the first time and zero on subsequent edits. The composed `DictType` itself is cached under a key derived from the sorted (key, typeref) pairs so identical map hints — including ones spelled with keys in a different order — share a single entry.
+Each value type is loaded through the same `CachedLoadTypeFromHint` used by struct hints, which in turn shares the per-package cache (`loadedPackages`). A map hint listing three types from the same package therefore triggers a single `packages.Load` call, and every value shares one `*types.Package`. The composed `DictType` itself is cached under a key derived from the sorted (key, typeref) pairs so identical map hints — including ones spelled with keys in a different order — share a single entry.
 
-Cache invalidation is identical to struct hints: any `.go` change in the workspace clears the entire `typeHintCache`.
+Cache invalidation is identical to struct hints: any `.go` change in the workspace clears both `typeHintCache` and `loadedPackages`.
 
 ### Diagnostics
 
