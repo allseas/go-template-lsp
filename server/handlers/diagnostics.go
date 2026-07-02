@@ -28,7 +28,7 @@ func createDiagnostic(
 		sev = new(protocol.DiagnosticSeverityHint)
 	}
 
-	source := "text-template-support"
+	source := "gotmpls"
 
 	diagnostic = protocol.Diagnostic{
 		Range:    rang,
@@ -66,11 +66,6 @@ func publishDiagnostics(ctx *glsp.Context, uri, text string) {
 			diagnostics[i].Message = "unknown diagnostic"
 		}
 	}
-
-	log.Debug().
-		Int("num diagnostics", len(diagnostics)).
-		Any("diagnostics", diagnostics).
-		Msg("publishDiagnostics")
 
 	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, &protocol.PublishDiagnosticsParams{
 		URI:         uri,
@@ -124,20 +119,28 @@ func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Di
 	if doc == nil || len(doc.failedHints) == 0 {
 		return nil
 	}
-	severity := GetConfig().Diagnostics[types.ErrorHintLoadFailure]
-	if severity == DiagnosticSeverityDisabled {
-		return nil
-	}
+	cfg := GetConfig().Diagnostics
+	loadSev := cfg[types.ErrorHintLoadFailure]
+	malformedSev := cfg[types.ErrorTypeMalformedHint]
 	var diagnostics []protocol.Diagnostic
 
-	for hint, errMsg := range doc.failedHints {
-		offset := gotypeHintOffset(text, hint.Line)
+	for _, fh := range doc.failedHints {
+		severity := loadSev
+		msg := "gotype: could not load type: " + fh.Err
+		if fh.Hint.IsMalformed() {
+			severity = malformedSev
+			msg = "gotype: " + fh.Err
+		}
+		if severity == DiagnosticSeverityDisabled {
+			continue
+		}
+		offset := gotypeHintOffset(text, fh.Hint.Line)
 		if offset < 0 {
 			continue
 		}
 		rng := expandToFullBracketsFromOffset(offset, text)
 		diagnostics = append(diagnostics, createDiagnostic(
-			"gotype: could not load type: "+errMsg,
+			msg,
 			rng,
 			severity,
 		))

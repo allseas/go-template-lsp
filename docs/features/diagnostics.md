@@ -15,11 +15,15 @@ Diagnostics report errors in template files as squiggly underlines. They are pub
 | `{{ range . }}`** (`.` is a struct)                      | `cannot range over value of type models.Order`                            | The `{{ range … }}` block                    |
 | `{{/*gotype: pkg.NoSuchType*/}}`***                      | `could not load type "pkg.NoSuchType": …`                                 | The hint comment                             |
 | `{{template "T" .Order}}`****                            | `template "T" expects argument of type models.User, but got models.Order` | The full `{{ … }}` block                     |
+| `{{/*gotype: map{"K": p.T*/}}`*****                      | `gotype: malformed map hint`                                              | The hint comment                             |
+| `{{ .NotAKey }}` (dot is `map{"K": p.T}`)†               | `map has no key "NotAKey"; known keys: K`                                 | The `{{ … }}` block                          |
 
 *Redeclaration inside `{{ range }}` clause; same `doubleDeclaredVariable` diagnostic as flat scope.
 **`invalidRange` diagnostic; raised when the ranged-over value is not a slice, array, map, channel, or string.
 ***`hintLoadFailure` diagnostic; the exact message includes the loader error. See [type_hints.md](type_hints.md).
 ****Template `T` has type hint `/*gotype: models.User*/`. See [template_checking.md](template_checking.md).
+*****`malformedHint` diagnostic (default `error`); fires when a `gotype: map{...}` marker is present but the body is invalid. See [type_hints.md#diagnostics](type_hints.md#diagnostics).
+†`invalidDictKey` diagnostic (default `information`); fires when field access uses a key not declared in a map hint.
 
 ## Request flow
 

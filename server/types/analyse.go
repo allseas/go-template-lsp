@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"strings"
 
 	parse "text-template-parser"
 )
@@ -22,7 +23,8 @@ type Tree struct {
 	Errors     []error                // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
 	End        Pos                    // position of the end of the template text; only set after parsing.
 	funcs      map[string]*types.Func // available functions with their signatures
-	DotType    *types.Named           // optional: type of dot context (from gotype hint)
+	DotType    *types.Named           // optional: named type of dot context (from struct-shaped gotype hint)
+	DictType   *DictType              // optional: dict-shaped dot context (from `gotype: map{...}` hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
 	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
@@ -62,6 +64,10 @@ const (
 	ErrorTypeEmptyDefineName
 	// ErrorTypeVariableReassigned A variable is reassigned to a value of a different concrete type. The new binding shadows the previous one on the variable stack rather than mutating it.
 	ErrorTypeVariableReassigned
+	// ErrorTypeMalformedHint A gotype hint's syntax is invalid (e.g. malformed `map{...}` body)
+	ErrorTypeMalformedHint
+	// ErrorTypeInvalidDictKey Key lookup on a map-shaped gotype hint failed
+	ErrorTypeInvalidDictKey
 	// Add more error types as needed
 )
 
@@ -81,6 +87,8 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeUnknownRangeType:   "unknownRangeType",
 	ErrorTypeEmptyDefineName:    "emptyDefineName",
 	ErrorTypeVariableReassigned: "variableReassigned",
+	ErrorTypeMalformedHint:      "malformedHint",
+	ErrorTypeInvalidDictKey:     "invalidDictKey",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
@@ -246,32 +254,58 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if !IsEmptyInterface(expectedType) && IsEmptyInterface(argType) {
-				// Template parameter is concrete but argument type is
-				// unknown (any). We can't verify the call, so warn only.
-				// The reverse (concrete arg to any param) is fine: losing
-				// precision toward `any` is not the user's problem.
-				ctx.errorf(
-					t,
-					ErrorUnknownType,
-					"template %q expects argument of type %s, it's impossible to determine the type of the argument provided",
-					n.Name,
-					expectedType.String(),
-				)
-			} else if argType != nil && !IsEmptyInterface(argType) && !IsEmptyInterface(expectedType) &&
-				argType != expectedType &&
-				!types.Identical(argType, expectedType) &&
-				!types.AssignableTo(argType, expectedType) &&
-				!types.ConvertibleTo(argType, expectedType) &&
-				argType.String() != expectedType.String() { // fallback to string comparison to handle loading a package multiple times
-				ctx.errorf(
-					t,
-					ErrorTypeInvalidTemplateArg,
-					"template %q expects argument of type %s, but got %s",
-					n.Name,
-					expectedType.String(),
-					argType.String(),
-				)
+			_, expectedIsDict := expectedType.(*DictType)
+			_, argIsDict := argType.(*DictType)
+			switch {
+			case expectedIsDict && argIsDict:
+				// Both sides are dicts: compare by String() (DictType.String
+				// is stable and captures keys + per-key value types). This is
+				// the only case where dict shape is checked exactly.
+				if !IsEmptyInterface(argType) &&
+					argType.String() != expectedType.String() {
+					ctx.errorf(
+						t,
+						ErrorTypeInvalidTemplateArg,
+						"template %q expects argument of type %s, but got %s",
+						n.Name,
+						expectedType.String(),
+						argType.String(),
+					)
+				}
+			default:
+				// If exactly one side is a dict, project it to map[string]any
+				// and fall through to the ordinary go/types comparison. The
+				// tightest static type we can attribute to a dict when the
+				// other side is not itself a dict is map[string]any.
+				effExpected := dictAsMapStringAny(expectedType)
+				effArg := dictAsMapStringAny(argType)
+				if !IsEmptyInterface(effExpected) && IsEmptyInterface(effArg) {
+					// Template parameter is concrete but argument type is
+					// unknown (any). We can't verify the call, so warn only.
+					// The reverse (concrete arg to any param) is fine: losing
+					// precision toward `any` is not the user's problem.
+					ctx.errorf(
+						t,
+						ErrorUnknownType,
+						"template %q expects argument of type %s, it's impossible to determine the type of the argument provided",
+						n.Name,
+						expectedType.String(),
+					)
+				} else if effArg != nil && !IsEmptyInterface(effArg) && !IsEmptyInterface(effExpected) &&
+					effArg != effExpected &&
+					!types.Identical(effArg, effExpected) &&
+					!types.AssignableTo(effArg, effExpected) &&
+					!types.ConvertibleTo(effArg, effExpected) &&
+					!pointerElemMatches(effArg, effExpected) {
+					ctx.errorf(
+						t,
+						ErrorTypeInvalidTemplateArg,
+						"template %q expects argument of type %s, but got %s",
+						n.Name,
+						expectedType.String(),
+						argType.String(),
+					)
+				}
 			}
 		}
 	}
@@ -288,6 +322,23 @@ func AnyType() types.Type {
 	return types.NewInterfaceType(nil, nil).Complete()
 }
 
+// mapStringAnyType returns Go's `map[string]any`. It is the tightest ordinary
+// Go type the analyser can attribute to a `*DictType` value when the other
+// side of a type comparison is not itself a dict: the dict knows its keys and
+// per-key value types, but no real Go type captures both, so for cross-type
+// checks we project down to `map[string]any`.
+func mapStringAnyType() types.Type {
+	return types.NewMap(types.Typ[types.String], AnyType())
+}
+
+// dictAsMapStringAny returns mapStringAnyType() if t is a *DictType, otherwise t.
+func dictAsMapStringAny(t types.Type) types.Type {
+	if _, ok := t.(*DictType); ok {
+		return mapStringAnyType()
+	}
+	return t
+}
+
 // unalias resolves alias types and dereferences pointers recursively, returning
 // the underlying named/struct/etc. type. nil in -> nil out.
 func unalias(t types.Type) types.Type {
@@ -299,6 +350,21 @@ func unalias(t types.Type) types.Type {
 		}
 		t = p.Elem()
 	}
+}
+
+// pointerElemMatches reports whether arg is *T where T matches expected.
+// Go's text/template auto-dereferences pointer values, so a *T argument is
+// acceptable wherever a T parameter is declared. The reverse (T where *T is
+// expected) is not accepted: templates do not auto-address values.
+func pointerElemMatches(arg, expected types.Type) bool {
+	p, ok := types.Unalias(arg).(*types.Pointer)
+	if !ok {
+		return false
+	}
+	elem := p.Elem()
+	return types.Identical(elem, expected) ||
+		types.AssignableTo(elem, expected) ||
+		elem.String() == expected.String()
 }
 
 func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
@@ -314,13 +380,15 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	keepVars := len(ctx.vars)
 	w.Pipe = analysePipe(n.Pipe, w, ctx)
 	if w.Pipe.typ != nil && !IsEmptyInterface(w.Pipe.typ) {
-		if _, ok := unalias(w.Pipe.typ).Underlying().(*types.Struct); !ok {
-			ctx.errorf(
-				w.Pipe,
-				ErrorTypeInvalidWith,
-				"cannot use type %v in with statement; expected struct type",
-				w.Pipe.typ,
-			)
+		if _, isDict := w.Pipe.typ.(*DictType); !isDict {
+			if _, ok := unalias(w.Pipe.typ).Underlying().(*types.Struct); !ok {
+				ctx.errorf(
+					w.Pipe,
+					ErrorTypeInvalidWith,
+					"cannot use type %v in with statement; expected struct type",
+					w.Pipe.typ,
+				)
+			}
 		}
 	}
 	ctx.dotType = w.Pipe.typ
@@ -656,6 +724,22 @@ func walkFieldChainWithMethodInfo(
 	currentType := base
 	isMethod := make([]bool, len(path))
 	for i, name := range path {
+		if d, ok := currentType.(*DictType); ok {
+			valueTyp, keyOk := d.LookupDictKey(name)
+			if !keyOk {
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidDictKey,
+					"map has no key %q; known keys: %s",
+					name,
+					strings.Join(d.DictKeys(), ", "),
+				)
+				return types.NewInterfaceType(nil, nil).Complete(), isMethod
+			}
+			currentType = valueTyp
+			isMethod[i] = false
+			continue
+		}
 		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
 		if obj == nil {
 			ctx.errorf(
@@ -1160,6 +1244,7 @@ func IsEmptyInterface(t types.Type) bool {
 
 // typesCompatible reports whether a value of type got is assignable to a parameter
 // of type want. When either side is the empty interface (any), we always accept.
+// *DictType is projected to map[string]any for the check (see mapStringAnyType).
 func typesCompatible(want, got types.Type) bool {
 	if IsEmptyInterface(want) || IsEmptyInterface(got) {
 		return true
@@ -1167,6 +1252,8 @@ func typesCompatible(want, got types.Type) bool {
 	if want == nil || got == nil {
 		return false
 	}
+	want = dictAsMapStringAny(want)
+	got = dictAsMapStringAny(got)
 	return types.Identical(want, got) || types.AssignableTo(got, want)
 }
 

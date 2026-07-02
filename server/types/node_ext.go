@@ -22,3 +22,7 @@ func extNodeChildren(_ Node) []Node {
 
 // extSetEndPos is the !allseas no-op counterpart of the boundary setter.
 func extSetEndPos(_ Node, _ Pos, _ *string) {}
+
+func extParseNodeChildren(_ parse.Node) []parse.Node {
+	return []parse.Node{}
+}

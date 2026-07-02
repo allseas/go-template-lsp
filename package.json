@@ -1,6 +1,6 @@
 {
   "name": "go-template-extensions",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "",
   "private": "true",
   "directories": {
@@ -8,15 +8,15 @@
   },
   "workspaces": ["clients/*", "scripts"],
   "scripts": {
-    "generate:syntax": "ts-node --esm scripts/generate-syntax.ts",
-    "build:server": "ts-node --esm scripts/build-server-binaries.ts",
-    "build:server:allseas": "ts-node --esm scripts/build-server-binaries-allseas.ts",
+    "generate:syntax": "npx ts-node --esm scripts/generate-syntax.ts",
+    "build:server": "npx ts-node --esm scripts/build-server-binaries.ts",
+    "build:server:allseas": "npx ts-node --esm scripts/build-server-binaries-allseas.ts",
     "build:vscode": "npm run build:server && npm run compile -w clients/VSCode && shx mkdir -p clients/VSCode/out/server/bin && shx cp dist/server/* clients/VSCode/out/server/bin/",
     "build:vscode:allseas": "npm run build:server:allseas && npm run compile -w clients/VSCode && shx mkdir -p clients/VSCode/out/server/bin && shx cp dist/server/* clients/VSCode/out/server/bin/",
     "package:vscode": "npm run build:server && npm run package:no-verify -w clients/VSCode",
     "package:vscode:allseas": "npm run build:server:allseas && npm run package:no-verify -w clients/VSCode",
-    "watch:vscode": "(ts-node --esm scripts/watch-server-binaries.ts) | (npm run watch -w clients/VSCode)",
-    "watch:vscode:allseas": "(ts-node --esm scripts/watch-server-binaries_allseas.ts) | (npm run watch -w clients/VSCode)",
+    "watch:vscode": "(npx ts-node --esm scripts/watch-server-binaries.ts) | (npm run watch -w clients/VSCode)",
+    "watch:vscode:allseas": "(npx ts-node --esm scripts/watch-server-binaries_allseas.ts) | (npm run watch -w clients/VSCode)",
     "launch:vscode": "npm run package:vscode && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test",
     "launch:vscode:allseas": "npm run package:vscode:allseas && find . | grep '.vsix' | xargs -i code --install-extension {} && code ./test",
     "benchmark": "npm run benchmark -w clients/VSCode",

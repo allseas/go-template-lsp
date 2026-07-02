@@ -55,6 +55,8 @@ class ProjectSettingsConfigurable(
                         "unknownRangeType" to "Unknown range type",
                         "emptyDefineName" to "Empty define name",
                         "variableReassigned" to "Variable reassigned to different type",
+                        "malformedHint" to "Malformed gotype hint",
+                        "invalidDictKey" to "Invalid map key access",
                     )
                 for ((key, label) in diagnosticEntries) {
                     val k = key

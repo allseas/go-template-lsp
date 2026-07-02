@@ -103,12 +103,29 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		return fieldNodeDefinition(loadedType, dotTypeAt(target), target, offset)
 	case *types.IdentifierNode:
 		return definitionIdentifier(target)
+	case *types.TemplateNode:
+		return templateDefinition(target.Name, doc.typedTrees, uri, doc.text)
 	}
 
 	log.Debug().
 		Str("handler", "definition").
 		Any("node", node).
 		Msg("node at position is not a field or identifier")
+	return nil, nil
+}
+
+func templateDefinition(
+	templateName string,
+	typedTrees map[string]*types.Tree,
+	uri protocol.DocumentUri,
+	docText string,
+) (any, error) {
+	if tree, ok := typedTrees[templateName]; ok && tree != nil && tree.Root != nil {
+		return protocol.Location{
+			URI:   uri,
+			Range: nodeRange(tree.Root, docText),
+		}, nil
+	}
 	return nil, nil
 }
 
@@ -149,6 +166,21 @@ func resolveFieldChainDefinition(
 
 	currentType := baseType
 	for i := 0; i <= targetIdx; i++ {
+		if d, ok := currentType.(*types.DictType); ok {
+			valueTyp, keyOk := d.LookupDictKey(idents[i])
+			if !keyOk {
+				return nil, nil
+			}
+			if i == targetIdx {
+				named := toNamed(valueTyp)
+				if named == nil {
+					return nil, nil
+				}
+				return namedTypeLocation(loadedType, named)
+			}
+			currentType = valueTyp
+			continue
+		}
 		obj, _, _ := gotypes.LookupFieldOrMethod(
 			currentType,
 			true,
@@ -196,6 +228,27 @@ func resolveFieldChainDefinition(
 		}
 	}
 	return nil, nil
+}
+
+// namedTypeLocation returns the LSP Location of a *types.Named type declaration.
+func namedTypeLocation(loadedType *types.Tree, named *gotypes.Named) (any, error) {
+	pos := named.Obj().Pos()
+	if !pos.IsValid() {
+		return nil, nil
+	}
+	fpos := loadedType.Fset.Position(pos)
+	var line, char uint32
+	if fpos.Line > 0 && fpos.Column > 0 {
+		line = uint32(fpos.Line - 1)   //nolint:gosec // disable G115
+		char = uint32(fpos.Column - 1) //nolint:gosec // disable G115
+	}
+	return protocol.Location{
+		URI: utils.FilePathToURI(fpos.Filename),
+		Range: protocol.Range{
+			Start: protocol.Position{Line: line, Character: char},
+			End:   protocol.Position{Line: line, Character: char},
+		},
+	}, nil
 }
 
 func definitionIdentifier(target *types.IdentifierNode) (any, error) {

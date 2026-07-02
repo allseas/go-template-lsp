@@ -232,6 +232,9 @@ func expandedFieldItems(
 	if mode == pipeChainOff || targetKind == outputAny || targetKind == outputUntyped {
 		return nil
 	}
+	if dict, ok := base.(*serverTypes.DictType); ok && dict != nil {
+		return expandedDictItems(dict, targetKind, mode, prefix, wordRange)
+	}
 	named := toNamed(base)
 	if named == nil {
 		return nil
@@ -240,6 +243,56 @@ func expandedFieldItems(
 	seen := map[string]struct{}{}
 	visited := map[string]int{namedKey(named): 1}
 	walkChainPaths(named, targetKind, mode, prefix, nil, &out, seen, 0, wordRange, visited)
+	return out
+}
+
+// expandedDictItems produces chained field completions rooted at a dict. At
+// depth 0 the frontier is the dict's keys; from depth 1 onward the existing
+// walkChainPaths handles the resolved Named value type.
+func expandedDictItems(
+	dict *serverTypes.DictType,
+	targetKind outputKind,
+	mode pipeChainMode,
+	prefix string,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	out := []protocol.CompletionItem{}
+	seen := map[string]struct{}{}
+	for _, f := range serverTypes.DictTypeFields(dict) {
+		segs := []string{f.Name}
+		if basicTypeMatchesKind(f.Type, targetKind) {
+			// depth == 0 frontier: original walker also skips depth-0 basic
+			// matches, so preserve that.
+			continue
+		}
+		child := toNamed(f.Type)
+		if child == nil {
+			continue
+		}
+		if _, isStruct := child.Underlying().(*types.Struct); !isStruct {
+			continue
+		}
+		childKey := namedKey(child)
+		visited := map[string]int{childKey: 1}
+		if mode == pipeChainStep {
+			if hasMatchingDescendant(child, targetKind, 1, visited) {
+				addPathItem(&out, seen, prefix, segs, f.TypeName, wordRange)
+			}
+			continue
+		}
+		walkChainPaths(
+			child,
+			targetKind,
+			mode,
+			prefix,
+			segs,
+			&out,
+			seen,
+			1,
+			wordRange,
+			visited,
+		)
+	}
 	return out
 }
 

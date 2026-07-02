@@ -311,6 +311,14 @@ func walkChainType(base types.Type, idents []string) types.Type {
 		if cur == nil {
 			return nil
 		}
+		if d, ok := cur.(*serverTypes.DictType); ok {
+			valueTyp, keyOk := d.LookupDictKey(name)
+			if !keyOk {
+				return nil
+			}
+			cur = valueTyp
+			continue
+		}
 		obj, _, _ := types.LookupFieldOrMethod(cur, true, nil, name)
 		switch o := obj.(type) {
 		case *types.Var:
@@ -387,11 +395,11 @@ func suggest(
 		pipeIn = nil
 		kind = outputAny
 	}
-	inputType := pipeIn
-	if inputType == nil && kind == outputAny {
-		inputType = dotTypeAt(cur)
-	}
-	items := pipeFilteredItemsT(cur, kind, inputType, pipeIn, argKind, wordRange)
+	// Only pipe input drives input-kind filtering. Dot is not automatically
+	// passed as an argument in `{{ func }}`, so falling back to dot's kind
+	// here would drop concrete-param funcs (e.g. box(string)) from a plain
+	// `{{<>}}` while keeping variadic-any ones.
+	items := pipeFilteredItemsT(cur, kind, pipeIn, pipeIn, argKind, wordRange)
 	if pipeIn == nil {
 		items = append(
 			items,
@@ -481,7 +489,9 @@ func pipeSortPrefix(concrete bool) string {
 
 func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) (accepts bool, concrete bool) {
 	if pipeInputType == nil {
-		return true, true
+		// No pipe input to match: concreteness is meaningless, so don't
+		// promote funcs above fields/methods in the sort order.
+		return true, false
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
@@ -528,6 +538,8 @@ func dotItemsT(
 	}
 	if named := toNamed(dotTypeAt(cur)); named != nil {
 		items = append(items, namedItems(named, inputType, pipeKind, argKind, prefix, wordRange)...)
+	} else if dict, ok := dotTypeAt(cur).(*serverTypes.DictType); ok && dict != nil {
+		items = append(items, dictItems(dict, argKind, prefix, wordRange)...)
 	}
 	return items
 }
@@ -540,11 +552,25 @@ func fieldChainItemsT(
 	argKind outputKind,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
+	if dict, ok := t.(*serverTypes.DictType); ok && dict != nil {
+		return dictItems(dict, argKind, "", wordRange)
+	}
 	named := toNamed(t)
 	if named == nil {
 		return []protocol.CompletionItem{}
 	}
 	return namedItems(named, nil, outputAny, argKind, "", wordRange)
+}
+
+// dictItems renders a *DictType's keys as field completion items. Dicts have
+// no methods, so only fieldCompletionItems is used.
+func dictItems(
+	dict *serverTypes.DictType,
+	argKind outputKind,
+	prefix string,
+	wordRange protocol.Range,
+) []protocol.CompletionItem {
+	return fieldCompletionItems(serverTypes.DictTypeFields(dict), argKind, prefix, wordRange)
 }
 
 // namedItems returns the field + filtered method completions for a named type,
@@ -774,10 +800,16 @@ func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
 	funcs := serverTypes.GlobalFuncs()
 	items := make([]protocol.CompletionItem, 0, len(funcs)+len(templateActionNames))
 	for name := range funcs {
-		items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
+		item := newItem(name, protocol.CompletionItemKindFunction, wordRange)
+		sortText := "1_" + name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	for _, name := range templateActionNames {
-		items = append(items, newItem(name, protocol.CompletionItemKindKeyword, wordRange))
+		item := newItem(name, protocol.CompletionItemKindKeyword, wordRange)
+		sortText := "1_" + name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	return items
 }

@@ -36,7 +36,7 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
         file: PsiFile,
         fileType: FileType,
     ): Result {
-        if (c != '{') return Result.CONTINUE
+        if (c != '{' && c != '-' && c != '*') return Result.CONTINUE
         if (!isGoTemplateFile(file)) return Result.CONTINUE
         // Leave selection-surrounding to the platform.
         if (editor.selectionModel.hasSelection()) return Result.CONTINUE
@@ -47,11 +47,73 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
 
         val prevChar = if (caret > 0) text[caret - 1] else null
         val nextChar = if (caret < text.length) text[caret] else null
+        val charBeforePrev = if (caret >= 2) text[caret - 2] else null
+        val charAfterNext = if (caret + 1 < text.length) text[caret + 1] else null
+
+        if (c == '-') {
+            // Same double-close bug as "{{": when the caret is sitting between
+            // "{{" and "}}" (i.e. right after we auto-inserted "{{}}"), the
+            // TextMate `{{- -}}` pair adds its own "-}}" on top of the existing
+            // "}}", producing "{{--}}}}". Handle it ourselves so only one pair
+            // is inserted.
+            val insideEmptyDelimiter =
+                prevChar == '{' &&
+                    charBeforePrev == '{' &&
+                    nextChar == '}' &&
+                    charAfterNext == '}'
+            if (!insideEmptyDelimiter) return Result.CONTINUE
+
+            // Replace the trailing "}}" with "-  -}}" so the buffer becomes
+            // "{{-  -}}" with the caret between the two spaces. The spaces are
+            // part of Go template trim-marker syntax ("{{- x -}}") so we insert
+            // them eagerly — this also sidesteps a follow-up double-close where
+            // typing the space after "{{-" would trigger the TextMate
+            // "{{- " -> " -}}" pair on top of our existing "}}".
+            document.replaceString(caret, caret + 2, "-  -}}")
+            editor.caretModel.moveToOffset(caret + 2)
+            PsiDocumentManager.getInstance(project).commitDocument(document)
+            return Result.STOP
+        }
+
+        if (c == '*') {
+            // Same double-close bug for comments: after "{{|}}" the user types
+            // "/" (buffer becomes "{{/|}}"), then "*". The TextMate `{{/*` pair
+            // adds "*/}}" on top of the existing "}}", producing "{{/**/}}}}".
+            val charBeforeBeforePrev = if (caret >= 3) text[caret - 3] else null
+            val insideCommentOpener =
+                prevChar == '/' &&
+                    charBeforePrev == '{' &&
+                    charBeforeBeforePrev == '{' &&
+                    nextChar == '}' &&
+                    charAfterNext == '}'
+            if (insideCommentOpener) {
+                // Replace the trailing "}}" with "**/}}" so the buffer becomes
+                // "{{/**/}}" with the caret between the two stars.
+                document.replaceString(caret, caret + 2, "**/}}")
+                editor.caretModel.moveToOffset(caret + 1)
+                PsiDocumentManager.getInstance(project).commitDocument(document)
+                return Result.STOP
+            }
+
+            // Trim-marker variant: caret sits in "{{- /|  -}}" (i.e. the user
+            // typed "{{-" then " /" inside the auto-inserted "{{-  -}}"). We
+            // want the buffer to become "{{- /*  */ -}}" with the caret
+            // between the two spaces of the comment body.
+            val fiveBack = if (caret >= 5) text.subSequence(caret - 5, caret).toString() else null
+            val fourAhead = if (caret + 4 <= text.length) text.subSequence(caret, caret + 4).toString() else null
+            if (fiveBack == "{{- /" && fourAhead == " -}}") {
+                document.replaceString(caret, caret + 4, "*  */ -}}")
+                editor.caretModel.moveToOffset(caret + 2)
+                PsiDocumentManager.getInstance(project).commitDocument(document)
+                return Result.STOP
+            }
+
+            return Result.CONTINUE
+        }
 
         // Are we completing a fresh "{{" delimiter? Only when the char right
         // before the caret is "{" and the one before that is NOT "{" (so we do
         // not turn "{{" into "{{{...}}}" when typing a third brace).
-        val charBeforePrev = if (caret >= 2) text[caret - 2] else null
         val completingDelimiter = prevChar == '{' && charBeforePrev != '{'
 
         if (completingDelimiter) {
