@@ -474,8 +474,6 @@ func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error)
 		typeHintCacheMu.RUnlock()
 		return lp, nil
 	}
-	typeHintCacheMu.RUnlock()
-
 	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
 	dir := workspaceRoot
 	if _, err := os.Stat(dir); err != nil {
@@ -518,7 +516,6 @@ func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error)
 	}
 
 	lp := &loadedPackage{pkg: pkg.Types, fset: fset}
-	typeHintCacheMu.Lock()
 	loadedPackages[key] = lp
 	typeHintCacheMu.Unlock()
 	return lp, nil
