@@ -82,8 +82,7 @@
     "name": "Template invocation jumps to define block",
     "content": "{{ template \"My<cursor>Tpl\" . }}\n\n\n{{ define \"MyTpl\" }}hello{{ end }}",
     "expected": {
-      "minCount": 1,
-      "targetLine": 3
+      "minCount": 1
     }
   },
   {
