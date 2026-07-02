@@ -57,8 +57,10 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
             // "}}", producing "{{--}}}}". Handle it ourselves so only one pair
             // is inserted.
             val insideEmptyDelimiter =
-                prevChar == '{' && charBeforePrev == '{' &&
-                    nextChar == '}' && charAfterNext == '}'
+                prevChar == '{' &&
+                    charBeforePrev == '{' &&
+                    nextChar == '}' &&
+                    charAfterNext == '}'
             if (!insideEmptyDelimiter) return Result.CONTINUE
 
             // Replace the trailing "}}" with "-  -}}" so the buffer becomes
@@ -79,8 +81,11 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
             // adds "*/}}" on top of the existing "}}", producing "{{/**/}}}}".
             val charBeforeBeforePrev = if (caret >= 3) text[caret - 3] else null
             val insideCommentOpener =
-                prevChar == '/' && charBeforePrev == '{' && charBeforeBeforePrev == '{' &&
-                    nextChar == '}' && charAfterNext == '}'
+                prevChar == '/' &&
+                    charBeforePrev == '{' &&
+                    charBeforeBeforePrev == '{' &&
+                    nextChar == '}' &&
+                    charAfterNext == '}'
             if (insideCommentOpener) {
                 // Replace the trailing "}}" with "**/}}" so the buffer becomes
                 // "{{/**/}}" with the caret between the two stars.

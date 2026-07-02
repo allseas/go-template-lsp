@@ -29,7 +29,11 @@ class GoTemplateBackspaceHandler : BackspaceHandlerDelegate() {
      * [left] must match the text immediately before the caret and [right] the
      * text immediately after.
      */
-    private data class Collapse(val deleted: Char, val left: String, val right: String)
+    private data class Collapse(
+        val deleted: Char,
+        val left: String,
+        val right: String,
+    )
 
     private val collapses =
         listOf(
@@ -95,7 +99,11 @@ class GoTemplateBackspaceHandler : BackspaceHandlerDelegate() {
         return false
     }
 
-    private fun regionMatches(text: CharSequence, offset: Int, expected: String): Boolean {
+    private fun regionMatches(
+        text: CharSequence,
+        offset: Int,
+        expected: String,
+    ): Boolean {
         for (i in expected.indices) {
             if (text[offset + i] != expected[i]) return false
         }
