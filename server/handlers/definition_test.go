@@ -732,7 +732,7 @@ func TestDefinitionTemplateInvocation(t *testing.T) {
 	params := &protocol.DefinitionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
-			Position:     posOfSubStr(t, src, "MyTpl", 00),
+			Position:     posOfSubStr(t, src, "MyTpl", 0o0),
 		},
 	}
 

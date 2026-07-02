@@ -114,7 +114,12 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 	return nil, nil
 }
 
-func templateDefinition(templateName string, typedTrees map[string]*types.Tree, uri protocol.DocumentUri, docText string) (any, error) {
+func templateDefinition(
+	templateName string,
+	typedTrees map[string]*types.Tree,
+	uri protocol.DocumentUri,
+	docText string,
+) (any, error) {
 	if tree, ok := typedTrees[templateName]; ok && tree != nil && tree.Root != nil {
 		return protocol.Location{
 			URI:   uri,
