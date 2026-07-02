@@ -61,10 +61,14 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
                     nextChar == '}' && charAfterNext == '}'
             if (!insideEmptyDelimiter) return Result.CONTINUE
 
-            // Replace the trailing "}}" with "--}}" so the buffer becomes
-            // "{{--}}" with the caret between the two dashes.
-            document.replaceString(caret, caret + 2, "--}}")
-            editor.caretModel.moveToOffset(caret + 1)
+            // Replace the trailing "}}" with "-  -}}" so the buffer becomes
+            // "{{-  -}}" with the caret between the two spaces. The spaces are
+            // part of Go template trim-marker syntax ("{{- x -}}") so we insert
+            // them eagerly — this also sidesteps a follow-up double-close where
+            // typing the space after "{{-" would trigger the TextMate
+            // "{{- " -> " -}}" pair on top of our existing "}}".
+            document.replaceString(caret, caret + 2, "-  -}}")
+            editor.caretModel.moveToOffset(caret + 2)
             PsiDocumentManager.getInstance(project).commitDocument(document)
             return Result.STOP
         }
@@ -77,14 +81,29 @@ class GoTemplateTypedHandler : TypedHandlerDelegate() {
             val insideCommentOpener =
                 prevChar == '/' && charBeforePrev == '{' && charBeforeBeforePrev == '{' &&
                     nextChar == '}' && charAfterNext == '}'
-            if (!insideCommentOpener) return Result.CONTINUE
+            if (insideCommentOpener) {
+                // Replace the trailing "}}" with "**/}}" so the buffer becomes
+                // "{{/**/}}" with the caret between the two stars.
+                document.replaceString(caret, caret + 2, "**/}}")
+                editor.caretModel.moveToOffset(caret + 1)
+                PsiDocumentManager.getInstance(project).commitDocument(document)
+                return Result.STOP
+            }
 
-            // Replace the trailing "}}" with "**/}}" so the buffer becomes
-            // "{{/**/}}" with the caret between the two stars.
-            document.replaceString(caret, caret + 2, "**/}}")
-            editor.caretModel.moveToOffset(caret + 1)
-            PsiDocumentManager.getInstance(project).commitDocument(document)
-            return Result.STOP
+            // Trim-marker variant: caret sits in "{{- /|  -}}" (i.e. the user
+            // typed "{{-" then " /" inside the auto-inserted "{{-  -}}"). We
+            // want the buffer to become "{{- /*  */ -}}" with the caret
+            // between the two spaces of the comment body.
+            val fiveBack = if (caret >= 5) text.subSequence(caret - 5, caret).toString() else null
+            val fourAhead = if (caret + 4 <= text.length) text.subSequence(caret, caret + 4).toString() else null
+            if (fiveBack == "{{- /" && fourAhead == " -}}") {
+                document.replaceString(caret, caret + 4, "*  */ -}}")
+                editor.caretModel.moveToOffset(caret + 2)
+                PsiDocumentManager.getInstance(project).commitDocument(document)
+                return Result.STOP
+            }
+
+            return Result.CONTINUE
         }
 
         // Are we completing a fresh "{{" delimiter? Only when the char right
