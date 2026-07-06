@@ -411,7 +411,10 @@ func collectFieldsAndMethods(t types.Type) ([]serverTypes.TypeField, []serverTyp
 }
 
 // filterFieldsByReturn keeps only fields whose type is assignable to argType.
-func filterFieldsByReturn(fields []serverTypes.TypeField, argType types.Type) []serverTypes.TypeField {
+func filterFieldsByReturn(
+	fields []serverTypes.TypeField,
+	argType types.Type,
+) []serverTypes.TypeField {
 	if serverTypes.IsEmptyInterface(argType) {
 		return fields
 	}
@@ -426,7 +429,10 @@ func filterFieldsByReturn(fields []serverTypes.TypeField, argType types.Type) []
 
 // filterMethods keeps only usable methods that accept inputType and whose
 // return type is assignable to argType.
-func filterMethods(methods []serverTypes.MethodType, inputType, argType types.Type) []serverTypes.MethodType {
+func filterMethods(
+	methods []serverTypes.MethodType,
+	inputType, argType types.Type,
+) []serverTypes.MethodType {
 	out := methods[:0:0]
 	for _, m := range methods {
 		if !methodIsUsable(m) || !methodAcceptsInput(m, inputType) {

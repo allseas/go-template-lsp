@@ -377,7 +377,18 @@ func walkChainPaths(
 		if childKey != "" {
 			visited[childKey]++
 		}
-		walkChainPaths(child, targetType, mode, prefix, segs, out, seen, depth+1, wordRange, visited)
+		walkChainPaths(
+			child,
+			targetType,
+			mode,
+			prefix,
+			segs,
+			out,
+			seen,
+			depth+1,
+			wordRange,
+			visited,
+		)
 		if childKey != "" {
 			visited[childKey]--
 		}

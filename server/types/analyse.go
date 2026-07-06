@@ -644,12 +644,12 @@ func walkFieldChain(
 				ErrorUnknownType,
 				"cannot determine range element type of empty interface; assuming any",
 			)
-			any := AnyType()
+			anyt := AnyType()
 			steps := make([]types.Type, len(path))
 			for i := range steps {
-				steps[i] = any
+				steps[i] = anyt
 			}
-			return any, true, steps
+			return anyt, true, steps
 		}
 	}
 
@@ -726,12 +726,12 @@ func walkFieldChainWithMethodInfo(
 	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
 	if base != nil {
 		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
-			any := AnyType()
+			anyt := AnyType()
 			steps := make([]types.Type, len(path))
 			for i := range steps {
-				steps[i] = any
+				steps[i] = anyt
 			}
-			return any, make([]bool, len(path)), steps
+			return anyt, make([]bool, len(path)), steps
 		}
 	}
 
@@ -870,7 +870,12 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if baseType == nil {
 		return v
 	}
-	if typ, isMethod, steps := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); typ != nil {
+	if typ, isMethod, steps := walkFieldChainWithMethodInfo(
+		ctx,
+		v,
+		baseType,
+		n.Ident[1:],
+	); typ != nil {
 		v.typ = typ
 		v.isMethod = isMethod
 		v.stepTypes = steps
@@ -896,7 +901,12 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		return fn
 	}
 
-	if typ, isMethod, steps := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); typ != nil {
+	if typ, isMethod, steps := walkFieldChainWithMethodInfo(
+		ctx,
+		fn,
+		ctx.dotType,
+		n.Ident,
+	); typ != nil {
 		fn.typ = typ
 		fn.isMethod = isMethod
 		fn.stepTypes = steps
