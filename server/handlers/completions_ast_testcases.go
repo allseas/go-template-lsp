@@ -961,7 +961,6 @@ type dotItemsTTestCase struct {
 	subStr        string
 	delSign       bool
 	inputIsString bool // set inputType = types.Typ[types.String]
-	pipeKind      outputKind
 	withType      bool
 	contains      []string
 	notContains   []string
@@ -969,13 +968,6 @@ type dotItemsTTestCase struct {
 }
 
 var dotItemsTTestCases = []dotItemsTTestCase{
-	{
-		name:      "non-outputAny pipe kind blocks all items",
-		src:       `{{.}}`,
-		subStr:    ".",
-		pipeKind:  outputBool,
-		wantEmpty: true,
-	},
 	{
 		name:          "non-nil inputType blocks all items",
 		src:           `{{.}}`,
@@ -1023,7 +1015,6 @@ type pipeFilteredItemsTTestCase struct {
 	name          string
 	src           string
 	subStr        string
-	kind          outputKind
 	inputIsString bool // set inputType = types.Typ[types.String]
 	contains      []string
 	notContains   []string
@@ -1031,69 +1022,18 @@ type pipeFilteredItemsTTestCase struct {
 
 var pipeFilteredItemsTTestCases = []pipeFilteredItemsTTestCase{
 	{
-		name:     "outputAny includes all builtins",
+		name:     "no pipe input includes all builtins",
 		src:      `{{.}}`,
 		subStr:   ".",
-		kind:     outputAny,
-		contains: []string{"len", "html", "not", "eq"},
+		contains: []string{"len", "html", "not", "eq", "and", "or"},
 	},
 	{
-		name:     "outputString includes all builtins (anyT param)",
-		src:      `{{.}}`,
-		subStr:   ".",
-		kind:     outputString,
-		contains: []string{"html", "len", "not", "and", "eq"},
-	},
-	{
-		name:     "outputBool includes all builtins (anyT param)",
-		src:      `{{.}}`,
-		subStr:   ".",
-		kind:     outputBool,
-		contains: []string{"not", "and", "html", "len", "eq"},
-	},
-	{
-		name:     "outputInt includes all builtins (anyT param)",
-		src:      `{{.}}`,
-		subStr:   ".",
-		kind:     outputInt,
-		contains: []string{"eq", "lt", "html", "not", "len"},
-	},
-	{
-		name:     "outputUntyped includes all builtins",
-		src:      `{{.}}`,
-		subStr:   ".",
-		kind:     outputUntyped,
-		contains: []string{"len", "not", "html"},
-	},
-	{
-		name:          "inputType string with outputAny shows all builtins",
+		name:          "string pipe input still shows any-accepting builtins",
 		src:           `{{.}}`,
 		subStr:        ".",
-		kind:          outputAny,
 		inputIsString: true,
 		contains:      []string{"html", "len", "not", "and", "eq"},
 	},
-}
-
-// basicTypeMatchesKind unit test cases
-
-type basicTypeMatchesKindTestCase struct {
-	name  string
-	basic string
-	kind  outputKind
-	want  bool
-}
-
-var basicTypeMatchesKindTestCases = []basicTypeMatchesKindTestCase{
-	{name: "non-basic type returns false", basic: "none", kind: outputString, want: false},
-	{name: "string matches outputString", basic: "string", kind: outputString, want: true},
-	{name: "string does not match outputInt", basic: "string", kind: outputInt, want: false},
-	{name: "int matches outputInt", basic: "int", kind: outputInt, want: true},
-	{name: "int does not match outputBool", basic: "int", kind: outputBool, want: false},
-	{name: "bool matches outputBool", basic: "bool", kind: outputBool, want: true},
-	{name: "bool does not match outputString", basic: "bool", kind: outputString, want: false},
-	{name: "string with outputAny returns false", basic: "string", kind: outputAny, want: false},
-	{name: "float with outputInt returns false", basic: "float64", kind: outputInt, want: false},
 }
 
 // methodAcceptsInput unit test cases
@@ -1103,21 +1043,13 @@ type methodAcceptsInputTestCase struct {
 	methodName    string // Order method to use
 	inputIsString bool
 	inputIsInt    bool
-	pipeKind      outputKind
 	want          bool
 }
 
 var methodAcceptsInputTestCases = []methodAcceptsInputTestCase{
 	{
-		name:       "no input and outputAny returns true",
+		name:       "no input returns true",
 		methodName: "Format",
-		pipeKind:   outputAny,
-		want:       true,
-	},
-	{
-		name:       "no input and outputUntyped returns true",
-		methodName: "Format",
-		pipeKind:   outputUntyped,
 		want:       true,
 	},
 	{
@@ -1130,30 +1062,6 @@ var methodAcceptsInputTestCases = []methodAcceptsInputTestCase{
 		name:       "int input does not match Format(string)",
 		methodName: "Format",
 		inputIsInt: true,
-		want:       false,
-	},
-	{
-		name:       "outputString matches last param of Format(string)",
-		methodName: "Format",
-		pipeKind:   outputString,
-		want:       true,
-	},
-	{
-		name:       "outputInt does not match last param of Format(string)",
-		methodName: "Format",
-		pipeKind:   outputInt,
-		want:       false,
-	},
-	{
-		name:       "outputInt matches last param of Oper(int)",
-		methodName: "Oper",
-		pipeKind:   outputInt,
-		want:       true,
-	},
-	{
-		name:       "outputString does not match last param of Oper(int)",
-		methodName: "Oper",
-		pipeKind:   outputString,
 		want:       false,
 	},
 }

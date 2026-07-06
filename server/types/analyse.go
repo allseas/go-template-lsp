@@ -455,7 +455,7 @@ func getRangeableType(typ types.Type, ctx *analysisCtx) (types.Type, types.Type)
 				ErrorUnknownType,
 				"cannot determine range element type of empty interface; assuming any",
 			)
-			return nil, types.NewInterfaceType(nil, nil).Complete()
+			return nil, AnyType()
 		}
 		return nil, nil
 	default:
@@ -619,21 +619,23 @@ func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
 		return cn
 	}
 
-	if typ, _ := walkFieldChain(ctx, cn, baseType, n.Field); typ != nil {
+	if typ, _, steps := walkFieldChain(ctx, cn, baseType, n.Field); typ != nil {
 		cn.typ = typ
+		cn.stepTypes = steps
 	}
 	return cn
 }
 
 // walkFieldChain walks a chain of field/method names from a starting type,
-// reporting any lookup errors on errNode. It returns the final type and a
-// bool indicating whether the entire chain resolved successfully.
+// reporting any lookup errors on errNode. It returns the final type, a bool
+// indicating whether the entire chain resolved successfully, and a slice with
+// the resolved type at each step (len == len(path)).
 func walkFieldChain(
 	ctx *analysisCtx,
 	errNode Node,
 	base types.Type,
 	path []string,
-) (types.Type, bool) {
+) (types.Type, bool, []types.Type) {
 	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
 	if base != nil {
 		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
@@ -642,13 +644,19 @@ func walkFieldChain(
 				ErrorUnknownType,
 				"cannot determine range element type of empty interface; assuming any",
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), true
+			any := AnyType()
+			steps := make([]types.Type, len(path))
+			for i := range steps {
+				steps[i] = any
+			}
+			return any, true, steps
 		}
 	}
 
 	pkg := ctx.tree.Pkg
 	currentType := base
-	for _, name := range path {
+	stepTypes := make([]types.Type, len(path))
+	for i, name := range path {
 		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
 		if obj == nil {
 			ctx.errorf(
@@ -658,7 +666,7 @@ func walkFieldChain(
 				currentType.String(),
 				name,
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), false
+			return AnyType(), false, stepTypes
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -673,7 +681,7 @@ func walkFieldChain(
 					name,
 					currentType.String(),
 				)
-				return types.NewInterfaceType(nil, nil).Complete(), false
+				return AnyType(), false, stepTypes
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -698,31 +706,39 @@ func walkFieldChain(
 				name,
 				currentType.String(),
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), false
+			return AnyType(), false, stepTypes
 		}
+		stepTypes[i] = currentType
 	}
-	return currentType, true
+	return currentType, true, stepTypes
 }
 
 // walkFieldChainWithMethodInfo is like walkFieldChain but additionally returns an isMethod slice
 // whose i-th element is true when path[i] resolves to a *types.Func (method) and false when it
-// resolves to a *types.Var (struct field). On failure the returned slice is nil.
+// resolves to a *types.Var (struct field). stepTypes[i] holds the type resolved for path[i].
+// On failure the returned slices are still populated up to the failing step (later entries nil/false).
 func walkFieldChainWithMethodInfo(
 	ctx *analysisCtx,
 	errNode Node,
 	base types.Type,
 	path []string,
-) (types.Type, []bool) {
+) (types.Type, []bool, []types.Type) {
 	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
 	if base != nil {
 		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
-			return types.NewInterfaceType(nil, nil).Complete(), make([]bool, len(path))
+			any := AnyType()
+			steps := make([]types.Type, len(path))
+			for i := range steps {
+				steps[i] = any
+			}
+			return any, make([]bool, len(path)), steps
 		}
 	}
 
 	pkg := ctx.tree.Pkg
 	currentType := base
 	isMethod := make([]bool, len(path))
+	stepTypes := make([]types.Type, len(path))
 	for i, name := range path {
 		if d, ok := currentType.(*DictType); ok {
 			valueTyp, keyOk := d.LookupDictKey(name)
@@ -734,10 +750,11 @@ func walkFieldChainWithMethodInfo(
 					name,
 					strings.Join(d.DictKeys(), ", "),
 				)
-				return types.NewInterfaceType(nil, nil).Complete(), isMethod
+				return AnyType(), isMethod, stepTypes
 			}
 			currentType = valueTyp
 			isMethod[i] = false
+			stepTypes[i] = currentType
 			continue
 		}
 		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
@@ -749,7 +766,7 @@ func walkFieldChainWithMethodInfo(
 				currentType.String(),
 				name,
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), isMethod
+			return AnyType(), isMethod, stepTypes
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -765,7 +782,7 @@ func walkFieldChainWithMethodInfo(
 					name,
 					currentType.String(),
 				)
-				return types.NewInterfaceType(nil, nil).Complete(), isMethod
+				return AnyType(), isMethod, stepTypes
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -790,10 +807,11 @@ func walkFieldChainWithMethodInfo(
 				name,
 				currentType.String(),
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), isMethod
+			return AnyType(), isMethod, stepTypes
 		}
+		stepTypes[i] = currentType
 	}
-	return currentType, isMethod
+	return currentType, isMethod, stepTypes
 }
 
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
@@ -852,9 +870,10 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if baseType == nil {
 		return v
 	}
-	if typ, isMethod := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); typ != nil {
+	if typ, isMethod, steps := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); typ != nil {
 		v.typ = typ
 		v.isMethod = isMethod
+		v.stepTypes = steps
 	}
 	return v
 }
@@ -877,9 +896,10 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		return fn
 	}
 
-	if typ, isMethod := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); typ != nil {
+	if typ, isMethod, steps := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); typ != nil {
 		fn.typ = typ
 		fn.isMethod = isMethod
+		fn.stepTypes = steps
 	}
 	return fn
 }
@@ -1234,12 +1254,39 @@ func validateCommandArguments(
 }
 
 // IsEmptyInterface reports whether t is the empty interface (i.e. `any` / `interface{}`).
+// A nil t is treated as unconstrained and returns true.
 func IsEmptyInterface(t types.Type) bool {
 	if t == nil {
-		return false
+		return true
 	}
 	iface, ok := t.Underlying().(*types.Interface)
 	return ok && iface.NumMethods() == 0
+}
+
+// TypeConvertibleTo reports whether a value of type src can be used where dst
+// is expected, dereferencing pointers on both sides. A nil dst means no
+// constraint. The empty interface on either side always matches. *DictType is
+// projected to map[string]any so hint-defined dicts compose with real Go maps.
+func TypeConvertibleTo(src, dst types.Type) bool {
+	if dst == nil {
+		return true
+	}
+	if src == nil {
+		return false
+	}
+	if IsEmptyInterface(src) || IsEmptyInterface(dst) {
+		return true
+	}
+	src = derefPointer(dictAsMapStringAny(src))
+	dst = derefPointer(dictAsMapStringAny(dst))
+	return types.AssignableTo(src, dst)
+}
+
+func derefPointer(t types.Type) types.Type {
+	if p, ok := t.(*types.Pointer); ok {
+		return p.Elem()
+	}
+	return t
 }
 
 // typesCompatible reports whether a value of type got is assignable to a parameter

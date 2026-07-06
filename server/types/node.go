@@ -590,13 +590,14 @@ func (i *IdentifierNode) ValueType() types.Type {
 type VariableNode struct {
 	NodeType
 	Pos
-	Ident    []string   // Variable name and fields in lexical order.
-	typ      types.Type // Resolved type of the variable (set during analysis)
-	parent   Node
-	endPos   Pos
-	isElse   bool       // Whether this is in an else list.
-	isMethod []bool     // Per-identifier (Ident[1:]): true if the segment resolves to a method. (set during analysis)
-	Base     types.Type // The base type of the variable (set during analysis)
+	Ident     []string   // Variable name and fields in lexical order.
+	typ       types.Type // Resolved type of the variable (set during analysis)
+	parent    Node
+	endPos    Pos
+	isElse    bool         // Whether this is in an else list.
+	isMethod  []bool       // Per-identifier (Ident[1:]): true if the segment resolves to a method. (set during analysis)
+	stepTypes []types.Type // Per-identifier (Ident[1:]): resolved type after each chain step. (set during analysis)
+	Base      types.Type   // The base type of the variable (set during analysis)
 }
 
 func (v *VariableNode) IsElseList() bool {
@@ -637,15 +638,38 @@ func (v *VariableNode) IdentIsMethod(i int) bool {
 	return v.isMethod[i-1]
 }
 
+// OwnerType returns the type against which Ident[i] was resolved. For i == 0
+// (the base variable itself) it returns nil; for i == 1 it returns Base; for
+// deeper indices it returns the resolved type of the previous chain step.
+func (v *VariableNode) OwnerType(i int) types.Type {
+	if i <= 0 {
+		return nil
+	}
+	if i == 1 {
+		return v.Base
+	}
+	if i-2 >= len(v.stepTypes) {
+		return nil
+	}
+	return v.stepTypes[i-2]
+}
+
+// PrefixType returns the type reached by walking all but the last chained
+// identifier, i.e. the owner type of the trailing segment.
+func (v *VariableNode) PrefixType() types.Type {
+	return v.OwnerType(len(v.Ident) - 1)
+}
+
 func (v *VariableNode) Copy() Node {
 	return &VariableNode{
-		parent:   v.parent,
-		NodeType: NodeVariable,
-		Pos:      v.Pos,
-		endPos:   v.endPos,
-		Ident:    append([]string{}, v.Ident...),
-		isElse:   v.isElse,
-		isMethod: append([]bool{}, v.isMethod...),
+		parent:    v.parent,
+		NodeType:  NodeVariable,
+		Pos:       v.Pos,
+		endPos:    v.endPos,
+		Ident:     append([]string{}, v.Ident...),
+		isElse:    v.isElse,
+		isMethod:  append([]bool{}, v.isMethod...),
+		stepTypes: append([]types.Type{}, v.stepTypes...),
 	}
 }
 
@@ -756,13 +780,14 @@ func (n *NilNode) ValueType() types.Type {
 type FieldNode struct {
 	NodeType
 	Pos
-	endPos   Pos
-	parent   Node
-	Ident    []string   // The identifiers in lexical order (period stripped).
-	typ      types.Type // Resolved type of the final segment (set during analysis).
-	dotType  types.Type // Resolved type of the dot context this field is evaluated against (set during analysis).
-	isElse   bool       // Whether this node appears inside an else list.
-	isMethod []bool     // Per-identifier: true if the segment resolves to a method, false for a struct field. (set during analysis)
+	endPos    Pos
+	parent    Node
+	Ident     []string     // The identifiers in lexical order (period stripped).
+	typ       types.Type   // Resolved type of the final segment (set during analysis).
+	dotType   types.Type   // Resolved type of the dot context this field is evaluated against (set during analysis).
+	isElse    bool         // Whether this node appears inside an else list.
+	isMethod  []bool       // Per-identifier: true if the segment resolves to a method, false for a struct field. (set during analysis)
+	stepTypes []types.Type // Per-identifier: resolved type after each chain step. (set during analysis)
 }
 
 func (f *FieldNode) End() Pos {
@@ -788,14 +813,15 @@ func (f *FieldNode) writeTo(sb *strings.Builder) {
 
 func (f *FieldNode) Copy() Node {
 	return &FieldNode{
-		parent:   f.parent,
-		NodeType: NodeField,
-		Pos:      f.Pos,
-		endPos:   f.endPos,
-		Ident:    append([]string{}, f.Ident...),
-		isElse:   f.isElse,
-		isMethod: append([]bool{}, f.isMethod...),
-		dotType:  f.dotType,
+		parent:    f.parent,
+		NodeType:  NodeField,
+		Pos:       f.Pos,
+		endPos:    f.endPos,
+		Ident:     append([]string{}, f.Ident...),
+		isElse:    f.isElse,
+		isMethod:  append([]bool{}, f.isMethod...),
+		stepTypes: append([]types.Type{}, f.stepTypes...),
+		dotType:   f.dotType,
 	}
 }
 
@@ -807,6 +833,25 @@ func (f *FieldNode) IdentIsMethod(i int) bool {
 		return false
 	}
 	return f.isMethod[i]
+}
+
+// OwnerType returns the type against which Ident[i] was resolved. For i == 0
+// it returns the dot context type; for deeper indices it returns the resolved
+// type of the previous chain step.
+func (f *FieldNode) OwnerType(i int) types.Type {
+	if i <= 0 {
+		return f.dotType
+	}
+	if i-1 >= len(f.stepTypes) {
+		return nil
+	}
+	return f.stepTypes[i-1]
+}
+
+// PrefixType returns the type reached by walking all but the last identifier,
+// i.e. the owner type of the trailing segment.
+func (f *FieldNode) PrefixType() types.Type {
+	return f.OwnerType(len(f.Ident) - 1)
 }
 
 func (f *FieldNode) Parent() Node {
@@ -829,12 +874,13 @@ func (f *FieldNode) DotType() types.Type {
 type ChainNode struct {
 	NodeType
 	Pos
-	endPos Pos
-	parent Node
-	Node   Node
-	Field  []string   // The identifiers in lexical order.
-	typ    types.Type // Resolved type of the final field in chain (set during analysis)
-	isElse bool       // Whether this is in an else list.
+	endPos    Pos
+	parent    Node
+	Node      Node
+	Field     []string     // The identifiers in lexical order.
+	typ       types.Type   // Resolved type of the final field in chain (set during analysis)
+	stepTypes []types.Type // Per-identifier: resolved type after each chain step. (set during analysis)
+	isElse    bool         // Whether this is in an else list.
 }
 
 func (c *ChainNode) End() Pos {
@@ -883,18 +929,41 @@ func (c *ChainNode) IsElseList() bool {
 
 func (c *ChainNode) Copy() Node {
 	return &ChainNode{
-		NodeType: NodeChain,
-		Pos:      c.Pos,
-		endPos:   c.endPos,
-		Node:     c.Node,
-		Field:    append([]string{}, c.Field...),
-		parent:   c.parent,
-		isElse:   c.isElse,
+		NodeType:  NodeChain,
+		Pos:       c.Pos,
+		endPos:    c.endPos,
+		Node:      c.Node,
+		Field:     append([]string{}, c.Field...),
+		stepTypes: append([]types.Type{}, c.stepTypes...),
+		parent:    c.parent,
+		isElse:    c.isElse,
 	}
 }
 
 func (c *ChainNode) ValueType() types.Type {
 	return c.typ
+}
+
+// OwnerType returns the type against which Field[i] was resolved. For i == 0
+// it returns the base term's type; for deeper indices it returns the resolved
+// type of the previous chain step.
+func (c *ChainNode) OwnerType(i int) types.Type {
+	if i <= 0 {
+		if c.Node == nil {
+			return nil
+		}
+		return c.Node.ValueType()
+	}
+	if i-1 >= len(c.stepTypes) {
+		return nil
+	}
+	return c.stepTypes[i-1]
+}
+
+// PrefixType returns the type reached by walking all but the last chained
+// field, i.e. the owner type of the trailing segment.
+func (c *ChainNode) PrefixType() types.Type {
+	return c.OwnerType(len(c.Field) - 1)
 }
 
 // BoolNode holds a boolean constant.

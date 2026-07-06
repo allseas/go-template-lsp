@@ -287,7 +287,7 @@ func TestFieldChainItemsT(t *testing.T) {
 			} else if tc.useOrder {
 				typ = lt.DotType
 			}
-			items := fieldChainItemsT(typ, outputAny, wr)
+			items := fieldChainItemsT(typ, nil, wr)
 			if tc.wantEmpty {
 				assert.Empty(t, items)
 				return
@@ -318,7 +318,7 @@ func TestDotItemsT(t *testing.T) {
 			if tc.inputIsString {
 				inputType = types.Typ[types.String]
 			}
-			items := dotItemsT(cur, tc.delSign, inputType, tc.pipeKind, outputAny, wr)
+			items := dotItemsT(cur, tc.delSign, inputType, nil, wr)
 			if tc.wantEmpty {
 				assert.Empty(t, items)
 				return
@@ -344,44 +344,13 @@ func TestPipeFilteredItemsT(t *testing.T) {
 			if tc.inputIsString {
 				inputType = types.Typ[types.String]
 			}
-			labels := labelsOf(pipeFilteredItemsT(cur, tc.kind, inputType, nil, outputAny, wr))
+			labels := labelsOf(pipeFilteredItemsT(cur, inputType, nil, wr))
 			for _, want := range tc.contains {
 				assert.Contains(t, labels, want)
 			}
 			for _, notWant := range tc.notContains {
 				assert.NotContains(t, labels, notWant)
 			}
-		})
-	}
-}
-
-// basicTypeFor returns a types.Type for a string spec used in tests. "none"
-// returns a *types.Named so basicTypeMatchesKind exercises its non-basic branch.
-func basicTypeFor(t *testing.T, spec string, lt *serverTypes.Tree) types.Type {
-	t.Helper()
-	switch spec {
-	case "string":
-		return types.Typ[types.String]
-	case "int":
-		return types.Typ[types.Int]
-	case "bool":
-		return types.Typ[types.Bool]
-	case "float64":
-		return types.Typ[types.Float64]
-	case "none":
-		return lt.DotType
-	}
-	t.Fatalf("unknown basic spec %q", spec)
-	return nil
-}
-
-func TestBasicTypeMatchesKind(t *testing.T) {
-	lt := orderLoadedType(t)
-	for _, tc := range basicTypeMatchesKindTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			typ := basicTypeFor(t, tc.basic, lt)
-			got := basicTypeMatchesKind(typ, tc.kind)
-			assert.Equal(t, tc.want, got)
 		})
 	}
 }
@@ -410,7 +379,7 @@ func TestMethodAcceptsInput(t *testing.T) {
 			case tc.inputIsInt:
 				inputType = types.Typ[types.Int]
 			}
-			got := methodAcceptsInput(m, inputType, tc.pipeKind)
+			got := methodAcceptsInput(m, inputType)
 			assert.Equal(t, tc.want, got)
 		})
 	}

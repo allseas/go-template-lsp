@@ -96,9 +96,9 @@ var argKindCompletionTestCases = []completionTestCase{
 		subStr:     "x",
 		occurrence: 0,
 		withType:   true,
-		// builtins always offered; upper/lower/repeat/shout return string.
-		contains:    []string{"upper", "lower", "repeat", "html", "len", "not", "and"},
-		notContains: []string{"wc"},
+		// upper/lower/repeat/shout return string; html is a string-returning builtin.
+		contains:    []string{"upper", "lower", "repeat", "html", "and"},
+		notContains: []string{"wc", "len", "not"},
 	},
 	{
 		name:        "dot piped into string func - string fields/methods, dot consumed",
@@ -136,8 +136,8 @@ var argKindCompletionTestCases = []completionTestCase{
 		occurrence:  0,
 		offsetAdj:   1,
 		withType:    true,
-		contains:    []string{"upper", "lower", "html", "len", "and"},
-		notContains: []string{"wc"},
+		contains:    []string{"upper", "lower", "html", "and"},
+		notContains: []string{"wc", "len", "not"},
 	},
 	{
 		name:        "int func arg - int methods suggested, string excluded",
@@ -273,6 +273,16 @@ var argKindCompletionTestCases = []completionTestCase{
 		withType:    true,
 		contains:    []string{"upper", "lower"},
 		notContains: []string{".ItemCount", ".Oper", ".CustomerName"},
+	},
+	{
+		name:        "field-chain into string pipe - bool method excluded",
+		src:         `{{ .Address. | upper }}`,
+		subStr:      ". |",
+		occurrence:  0,
+		offsetAdj:   1,
+		withType:    true,
+		contains:    []string{".Address.City", ".Address.Street", ".Address.Zip"},
+		notContains: []string{".Address.IsLocal", ".Address.Copy"},
 	},
 }
 
