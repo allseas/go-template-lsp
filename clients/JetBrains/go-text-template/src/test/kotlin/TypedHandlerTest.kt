@@ -81,4 +81,102 @@ class TypedHandlerTest : CustomPlatformTestCase() {
             text == "{{}}}",
         )
     }
+
+    // Trim-marker delimiter: typing "{{-" must produce "{{-  -}}" with the
+    // caret sitting between the two body spaces, and never leak a triple close.
+    fun testTypingTrimDelimiterProducesProperPair() {
+        myFixture.configureByText("test.tmpl", "")
+        myFixture.type("{{-")
+        assertEquals("{{-  -}}", myFixture.editor.document.text)
+        assertEquals(4, myFixture.editor.caretModel.offset)
+        assertNoTripleBrace(myFixture.editor.document.text)
+    }
+
+    fun testTypingTrimDelimiterInsideExistingText() {
+        myFixture.configureByText("test.tmpl", "foo<caret>bar")
+        myFixture.type("{{-")
+        assertEquals("foo{{-  -}}bar", myFixture.editor.document.text)
+        assertEquals(7, myFixture.editor.caretModel.offset)
+        assertNoTripleBrace(myFixture.editor.document.text)
+    }
+
+    // A lone "-" outside a fresh "{{|}}" must insert literally.
+    fun testTypingDashOutsideDelimiterInsertsLiteral() {
+        myFixture.configureByText("test.tmpl", "foo<caret>")
+        myFixture.type('-')
+        assertEquals("foo-", myFixture.editor.document.text)
+    }
+
+    fun testTypingTrimDelimiterInNonTmplFileIsNotHandledByUs() {
+        myFixture.configureByText("test.html", "")
+        myFixture.type("{{-")
+        val text = myFixture.editor.document.text
+        assertFalse(
+            "Our handler must not touch non-tmpl files, got: '$text'",
+            text == "{{-  -}}",
+        )
+    }
+
+    // Comment delimiter: typing "{{/*" must produce "{{/**/}}" with the caret
+    // between the two stars.
+    fun testTypingCommentProducesProperPair() {
+        myFixture.configureByText("test.tmpl", "")
+        myFixture.type("{{/*")
+        assertEquals("{{/**/}}", myFixture.editor.document.text)
+        assertEquals(4, myFixture.editor.caretModel.offset)
+        assertNoTripleBrace(myFixture.editor.document.text)
+    }
+
+    fun testTypingCommentInsideExistingText() {
+        myFixture.configureByText("test.tmpl", "foo<caret>bar")
+        myFixture.type("{{/*")
+        assertEquals("foo{{/**/}}bar", myFixture.editor.document.text)
+        assertEquals(7, myFixture.editor.caretModel.offset)
+        assertNoTripleBrace(myFixture.editor.document.text)
+    }
+
+    // A lone "*" outside a comment context must insert literally.
+    fun testTypingStarOutsideCommentInsertsLiteral() {
+        myFixture.configureByText("test.tmpl", "foo<caret>")
+        myFixture.type('*')
+        assertEquals("foo*", myFixture.editor.document.text)
+    }
+
+    fun testTypingCommentInNonTmplFileIsNotHandledByUs() {
+        myFixture.configureByText("test.html", "")
+        myFixture.type("{{/*")
+        val text = myFixture.editor.document.text
+        assertFalse(
+            "Our handler must not touch non-tmpl files, got: '$text'",
+            text == "{{/**/}}",
+        )
+    }
+
+    // Trim-comment delimiter: typing "{{- /*" must produce "{{- /*  */ -}}"
+    // with the caret between the two body spaces.
+    fun testTypingTrimCommentProducesProperPair() {
+        myFixture.configureByText("test.tmpl", "")
+        myFixture.type("{{-/*")
+        assertEquals("{{- /*  */ -}}", myFixture.editor.document.text)
+        assertEquals(7, myFixture.editor.caretModel.offset)
+        assertNoTripleBrace(myFixture.editor.document.text)
+    }
+
+    fun testTypingTrimCommentInsideExistingText() {
+        myFixture.configureByText("test.tmpl", "foo<caret>bar")
+        myFixture.type("{{-/*")
+        assertEquals("foo{{- /*  */ -}}bar", myFixture.editor.document.text)
+        assertEquals(10, myFixture.editor.caretModel.offset)
+        assertNoTripleBrace(myFixture.editor.document.text)
+    }
+
+    fun testTypingTrimCommentInNonTmplFileIsNotHandledByUs() {
+        myFixture.configureByText("test.html", "")
+        myFixture.type("{{- /*")
+        val text = myFixture.editor.document.text
+        assertFalse(
+            "Our handler must not touch non-tmpl files, got: '$text'",
+            text == "{{- /*  */ -}}",
+        )
+    }
 }
