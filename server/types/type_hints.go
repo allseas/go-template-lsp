@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"iter"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	parse "text-template-parser"
@@ -17,70 +19,328 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+type typeHintType int
+
+const (
+	typeHintNone typeHintType = iota
+	typeHintStruct
+	typeHintDict
+	typeHintMalformedDict
+)
+
 // TypeHint represents a `gotype:` type hint found in a template file.
 type TypeHint struct {
+	Type typeHintType
+	// Text is the raw type reference that follows `gotype:` in the comment.
+	// For struct hints this is the type path (e.g. "example.com/m.Order").
+	// For dict hints this is the raw body between the braces of `map{...}`.
+	Text string
+	// Dict is populated for dict hints; it maps each declared key to its type
+	// reference (e.g. "Order" -> "example.com/m.Order"). Nil for struct hints.
+	Dict map[string]string
+	// Line is the 1-based line number in the source text at which the hint
+	// appears; 0 when the hint is unset.
 	Line int
-	Type string
 }
 
-func treeAt(offset int, trees map[string]*parse.Tree) *parse.Tree {
-	var best *parse.Tree
-	var bestSpan int
-	for _, t := range trees {
-		if t == nil || t.Root == nil {
-			continue
-		}
-		start := int(t.Root.Position())
-		end := int(t.End)
-		if start > offset || offset >= end {
-			continue
-		}
-		if span := end - start; best == nil || span < bestSpan {
-			best, bestSpan = t, span
-		}
+// IsMalformed reports whether the hint was recognised as a map hint but its
+// body could not be parsed.
+func (h TypeHint) IsMalformed() bool { return h.Type == typeHintMalformedDict }
+
+// describe returns a short human-readable rendering of the hint for use in
+// diagnostic messages.
+func (h TypeHint) describe() string {
+	switch h.Type {
+	case typeHintStruct:
+		return h.Text
+	case typeHintDict:
+		return "map{" + h.Text + "}"
+	case typeHintMalformedDict:
+		return "malformed map{...}"
+	default:
+		return "<none>"
 	}
-	if best != nil {
-		return best
-	}
-	return trees["t"]
 }
 
-// FindTreeHints scans the template text for `gotype:` hints in comments and returns a map of template names to their corresponding type hints.
-// Tree root is the special case, as it contains all the other templates within it, therefore we have to remove the sub templates before passing it into ParseTypeHints.
+// parseHintText parses the raw body of a comment (with or without leading
+// whitespace) into a TypeHint. Line is left at 0; callers that need position
+// information should use ParseHintComment instead.
+func parseHintText(commentText string) (TypeHint, bool) {
+	if dictHintRe.MatchString(commentText) {
+		if h, ok := parseDictHint(commentText, 0); ok {
+			return h, true
+		}
+		return TypeHint{Type: typeHintMalformedDict}, true
+	}
+	return parseStructHint(commentText, 0)
+}
+
+// hintsEqual reports whether two hints refer to the same type. Line numbers
+// are ignored.
+func hintsEqual(a, b TypeHint) bool {
+	if a.Type != b.Type {
+		return false
+	}
+	switch a.Type {
+	case typeHintStruct:
+		return a.Text == b.Text
+	case typeHintDict:
+		if len(a.Dict) != len(b.Dict) {
+			return false
+		}
+		for k, v := range a.Dict {
+			if b.Dict[k] != v {
+				return false
+			}
+		}
+		return true
+	case typeHintMalformedDict:
+		return true
+	default:
+		return true
+	}
+}
+
+var (
+	structHintRe = regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
+	dictHintRe   = regexp.MustCompile(`gotype:\s*map\s*\{`)
+	dictEntryRe  = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*([A-Za-z_][A-Za-z0-9_/.-]*)\s*$`)
+)
+
+// FindTreeHints scans each parse tree for a `gotype:` comment and returns a
+// map of template names to the first hint found in that tree. Any additional
+// hint comments in the same tree are ignored here; they are detected during
+// analysis and reported as ErrorTypeConflictingHint diagnostics.
 func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHint {
 	result := make(map[string]TypeHint)
 
-	re := regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
-
-	lineNo := 0
-	lineStart := 0
-	for i := 0; i <= len(text); i++ {
-		if i < len(text) && text[i] != '\n' {
+	for name, tree := range trees {
+		if tree == nil || tree.Root == nil {
 			continue
 		}
-		line := strings.TrimSuffix(text[lineStart:i], "\r")
-		lineNo++
-
-		if strings.Contains(line, "gotype:") {
-			for _, m := range re.FindAllStringSubmatchIndex(line, -1) {
-				if len(m) < 4 {
-					continue
-				}
-				owner := treeAt(lineStart+m[0], trees)
-				if owner == nil {
-					continue
-				}
-				if _, exists := result[owner.Name]; exists {
-					continue
-				}
-				result[owner.Name] = TypeHint{Line: lineNo, Type: line[m[2]:m[3]]}
-			}
+		if h, ok := findFirstTreeHint(text, tree.Root); ok {
+			result[name] = h
 		}
-
-		lineStart = i + 1
 	}
 
 	return result
+}
+
+// findFirstTreeHint walks root and returns the first gotype hint comment found,
+// stopping the traversal as soon as one is discovered.
+func findFirstTreeHint(text string, root parse.Node) (TypeHint, bool) {
+	for node := range walkParsed(root) {
+		c, isComment := node.(*parse.CommentNode)
+		if !isComment {
+			continue
+		}
+		if h, ok := ParseHintComment(text, c); ok {
+			return h, true
+		}
+	}
+	return TypeHint{}, false
+}
+
+// ParseHintComment inspects a CommentNode and returns the gotype hint it
+// carries, if any. A dict marker takes priority over struct parsing so a
+// malformed `map{...}` body is not silently reinterpreted as a struct hint.
+func ParseHintComment(text string, c *parse.CommentNode) (TypeHint, bool) {
+	if c == nil {
+		return TypeHint{}, false
+	}
+	line := strings.Count(text[:int(c.Pos)], "\n") + 1
+	if dictHintRe.MatchString(c.Text) {
+		if h, ok := parseDictHint(c.Text, line); ok {
+			return h, true
+		}
+		return TypeHint{Type: typeHintMalformedDict, Line: line}, true
+	}
+	if h, ok := parseStructHint(c.Text, line); ok {
+		return h, true
+	}
+	return TypeHint{}, false
+}
+
+// parseDictHint tries to interpret commentText as `gotype: map{...}`. It
+// returns ok=false when the comment does not contain a dict marker at all;
+// when the marker is present but the body is malformed the returned ok is
+// still false so the caller does not fall back to struct parsing.
+func parseDictHint(commentText string, line int) (TypeHint, bool) {
+	loc := dictHintRe.FindStringIndex(commentText)
+	if loc == nil {
+		return TypeHint{}, false
+	}
+	rest := commentText[loc[1]:]
+	end := strings.Index(rest, "}")
+	if end < 0 {
+		return TypeHint{}, false
+	}
+	body := rest[:end]
+	dict, ok := parseDictBody(body)
+	if !ok {
+		return TypeHint{}, false
+	}
+	return TypeHint{
+		Type: typeHintDict,
+		Text: strings.TrimSpace(body),
+		Dict: dict,
+		Line: line,
+	}, true
+}
+
+// parseDictBody parses the comma-separated `"key": typeref` entries between
+// the braces of a dict hint. An empty body or any malformed entry rejects
+// the whole hint.
+func parseDictBody(body string) (map[string]string, bool) {
+	entries := strings.Split(body, ",")
+	dict := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if strings.TrimSpace(e) == "" {
+			return nil, false
+		}
+		m := dictEntryRe.FindStringSubmatch(e)
+		if m == nil {
+			return nil, false
+		}
+		dict[m[1]] = m[2]
+	}
+	if len(dict) == 0 {
+		return nil, false
+	}
+	return dict, true
+}
+
+func parseStructHint(commentText string, line int) (TypeHint, bool) {
+	m := structHintRe.FindStringSubmatch(commentText)
+	if len(m) < 2 {
+		return TypeHint{}, false
+	}
+	return TypeHint{
+		Type: typeHintStruct,
+		Text: m[1],
+		Line: line,
+	}, true
+}
+
+// walkParsed returns an iterator over node and its descendants in pre-order.
+// The caller can break out of the range loop to stop the walk early.
+func walkParsed(root parse.Node) iter.Seq[parse.Node] {
+	var visit func(parse.Node, func(parse.Node) bool) bool
+	visit = func(n parse.Node, yield func(parse.Node) bool) bool {
+		if n == nil {
+			return true
+		}
+		if !yield(n) {
+			return false
+		}
+		for _, child := range parseNodeChildren(n) {
+			if !visit(child, yield) {
+				return false
+			}
+		}
+		return true
+	}
+	return func(yield func(parse.Node) bool) {
+		visit(root, yield)
+	}
+}
+
+func parseNodeChildren(node parse.Node) []parse.Node {
+	switch n := node.(type) {
+	case *parse.ListNode:
+		return n.Nodes
+	case *parse.IfNode:
+		return parseBranchChildren(n.List, n.ElseList)
+	case *parse.RangeNode:
+		return parseBranchChildren(n.List, n.ElseList)
+	case *parse.WithNode:
+		return parseBranchChildren(n.List, n.ElseList)
+	case *parse.TemplateNode:
+		return nil
+	default:
+		return extParseNodeChildren(node)
+	}
+}
+
+func parseBranchChildren(list, elseList *parse.ListNode) []parse.Node {
+	var out []parse.Node
+	if list != nil {
+		out = append(out, list)
+	}
+	if elseList != nil {
+		out = append(out, elseList)
+	}
+	return out
+}
+
+// DictType is a synthetic types.Type representing a `gotype: map{...}` hint.
+// It behaves like a struct with named keys of arbitrary Go types, but is not
+// a real Go type — LookupFieldOrMethod does not work on it. The analyser and
+// completion code type-assert on *DictType to detect it.
+type DictType struct {
+	Fields map[string]types.Type
+}
+
+// Underlying implements types.Type; a dict is its own underlying.
+func (d *DictType) Underlying() types.Type { return d }
+
+// String implements types.Type. Keys are sorted so the output is stable.
+func (d *DictType) String() string {
+	if d == nil {
+		return "map{}"
+	}
+	keys := d.DictKeys()
+	var b strings.Builder
+	b.WriteString("map{")
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q: %s", k, types.TypeString(d.Fields[k], nil))
+	}
+	b.WriteString("}")
+	return b.String()
+}
+
+// LookupDictKey returns the value type for name, ok=false if absent.
+func (d *DictType) LookupDictKey(name string) (types.Type, bool) {
+	if d == nil {
+		return nil, false
+	}
+	t, ok := d.Fields[name]
+	return t, ok
+}
+
+// DictKeys returns the keys in sorted order for deterministic output.
+func (d *DictType) DictKeys() []string {
+	if d == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(d.Fields))
+	for k := range d.Fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// DictTypeFields projects a *DictType into TypeField rows so completion code
+// can treat dict keys and struct fields uniformly.
+func DictTypeFields(d *DictType) []TypeField {
+	if d == nil {
+		return nil
+	}
+	keys := d.DictKeys()
+	fields := make([]TypeField, 0, len(keys))
+	for _, k := range keys {
+		t := d.Fields[k]
+		fields = append(fields, TypeField{
+			Name:     k,
+			TypeName: types.TypeString(t, nil),
+			Type:     t,
+		})
+	}
+	return fields
 }
 
 // TypeField is a resolved field from a struct type.
@@ -135,9 +395,15 @@ func goEnv() []string {
 	return os.Environ()
 }
 
+type loadedPackage struct {
+	pkg  *types.Package
+	fset *token.FileSet
+}
+
 var (
 	typeHintCacheMu sync.RWMutex
 	typeHintCache   = make(map[string]*Tree)
+	loadedPackages  = make(map[string]*loadedPackage)
 )
 
 // InvalidateTypeHintCache clears the cached type-hint results
@@ -145,6 +411,7 @@ func InvalidateTypeHintCache() {
 	typeHintCacheMu.Lock()
 	defer typeHintCacheMu.Unlock()
 	typeHintCache = make(map[string]*Tree)
+	loadedPackages = make(map[string]*loadedPackage)
 }
 
 // CachedLoadTypeFromHint is like LoadTypeFromHint but returns the previously
@@ -172,18 +439,121 @@ func CachedLoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 	return t, nil
 }
 
-// LoadTypeFromHint loads the Go package identified by the hint and returns a
-// Tree with DotType and Pkg set.
-func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
-	importPath, typeName := splitTypeHint(hint)
+// CachedLoadHint dispatches on the hint kind and delegates to the appropriate
+// cached loader. Struct hints go through CachedLoadTypeFromHint; dict hints go
+// through CachedLoadDictFromHint.
+func CachedLoadHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
+	switch hint.Type {
+	case typeHintDict:
+		return CachedLoadDictFromHint(hint, workspaceRoot)
+	case typeHintStruct:
+		return CachedLoadTypeFromHint(hint.Text, workspaceRoot)
+	case typeHintMalformedDict:
+		return nil, fmt.Errorf("malformed map hint")
+	default:
+		return nil, fmt.Errorf("unknown hint type")
+	}
+}
 
-	log.Debug().
-		Str("hint", hint).
-		Str("importPath", importPath).
-		Str("typeName", typeName).
-		Str("workspaceRoot", workspaceRoot).
-		Msg("LoadTypeFromHint: attempting to load type")
+// dictCacheKey returns a deterministic key for a dict hint independent of map
+// iteration order.
+func dictCacheKey(hint TypeHint, workspaceRoot string) string {
+	keys := make([]string, 0, len(hint.Dict))
+	for k := range hint.Dict {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString("dict\x00")
+	for _, k := range keys {
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(hint.Dict[k])
+		b.WriteByte('\x01')
+	}
+	b.WriteString("\x00")
+	b.WriteString(workspaceRoot)
+	return b.String()
+}
 
+// CachedLoadDictFromHint is the cached counterpart of LoadDictFromHint.
+func CachedLoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
+	key := dictCacheKey(hint, workspaceRoot)
+
+	typeHintCacheMu.RLock()
+	if t, ok := typeHintCache[key]; ok {
+		typeHintCacheMu.RUnlock()
+		return t, nil
+	}
+	typeHintCacheMu.RUnlock()
+
+	t, err := LoadDictFromHint(hint, workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	typeHintCacheMu.Lock()
+	typeHintCache[key] = t
+	typeHintCacheMu.Unlock()
+
+	return t, nil
+}
+
+// LoadDictFromHint loads every value type of a dict hint and returns a Tree
+// whose DictType is populated. DotType is left nil.
+func LoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
+	if hint.Type != typeHintDict {
+		return nil, fmt.Errorf("LoadDictFromHint: hint is not a dict")
+	}
+	if len(hint.Dict) == 0 {
+		return nil, fmt.Errorf("LoadDictFromHint: dict is empty")
+	}
+	fields := make(map[string]types.Type, len(hint.Dict))
+	var pkg *types.Package
+	var fset *token.FileSet
+	for _, k := range sortedKeys(hint.Dict) {
+		ref := hint.Dict[k]
+		lt, err := LoadTypeFromHint(ref, workspaceRoot)
+		if err != nil {
+			return nil, fmt.Errorf("map key %q (%s): %w", k, ref, err)
+		}
+		fields[k] = lt.DotType
+		if pkg == nil {
+			pkg = lt.Pkg
+		}
+		if fset == nil {
+			fset = lt.Fset
+		}
+	}
+	return &Tree{
+		DictType: &DictType{Fields: fields},
+		Pkg:      pkg,
+		Fset:     fset,
+	}, nil
+}
+
+// sortedKeys returns the keys of m in sorted order.
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// loadPackageCached loads (or returns a cached) *types.Package for the given
+// import path. Every hint that resolves to the same package therefore shares
+// one *types.Package instance, so *types.Named identity comparisons work
+// across hints.
+func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error) {
+	key := importPath + "\x00" + workspaceRoot
+
+	typeHintCacheMu.RLock()
+	if lp, ok := loadedPackages[key]; ok {
+		typeHintCacheMu.RUnlock()
+		return lp, nil
+	}
 	// possibly add packages.NeedTypesInfo | packages.NeedImports |  packages.NeedName | packages.NeedFiles | packages.NeedSyntax later (some used in code_gen)
 	dir := workspaceRoot
 	if _, err := os.Stat(dir); err != nil {
@@ -209,10 +579,12 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 			Str("importPath", importPath).
 			Str("dir", workspaceRoot).
 			Msg("LoadTypeFromHint: packages.Load failed")
+		typeHintCacheMu.RUnlock()
 		return nil, fmt.Errorf("packages.Load(%q): %w", importPath, err)
 	}
 	if len(pkgs) == 0 {
 		log.Error().Str("importPath", importPath).Msg("LoadTypeFromHint: no packages found")
+		typeHintCacheMu.RUnlock()
 		return nil, fmt.Errorf("no packages found for import path %q", importPath)
 	}
 
@@ -222,10 +594,33 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 			Str("importPath", importPath).
 			Str("error", pkg.Errors[0].Msg).
 			Msg("LoadTypeFromHint: package has errors")
+		typeHintCacheMu.RUnlock()
 		return nil, fmt.Errorf("package %q has errors: %v", importPath, pkg.Errors[0])
 	}
+	lp := &loadedPackage{pkg: pkg.Types, fset: fset}
+	loadedPackages[key] = lp
+	typeHintCacheMu.RUnlock()
+	return lp, nil
+}
 
-	obj := pkg.Types.Scope().Lookup(typeName)
+// LoadTypeFromHint loads the Go package identified by the hint and returns a
+// Tree with DotType and Pkg set.
+func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
+	importPath, typeName := splitTypeHint(hint)
+
+	log.Debug().
+		Str("hint", hint).
+		Str("importPath", importPath).
+		Str("typeName", typeName).
+		Str("workspaceRoot", workspaceRoot).
+		Msg("LoadTypeFromHint: attempting to load type")
+
+	lp, err := loadPackageCached(importPath, workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	obj := lp.pkg.Scope().Lookup(typeName)
 	if obj == nil {
 		log.Error().
 			Str("typeName", typeName).
@@ -247,7 +642,7 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		Int("numMethods", named.NumMethods()).
 		Msg("LoadTypeFromHint: type loaded successfully")
 
-	tree := &Tree{DotType: named, Pkg: pkg.Types, Fset: fset}
+	tree := &Tree{DotType: named, Pkg: lp.pkg, Fset: lp.fset}
 	return tree, nil
 }
 

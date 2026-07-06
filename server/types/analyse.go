@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"strings"
 
 	parse "text-template-parser"
 )
@@ -22,7 +23,8 @@ type Tree struct {
 	Errors     []error                // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
 	End        Pos                    // position of the end of the template text; only set after parsing.
 	funcs      map[string]*types.Func // available functions with their signatures
-	DotType    *types.Named           // optional: type of dot context (from gotype hint)
+	DotType    *types.Named           // optional: named type of dot context (from struct-shaped gotype hint)
+	DictType   *DictType              // optional: dict-shaped dot context (from `gotype: map{...}` hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
 	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
@@ -62,6 +64,12 @@ const (
 	ErrorTypeEmptyDefineName
 	// ErrorTypeVariableReassigned A variable is reassigned to a value of a different concrete type. The new binding shadows the previous one on the variable stack rather than mutating it.
 	ErrorTypeVariableReassigned
+	// ErrorTypeMalformedHint A gotype hint's syntax is invalid (e.g. malformed `map{...}` body)
+	ErrorTypeMalformedHint
+	// ErrorTypeInvalidDictKey Key lookup on a map-shaped gotype hint failed
+	ErrorTypeInvalidDictKey
+	// ErrorTypeConflictingHint A gotype hint comment conflicts with the first hint in the same tree
+	ErrorTypeConflictingHint
 	// Add more error types as needed
 )
 
@@ -81,6 +89,9 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeUnknownRangeType:   "unknownRangeType",
 	ErrorTypeEmptyDefineName:    "emptyDefineName",
 	ErrorTypeVariableReassigned: "variableReassigned",
+	ErrorTypeMalformedHint:      "malformedHint",
+	ErrorTypeInvalidDictKey:     "invalidDictKey",
+	ErrorTypeConflictingHint:    "conflictingHint",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
@@ -246,32 +257,58 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
 		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
 			argType := t.Pipe.ValueType()
-			if !IsEmptyInterface(expectedType) && IsEmptyInterface(argType) {
-				// Template parameter is concrete but argument type is
-				// unknown (any). We can't verify the call, so warn only.
-				// The reverse (concrete arg to any param) is fine: losing
-				// precision toward `any` is not the user's problem.
-				ctx.errorf(
-					t,
-					ErrorUnknownType,
-					"template %q expects argument of type %s, it's impossible to determine the type of the argument provided",
-					n.Name,
-					expectedType.String(),
-				)
-			} else if argType != nil && !IsEmptyInterface(argType) && !IsEmptyInterface(expectedType) &&
-				argType != expectedType &&
-				!types.Identical(argType, expectedType) &&
-				!types.AssignableTo(argType, expectedType) &&
-				!types.ConvertibleTo(argType, expectedType) &&
-				argType.String() != expectedType.String() { // fallback to string comparison to handle loading a package multiple times
-				ctx.errorf(
-					t,
-					ErrorTypeInvalidTemplateArg,
-					"template %q expects argument of type %s, but got %s",
-					n.Name,
-					expectedType.String(),
-					argType.String(),
-				)
+			_, expectedIsDict := expectedType.(*DictType)
+			_, argIsDict := argType.(*DictType)
+			switch {
+			case expectedIsDict && argIsDict:
+				// Both sides are dicts: compare by String() (DictType.String
+				// is stable and captures keys + per-key value types). This is
+				// the only case where dict shape is checked exactly.
+				if !IsEmptyInterface(argType) &&
+					argType.String() != expectedType.String() {
+					ctx.errorf(
+						t,
+						ErrorTypeInvalidTemplateArg,
+						"template %q expects argument of type %s, but got %s",
+						n.Name,
+						expectedType.String(),
+						argType.String(),
+					)
+				}
+			default:
+				// If exactly one side is a dict, project it to map[string]any
+				// and fall through to the ordinary go/types comparison. The
+				// tightest static type we can attribute to a dict when the
+				// other side is not itself a dict is map[string]any.
+				effExpected := dictAsMapStringAny(expectedType)
+				effArg := dictAsMapStringAny(argType)
+				if !IsEmptyInterface(effExpected) && IsEmptyInterface(effArg) {
+					// Template parameter is concrete but argument type is
+					// unknown (any). We can't verify the call, so warn only.
+					// The reverse (concrete arg to any param) is fine: losing
+					// precision toward `any` is not the user's problem.
+					ctx.errorf(
+						t,
+						ErrorUnknownType,
+						"template %q expects argument of type %s, it's impossible to determine the type of the argument provided",
+						n.Name,
+						expectedType.String(),
+					)
+				} else if effArg != nil && !IsEmptyInterface(effArg) && !IsEmptyInterface(effExpected) &&
+					effArg != effExpected &&
+					!types.Identical(effArg, effExpected) &&
+					!types.AssignableTo(effArg, effExpected) &&
+					!types.ConvertibleTo(effArg, effExpected) &&
+					!pointerElemMatches(effArg, effExpected) {
+					ctx.errorf(
+						t,
+						ErrorTypeInvalidTemplateArg,
+						"template %q expects argument of type %s, but got %s",
+						n.Name,
+						expectedType.String(),
+						argType.String(),
+					)
+				}
 			}
 		}
 	}
@@ -288,6 +325,23 @@ func AnyType() types.Type {
 	return types.NewInterfaceType(nil, nil).Complete()
 }
 
+// mapStringAnyType returns Go's `map[string]any`. It is the tightest ordinary
+// Go type the analyser can attribute to a `*DictType` value when the other
+// side of a type comparison is not itself a dict: the dict knows its keys and
+// per-key value types, but no real Go type captures both, so for cross-type
+// checks we project down to `map[string]any`.
+func mapStringAnyType() types.Type {
+	return types.NewMap(types.Typ[types.String], AnyType())
+}
+
+// dictAsMapStringAny returns mapStringAnyType() if t is a *DictType, otherwise t.
+func dictAsMapStringAny(t types.Type) types.Type {
+	if _, ok := t.(*DictType); ok {
+		return mapStringAnyType()
+	}
+	return t
+}
+
 // unalias resolves alias types and dereferences pointers recursively, returning
 // the underlying named/struct/etc. type. nil in -> nil out.
 func unalias(t types.Type) types.Type {
@@ -299,6 +353,21 @@ func unalias(t types.Type) types.Type {
 		}
 		t = p.Elem()
 	}
+}
+
+// pointerElemMatches reports whether arg is *T where T matches expected.
+// Go's text/template auto-dereferences pointer values, so a *T argument is
+// acceptable wherever a T parameter is declared. The reverse (T where *T is
+// expected) is not accepted: templates do not auto-address values.
+func pointerElemMatches(arg, expected types.Type) bool {
+	p, ok := types.Unalias(arg).(*types.Pointer)
+	if !ok {
+		return false
+	}
+	elem := p.Elem()
+	return types.Identical(elem, expected) ||
+		types.AssignableTo(elem, expected) ||
+		elem.String() == expected.String()
 }
 
 func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
@@ -314,13 +383,15 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	keepVars := len(ctx.vars)
 	w.Pipe = analysePipe(n.Pipe, w, ctx)
 	if w.Pipe.typ != nil && !IsEmptyInterface(w.Pipe.typ) {
-		if _, ok := unalias(w.Pipe.typ).Underlying().(*types.Struct); !ok {
-			ctx.errorf(
-				w.Pipe,
-				ErrorTypeInvalidWith,
-				"cannot use type %v in with statement; expected struct type",
-				w.Pipe.typ,
-			)
+		if _, isDict := w.Pipe.typ.(*DictType); !isDict {
+			if _, ok := unalias(w.Pipe.typ).Underlying().(*types.Struct); !ok {
+				ctx.errorf(
+					w.Pipe,
+					ErrorTypeInvalidWith,
+					"cannot use type %v in with statement; expected struct type",
+					w.Pipe.typ,
+				)
+			}
 		}
 	}
 	ctx.dotType = w.Pipe.typ
@@ -387,7 +458,7 @@ func getRangeableType(typ types.Type, ctx *analysisCtx) (types.Type, types.Type)
 				ErrorUnknownType,
 				"cannot determine range element type of empty interface; assuming any",
 			)
-			return nil, types.NewInterfaceType(nil, nil).Complete()
+			return nil, AnyType()
 		}
 		return nil, nil
 	default:
@@ -464,13 +535,36 @@ func analyseIf(n *parse.IfNode, parent Node, ctx *analysisCtx) Node {
 	return i
 }
 
-func analyseComment(n *parse.CommentNode, parent Node, _ *analysisCtx) Node {
-	return &CommentNode{
+func analyseComment(n *parse.CommentNode, parent Node, ctx *analysisCtx) Node {
+	c := &CommentNode{
 		NodeType: NodeComment,
 		Pos:      Pos(n.Position()),
 		Text:     n.Text,
 		parent:   parent,
 	}
+	if ctx == nil {
+		return c
+	}
+	hint, ok := parseHintText(n.Text)
+	if !ok {
+		return c
+	}
+	if ctx.firstHint == nil {
+		h := hint
+		ctx.firstHint = &h
+		return c
+	}
+	if hintsEqual(*ctx.firstHint, hint) {
+		return c
+	}
+	ctx.errorf(
+		c,
+		ErrorTypeConflictingHint,
+		"gotype hint %s conflicts with earlier hint %s in the same template",
+		hint.describe(),
+		ctx.firstHint.describe(),
+	)
+	return c
 }
 
 func analyseString(n *parse.StringNode, parent Node, _ *analysisCtx) Node {
@@ -551,21 +645,23 @@ func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
 		return cn
 	}
 
-	if typ, _ := walkFieldChain(ctx, cn, baseType, n.Field); typ != nil {
+	if typ, _, steps := walkFieldChain(ctx, cn, baseType, n.Field); typ != nil {
 		cn.typ = typ
+		cn.stepTypes = steps
 	}
 	return cn
 }
 
 // walkFieldChain walks a chain of field/method names from a starting type,
-// reporting any lookup errors on errNode. It returns the final type and a
-// bool indicating whether the entire chain resolved successfully.
+// reporting any lookup errors on errNode. It returns the final type, a bool
+// indicating whether the entire chain resolved successfully, and a slice with
+// the resolved type at each step (len == len(path)).
 func walkFieldChain(
 	ctx *analysisCtx,
 	errNode Node,
 	base types.Type,
 	path []string,
-) (types.Type, bool) {
+) (types.Type, bool, []types.Type) {
 	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
 	if base != nil {
 		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
@@ -574,13 +670,19 @@ func walkFieldChain(
 				ErrorUnknownType,
 				"cannot determine range element type of empty interface; assuming any",
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), true
+			anyt := AnyType()
+			steps := make([]types.Type, len(path))
+			for i := range steps {
+				steps[i] = anyt
+			}
+			return anyt, true, steps
 		}
 	}
 
 	pkg := ctx.tree.Pkg
 	currentType := base
-	for _, name := range path {
+	stepTypes := make([]types.Type, len(path))
+	for i, name := range path {
 		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
 		if obj == nil {
 			ctx.errorf(
@@ -590,7 +692,7 @@ func walkFieldChain(
 				currentType.String(),
 				name,
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), false
+			return AnyType(), false, stepTypes
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -605,7 +707,7 @@ func walkFieldChain(
 					name,
 					currentType.String(),
 				)
-				return types.NewInterfaceType(nil, nil).Complete(), false
+				return AnyType(), false, stepTypes
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -630,32 +732,57 @@ func walkFieldChain(
 				name,
 				currentType.String(),
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), false
+			return AnyType(), false, stepTypes
 		}
+		stepTypes[i] = currentType
 	}
-	return currentType, true
+	return currentType, true, stepTypes
 }
 
 // walkFieldChainWithMethodInfo is like walkFieldChain but additionally returns an isMethod slice
 // whose i-th element is true when path[i] resolves to a *types.Func (method) and false when it
-// resolves to a *types.Var (struct field). On failure the returned slice is nil.
+// resolves to a *types.Var (struct field). stepTypes[i] holds the type resolved for path[i].
+// On failure the returned slices are still populated up to the failing step (later entries nil/false).
 func walkFieldChainWithMethodInfo(
 	ctx *analysisCtx,
 	errNode Node,
 	base types.Type,
 	path []string,
-) (types.Type, []bool) {
+) (types.Type, []bool, []types.Type) {
 	// special case: if base is an empty interface, allow any field/method access and return the empty interface type
 	if base != nil {
 		if iface, ok := base.Underlying().(*types.Interface); ok && iface.NumMethods() == 0 {
-			return types.NewInterfaceType(nil, nil).Complete(), make([]bool, len(path))
+			anyt := AnyType()
+			steps := make([]types.Type, len(path))
+			for i := range steps {
+				steps[i] = anyt
+			}
+			return anyt, make([]bool, len(path)), steps
 		}
 	}
 
 	pkg := ctx.tree.Pkg
 	currentType := base
 	isMethod := make([]bool, len(path))
+	stepTypes := make([]types.Type, len(path))
 	for i, name := range path {
+		if d, ok := currentType.(*DictType); ok {
+			valueTyp, keyOk := d.LookupDictKey(name)
+			if !keyOk {
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidDictKey,
+					"map has no key %q; known keys: %s",
+					name,
+					strings.Join(d.DictKeys(), ", "),
+				)
+				return AnyType(), isMethod, stepTypes
+			}
+			currentType = valueTyp
+			isMethod[i] = false
+			stepTypes[i] = currentType
+			continue
+		}
 		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
 		if obj == nil {
 			ctx.errorf(
@@ -665,7 +792,7 @@ func walkFieldChainWithMethodInfo(
 				currentType.String(),
 				name,
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), isMethod
+			return AnyType(), isMethod, stepTypes
 		}
 		switch o := obj.(type) {
 		case *types.Var:
@@ -681,7 +808,7 @@ func walkFieldChainWithMethodInfo(
 					name,
 					currentType.String(),
 				)
-				return types.NewInterfaceType(nil, nil).Complete(), isMethod
+				return AnyType(), isMethod, stepTypes
 			}
 			if sig.Results().Len() > 2 {
 				ctx.errorf(
@@ -706,10 +833,11 @@ func walkFieldChainWithMethodInfo(
 				name,
 				currentType.String(),
 			)
-			return types.NewInterfaceType(nil, nil).Complete(), isMethod
+			return AnyType(), isMethod, stepTypes
 		}
+		stepTypes[i] = currentType
 	}
-	return currentType, isMethod
+	return currentType, isMethod, stepTypes
 }
 
 func analyseIdentifier(n *parse.IdentifierNode, parent Node, ctx *analysisCtx) Node {
@@ -768,9 +896,15 @@ func analyseVariable(n *parse.VariableNode, parent Node, ctx *analysisCtx) *Vari
 	if baseType == nil {
 		return v
 	}
-	if typ, isMethod := walkFieldChainWithMethodInfo(ctx, v, baseType, n.Ident[1:]); typ != nil {
+	if typ, isMethod, steps := walkFieldChainWithMethodInfo(
+		ctx,
+		v,
+		baseType,
+		n.Ident[1:],
+	); typ != nil {
 		v.typ = typ
 		v.isMethod = isMethod
+		v.stepTypes = steps
 	}
 	return v
 }
@@ -793,9 +927,15 @@ func analyseField(n *parse.FieldNode, parent Node, ctx *analysisCtx) Node {
 		return fn
 	}
 
-	if typ, isMethod := walkFieldChainWithMethodInfo(ctx, fn, ctx.dotType, n.Ident); typ != nil {
+	if typ, isMethod, steps := walkFieldChainWithMethodInfo(
+		ctx,
+		fn,
+		ctx.dotType,
+		n.Ident,
+	); typ != nil {
 		fn.typ = typ
 		fn.isMethod = isMethod
+		fn.stepTypes = steps
 	}
 	return fn
 }
@@ -1150,16 +1290,44 @@ func validateCommandArguments(
 }
 
 // IsEmptyInterface reports whether t is the empty interface (i.e. `any` / `interface{}`).
+// A nil t is treated as unconstrained and returns true.
 func IsEmptyInterface(t types.Type) bool {
 	if t == nil {
-		return false
+		return true
 	}
 	iface, ok := t.Underlying().(*types.Interface)
 	return ok && iface.NumMethods() == 0
 }
 
+// TypeConvertibleTo reports whether a value of type src can be used where dst
+// is expected, dereferencing pointers on both sides. A nil dst means no
+// constraint. The empty interface on either side always matches. *DictType is
+// projected to map[string]any so hint-defined dicts compose with real Go maps.
+func TypeConvertibleTo(src, dst types.Type) bool {
+	if dst == nil {
+		return true
+	}
+	if src == nil {
+		return false
+	}
+	if IsEmptyInterface(src) || IsEmptyInterface(dst) {
+		return true
+	}
+	src = derefPointer(dictAsMapStringAny(src))
+	dst = derefPointer(dictAsMapStringAny(dst))
+	return types.AssignableTo(src, dst)
+}
+
+func derefPointer(t types.Type) types.Type {
+	if p, ok := t.(*types.Pointer); ok {
+		return p.Elem()
+	}
+	return t
+}
+
 // typesCompatible reports whether a value of type got is assignable to a parameter
 // of type want. When either side is the empty interface (any), we always accept.
+// *DictType is projected to map[string]any for the check (see mapStringAnyType).
 func typesCompatible(want, got types.Type) bool {
 	if IsEmptyInterface(want) || IsEmptyInterface(got) {
 		return true
@@ -1167,6 +1335,8 @@ func typesCompatible(want, got types.Type) bool {
 	if want == nil || got == nil {
 		return false
 	}
+	want = dictAsMapStringAny(want)
+	got = dictAsMapStringAny(got)
 	return types.Identical(want, got) || types.AssignableTo(got, want)
 }
 
@@ -1186,4 +1356,5 @@ type analysisCtx struct {
 	funcs              map[string]*types.Func // Available functions with their signatures
 	tree               *Tree                  // Reference to the tree being built, for error reporting
 	templateInputTypes map[string]types.Type  // Expected input type per template name (from gotype hints on {{define}} blocks)
+	firstHint          *TypeHint              // First gotype hint seen while analysing this tree, used to diagnose conflicting hints
 }

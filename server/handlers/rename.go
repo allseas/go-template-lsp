@@ -97,7 +97,7 @@ func renameFieldObject(
 		switch node := n.(type) {
 		case *types.FieldNode:
 			for i, name := range node.Ident {
-				owner := walkChainType(node.DotType(), node.Ident[:i])
+				owner := node.OwnerType(i)
 				if obj, ok := lookupField(owner, name); ok && obj == target {
 					start := fieldSegmentStart(node, i)
 					edits = append(edits, makeRenameEdit(start, len(name), newName, text))
@@ -106,7 +106,7 @@ func renameFieldObject(
 		case *types.VariableNode:
 			// Ident[0] is the base variable; chained fields start at index 1.
 			for i := 1; i < len(node.Ident); i++ {
-				owner := walkChainType(node.Base, node.Ident[1:i])
+				owner := node.OwnerType(i)
 				if obj, ok := lookupField(owner, node.Ident[i]); ok && obj == target {
 					start := variableSegmentStart(node, i)
 					edits = append(edits, makeRenameEdit(start, len(node.Ident[i]), newName, text))
@@ -133,7 +133,7 @@ func fieldRenameTarget(target types.Node, offset int) (obj gotypes.Object, isFie
 			return nil, false
 		}
 		idx := getFieldIdentIdx(node, offset)
-		owner := walkChainType(node.DotType(), node.Ident[:idx])
+		owner := node.OwnerType(idx)
 		o, _ := lookupField(owner, node.Ident[idx])
 		return o, true
 	case *types.VariableNode:
@@ -141,7 +141,7 @@ func fieldRenameTarget(target types.Node, offset int) (obj gotypes.Object, isFie
 		if idx == 0 {
 			return nil, false // cursor is on the base variable, not a field
 		}
-		owner := walkChainType(node.Base, node.Ident[1:idx])
+		owner := node.OwnerType(idx)
 		o, _ := lookupField(owner, node.Ident[idx])
 		return o, true
 	}

@@ -49,42 +49,45 @@ func chainExpansionItems(
 	if mode == pipeChainOff || base == nil {
 		return nil
 	}
-	targetKind := targetKindForArg(cur, offset, text)
-	if targetKind == outputAny || targetKind == outputUntyped {
+	targetType := targetTypeForArg(cur, offset, text)
+	if serverTypes.IsEmptyInterface(targetType) {
 		return nil
 	}
-	return expandedFieldItems(base, targetKind, mode, prefix, wordRange)
+	return expandedFieldItems(base, targetType, mode, prefix, wordRange)
 }
 
-// targetKindForArg determines the output kind required at the cursor position
-// based on the function consuming the value there.
-func targetKindForArg(cur serverTypes.Node, offset serverTypes.Pos, text string) outputKind {
+// targetTypeForArg determines the type required at the cursor position based on
+// the function consuming the value there. Returns AnyType when unconstrained.
+func targetTypeForArg(cur serverTypes.Node, offset serverTypes.Pos, text string) types.Type {
 	cmd := serverTypes.EnclosingCommand(cur)
 	if cmd == nil || len(cmd.Args) == 0 {
-		return outputAny
+		return serverTypes.AnyType()
 	}
 	if cursorPastPipe(cmd, offset, text) {
-		return outputAny
+		return serverTypes.AnyType()
 	}
 	head := cmd.Args[0]
 	// When the cursor is on (or before the end of) the command head, the value
 	// this command produces flows downstream: any constraint comes from the next
 	// pipe stage rather than from a parameter of this command.
 	if offset <= argEnd(head) {
-		return pipeForwardKind(cur, cmd)
+		return pipeForwardType(cur, cmd, offset, text)
 	}
-	// Otherwise the cursor fills a value-argument slot of a function command.
+	// Data-producing heads (fields, variables, parenthesized pipes) have no
+	// argument slots -- everything within the command emits into the next
+	// pipe stage. Only IdentifierNode heads represent function calls that
+	// consume arguments in the current stage.
 	id, ok := head.(*serverTypes.IdentifierNode)
 	if !ok {
-		return outputAny
+		return pipeForwardType(cur, cmd, offset, text)
 	}
 	fn := serverTypes.GlobalFuncs()[id.Ident]
 	if fn == nil {
-		return outputAny
+		return serverTypes.AnyType()
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok || sig.Params().Len() == 0 {
-		return outputAny
+		return serverTypes.AnyType()
 	}
 	params := sig.Params()
 	paramIdx := cursorParamSlot(cmd, offset)
@@ -95,10 +98,12 @@ func targetKindForArg(cur serverTypes.Node, offset serverTypes.Pos, text string)
 		paramIdx = params.Len() - 1
 	}
 	paramT := params.At(paramIdx).Type()
-	if sl, isSl := paramT.Underlying().(*types.Slice); isSl {
-		paramT = sl.Elem()
+	if sig.Variadic() && paramIdx == params.Len()-1 {
+		if sl, ok := paramT.Underlying().(*types.Slice); ok {
+			paramT = sl.Elem()
+		}
 	}
-	return typeToOutputKind(paramT)
+	return paramT
 }
 
 // cursorPastPipe reports whether a pipe separator appears in the source between
@@ -126,6 +131,17 @@ func argEnd(arg serverTypes.Node) serverTypes.Pos {
 	return arg.Position() + serverTypes.Pos(len(arg.String()))
 }
 
+// commandEnd returns the byte position just past the last argument of cmd.
+func commandEnd(cmd *serverTypes.CommandNode) serverTypes.Pos {
+	end := serverTypes.Pos(0)
+	for _, a := range cmd.Args {
+		if e := argEnd(a); e > end {
+			end = e
+		}
+	}
+	return end
+}
+
 // cursorParamSlot returns the 0-based parameter index that the cursor at offset fills within cmd
 func cursorParamSlot(cmd *serverTypes.CommandNode, offset serverTypes.Pos) int {
 	slot := 0
@@ -141,12 +157,25 @@ func cursorParamSlot(cmd *serverTypes.CommandNode, offset serverTypes.Pos) int {
 	return slot
 }
 
-// pipeForwardKind returns the kind required of the value produced by cmd,
-// derived from the parameter it fills in the next pipe stage
-func pipeForwardKind(cur serverTypes.Node, cmd *serverTypes.CommandNode) outputKind {
+// pipeForwardType returns the type required of the value produced by cmd,
+// derived from the parameter it fills in the next pipe stage. Returns AnyType
+// when unconstrained.
+//
+// The typed tree's command grouping cannot be trusted under partial parses:
+// when cmd contains an UndefinedNode the parser may insert extra recovery
+// commands between cmd and the real next stage. The source text is the only
+// reliable divider: `|` is a pure structural separator, never data. So the
+// next stage is the first command in pipe.Cmds whose head position lies at
+// or beyond the byte offset of the first `|` after cmd's textual end.
+func pipeForwardType(
+	cur serverTypes.Node,
+	cmd *serverTypes.CommandNode,
+	_ serverTypes.Pos,
+	text string,
+) types.Type {
 	pipe := serverTypes.EnclosingPipe(cur)
 	if pipe == nil {
-		return outputAny
+		return serverTypes.AnyType()
 	}
 	cmdIdx := -1
 	for i, c := range pipe.Cmds {
@@ -156,29 +185,53 @@ func pipeForwardKind(cur serverTypes.Node, cmd *serverTypes.CommandNode) outputK
 		}
 	}
 	if cmdIdx < 0 || cmdIdx+1 >= len(pipe.Cmds) {
-		return outputAny
+		return serverTypes.AnyType()
 	}
-	next := pipe.Cmds[cmdIdx+1]
-	if len(next.Args) == 0 {
-		return outputAny
+	cmdEnd := commandEnd(cmd)
+	if int(cmdEnd) > len(text) {
+		return serverTypes.AnyType()
 	}
-	id, ok := next.Args[0].(*serverTypes.IdentifierNode)
-	if !ok {
-		return outputAny
+	pipeRel := strings.IndexByte(text[cmdEnd:], '|')
+	if pipeRel < 0 {
+		return serverTypes.AnyType()
+	}
+	nextStageStart := cmdEnd + serverTypes.Pos(pipeRel) + 1
+	var id *serverTypes.IdentifierNode
+	for i := cmdIdx + 1; i < len(pipe.Cmds); i++ {
+		next := pipe.Cmds[i]
+		if len(next.Args) == 0 {
+			continue
+		}
+		if next.Args[0].Position() < nextStageStart {
+			continue
+		}
+		candidate, ok := next.Args[0].(*serverTypes.IdentifierNode)
+		if !ok {
+			break
+		}
+		id = candidate
+		break
+	}
+	if id == nil {
+		return serverTypes.AnyType()
 	}
 	fn := serverTypes.GlobalFuncs()[id.Ident]
 	if fn == nil {
-		return outputAny
+		return serverTypes.AnyType()
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok || sig.Params().Len() == 0 {
-		return outputAny
+		return serverTypes.AnyType()
 	}
-	paramT := sig.Params().At(sig.Params().Len() - 1).Type()
-	if sl, isSl := paramT.Underlying().(*types.Slice); isSl {
-		paramT = sl.Elem()
+	params := sig.Params()
+	last := params.Len() - 1
+	paramT := params.At(last).Type()
+	if sig.Variadic() {
+		if sl, ok := paramT.Underlying().(*types.Slice); ok {
+			paramT = sl.Elem()
+		}
 	}
-	return typeToOutputKind(paramT)
+	return paramT
 }
 
 // cursorInValueSlot finds out whether the user is typing an explicit argument for a function
@@ -221,26 +274,50 @@ func structuralArgIdx(cur serverTypes.Node, cmd *serverTypes.CommandNode) int {
 }
 
 // expandedFieldItems returns nested-path field completions whose leaf type
-// satisfies targetKind.
+// is convertible to targetType.
 func expandedFieldItems(
 	base types.Type,
-	targetKind outputKind,
+	targetType types.Type,
 	mode pipeChainMode,
 	prefix string,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
-	if mode == pipeChainOff || targetKind == outputAny || targetKind == outputUntyped {
-		return nil
-	}
-	named := toNamed(base)
-	if named == nil {
+	if mode == pipeChainOff || targetType == nil {
 		return nil
 	}
 	out := []protocol.CompletionItem{}
 	seen := map[string]struct{}{}
-	visited := map[string]int{namedKey(named): 1}
-	walkChainPaths(named, targetKind, mode, prefix, nil, &out, seen, 0, wordRange, visited)
+	visited := map[string]int{}
+	if key := chainVisitKey(base); key != "" {
+		visited[key] = 1
+	}
+	walkChainPaths(base, targetType, mode, prefix, nil, &out, seen, 0, wordRange, visited)
 	return out
+}
+
+// chainRecurseInto reports the type to recurse into for chain expansion and a
+// stable key used for cycle detection. Returns nil, "" when t has no reachable
+// children worth walking.
+func chainRecurseInto(t types.Type) (types.Type, string) {
+	if dict, ok := t.(*serverTypes.DictType); ok && dict != nil {
+		return dict, ""
+	}
+	named := toNamed(t)
+	if named == nil {
+		return nil, ""
+	}
+	if _, isStruct := named.Underlying().(*types.Struct); !isStruct {
+		return nil, ""
+	}
+	return named, namedKey(named)
+}
+
+// chainVisitKey returns the cycle-detection key for t, or "" when t has none.
+func chainVisitKey(t types.Type) string {
+	if named := toNamed(t); named != nil {
+		return namedKey(named)
+	}
+	return ""
 }
 
 // namedKey returns the string name of the Named type
@@ -253,8 +330,8 @@ func namedKey(n *types.Named) string {
 }
 
 func walkChainPaths(
-	named *types.Named,
-	targetKind outputKind,
+	t types.Type,
+	targetType types.Type,
 	mode pipeChainMode,
 	prefix string,
 	path []string,
@@ -267,39 +344,42 @@ func walkChainPaths(
 	if depth >= maxChainDepth {
 		return
 	}
-	for _, f := range serverTypes.StructFields(named) {
+	fields, _ := collectFieldsAndMethods(t)
+	for _, f := range fields {
 		segs := append(append([]string{}, path...), f.Name)
-		if basicTypeMatchesKind(f.Type, targetKind) {
+		if serverTypes.TypeConvertibleTo(f.Type, targetType) {
 			if depth >= 1 {
 				addPathItem(out, seen, prefix, segs, f.TypeName, wordRange)
 			}
 			continue
 		}
-		child := toNamed(f.Type)
+		child, childKey := chainRecurseInto(f.Type)
 		if child == nil {
 			continue
 		}
-		if _, isStruct := child.Underlying().(*types.Struct); !isStruct {
-			continue
-		}
-		childKey := namedKey(child)
-		if visited[childKey] > maxCycleRevisits {
+		if childKey != "" && visited[childKey] > maxCycleRevisits {
 			continue
 		}
 		if mode == pipeChainStep {
 			if depth == 0 {
-				visited[childKey]++
-				if hasMatchingDescendant(child, targetKind, 1, visited) {
+				if childKey != "" {
+					visited[childKey]++
+				}
+				if hasMatchingDescendant(child, targetType, 1, visited) {
 					addPathItem(out, seen, prefix, segs, f.TypeName, wordRange)
 				}
-				visited[childKey]--
+				if childKey != "" {
+					visited[childKey]--
+				}
 			}
 			continue
 		}
-		visited[childKey]++
+		if childKey != "" {
+			visited[childKey]++
+		}
 		walkChainPaths(
 			child,
-			targetKind,
+			targetType,
 			mode,
 			prefix,
 			segs,
@@ -309,38 +389,41 @@ func walkChainPaths(
 			wordRange,
 			visited,
 		)
-		visited[childKey]--
+		if childKey != "" {
+			visited[childKey]--
+		}
 	}
 }
 
-// hasMatchingDescendant reports whether any nested struct field reachable from named
+// hasMatchingDescendant reports whether any nested struct field reachable from t
 func hasMatchingDescendant(
-	named *types.Named,
-	targetKind outputKind,
+	t types.Type,
+	targetType types.Type,
 	depth int,
 	visited map[string]int,
 ) bool {
 	if depth >= maxChainDepth {
 		return false
 	}
-	for _, f := range serverTypes.StructFields(named) {
-		if basicTypeMatchesKind(f.Type, targetKind) {
+	fields, _ := collectFieldsAndMethods(t)
+	for _, f := range fields {
+		if serverTypes.TypeConvertibleTo(f.Type, targetType) {
 			return true
 		}
-		child := toNamed(f.Type)
+		child, childKey := chainRecurseInto(f.Type)
 		if child == nil {
 			continue
 		}
-		if _, isStruct := child.Underlying().(*types.Struct); !isStruct {
+		if childKey != "" && visited[childKey] > maxCycleRevisits {
 			continue
 		}
-		childKey := namedKey(child)
-		if visited[childKey] > maxCycleRevisits {
-			continue
+		if childKey != "" {
+			visited[childKey]++
 		}
-		visited[childKey]++
-		found := hasMatchingDescendant(child, targetKind, depth+1, visited)
-		visited[childKey]--
+		found := hasMatchingDescendant(child, targetType, depth+1, visited)
+		if childKey != "" {
+			visited[childKey]--
+		}
 		if found {
 			return true
 		}

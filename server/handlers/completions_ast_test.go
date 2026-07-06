@@ -287,7 +287,7 @@ func TestFieldChainItemsT(t *testing.T) {
 			} else if tc.useOrder {
 				typ = lt.DotType
 			}
-			items := fieldChainItemsT(typ, outputAny, wr)
+			items := fieldChainItemsT(typ, nil, wr)
 			if tc.wantEmpty {
 				assert.Empty(t, items)
 				return
@@ -318,7 +318,7 @@ func TestDotItemsT(t *testing.T) {
 			if tc.inputIsString {
 				inputType = types.Typ[types.String]
 			}
-			items := dotItemsT(cur, tc.delSign, inputType, tc.pipeKind, outputAny, wr)
+			items := dotItemsT(cur, tc.delSign, inputType, nil, wr)
 			if tc.wantEmpty {
 				assert.Empty(t, items)
 				return
@@ -344,44 +344,13 @@ func TestPipeFilteredItemsT(t *testing.T) {
 			if tc.inputIsString {
 				inputType = types.Typ[types.String]
 			}
-			labels := labelsOf(pipeFilteredItemsT(cur, tc.kind, inputType, nil, outputAny, wr))
+			labels := labelsOf(pipeFilteredItemsT(cur, inputType, nil, wr))
 			for _, want := range tc.contains {
 				assert.Contains(t, labels, want)
 			}
 			for _, notWant := range tc.notContains {
 				assert.NotContains(t, labels, notWant)
 			}
-		})
-	}
-}
-
-// basicTypeFor returns a types.Type for a string spec used in tests. "none"
-// returns a *types.Named so basicTypeMatchesKind exercises its non-basic branch.
-func basicTypeFor(t *testing.T, spec string, lt *serverTypes.Tree) types.Type {
-	t.Helper()
-	switch spec {
-	case "string":
-		return types.Typ[types.String]
-	case "int":
-		return types.Typ[types.Int]
-	case "bool":
-		return types.Typ[types.Bool]
-	case "float64":
-		return types.Typ[types.Float64]
-	case "none":
-		return lt.DotType
-	}
-	t.Fatalf("unknown basic spec %q", spec)
-	return nil
-}
-
-func TestBasicTypeMatchesKind(t *testing.T) {
-	lt := orderLoadedType(t)
-	for _, tc := range basicTypeMatchesKindTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			typ := basicTypeFor(t, tc.basic, lt)
-			got := basicTypeMatchesKind(typ, tc.kind)
-			assert.Equal(t, tc.want, got)
 		})
 	}
 }
@@ -410,7 +379,7 @@ func TestMethodAcceptsInput(t *testing.T) {
 			case tc.inputIsInt:
 				inputType = types.Typ[types.Int]
 			}
-			got := methodAcceptsInput(m, inputType, tc.pipeKind)
+			got := methodAcceptsInput(m, inputType)
 			assert.Equal(t, tc.want, got)
 		})
 	}
@@ -514,4 +483,81 @@ func TestCompletionAstMultiDefines(t *testing.T) {
 			}
 		})
 	}
+}
+
+// completionLabelsAt drives completionAst against the current store state and
+// returns the labels produced at the given byte offset in src.
+func completionLabelsAt(t *testing.T, uri, src string, offset int) []string {
+	t.Helper()
+	pos := offsetToPosition(src, offset)
+	result := completionAst(nil, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+			Position:     pos,
+		},
+	})
+	require.NotNil(t, result)
+	return labelsFrom(t, result)
+}
+
+// TestCompletionAst_DictHint verifies that dot completion at various positions
+// under a dict gotype hint offers the correct keys/fields end-to-end through
+// the handler pipeline.
+func TestCompletionAst_DictHint(t *testing.T) {
+	enableAutocompletion(t)
+	const resourceDir = "../../test/resources/dict-typehints"
+
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = resourceDir
+
+	uri := func(name string) string { return "file:///" + name }
+
+	t.Run("dot completion offers dict keys", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-keys-completion.tmpl")
+		u := uri("dict-keys-completion.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		// Cursor immediately after the `.` in `{{ . }}` — first occurrence.
+		offset := offsetOf(t, src, "{{ . }}", 0) + len("{{ .")
+		labels := completionLabelsAt(t, u, src, offset)
+
+		assert.Contains(t, labels, "Order")
+		assert.Contains(t, labels, "Address")
+		assert.NotContains(
+			t,
+			labels,
+			"CustomerName",
+			"dict keys, not resolved struct fields, should appear at the top level",
+		)
+	})
+
+	t.Run("chained completion resolves value type", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-keys-completion.tmpl")
+		u := uri("dict-keys-completion.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		// Cursor immediately after `.Order.` in `{{ .Order. }}`.
+		offset := offsetOf(t, src, ".Order.", 0) + len(".Order.")
+		labels := completionLabelsAt(t, u, src, offset)
+
+		assert.Contains(t, labels, "CustomerName")
+		assert.Contains(t, labels, "ID")
+		assert.Contains(t, labels, "Address")
+	})
+
+	t.Run("variable-bound dot offers dict keys", func(t *testing.T) {
+		src := readTestFile(t, resourceDir+"/dict-var-completion.tmpl")
+		u := uri("dict-var-completion.tmpl")
+		store.Set(u, src)
+		t.Cleanup(func() { store.Remove(u) })
+
+		// Cursor immediately after `$d.` in `{{ $d. }}`.
+		offset := offsetOf(t, src, "$d. }}", 0) + len("$d.")
+		labels := completionLabelsAt(t, u, src, offset)
+
+		assert.Contains(t, labels, "Order")
+		assert.Contains(t, labels, "Address")
+	})
 }

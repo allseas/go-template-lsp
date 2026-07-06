@@ -11,62 +11,6 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-type outputKind int
-
-const (
-	outputAny     outputKind = iota
-	outputInt                // len
-	outputBool               // not, and, or, eq, ne, lt, le, gt, ge
-	outputString             // html, js, urlquery, print, printf, println
-	outputUntyped            // call, index, slice - dynamic, don't restrict
-)
-
-// For functions with at least one concrete (non-interface{}) parameter the
-// check is performed by type: the function accepts the kind iff at least one
-// concrete param matches. For functions whose every parameter is interface{}
-// (all current builtins) the check falls back to the curated functionsAccepting
-// table, preserving the existing semantic filtering.
-func funcAcceptsKind(funcName string, kind outputKind) bool {
-	if kind == outputAny || kind == outputUntyped {
-		return true
-	}
-	fn := serverTypes.GlobalFuncs()[funcName]
-	if fn == nil {
-		return true // unknown signature - don't flag
-	}
-	sig, ok := fn.Type().(*types.Signature)
-	if !ok {
-		return true
-	}
-	params := sig.Params()
-	hasConcreteParam := false
-	for i := range params.Len() {
-		t := params.At(i).Type()
-		// Unwrap variadic slice wrapper.
-		if sl, isSl := t.Underlying().(*types.Slice); isSl {
-			t = sl.Elem()
-		}
-		if _, isIface := t.Underlying().(*types.Interface); isIface {
-			continue
-		}
-		hasConcreteParam = true
-		if basicTypeMatchesKind(t, kind) {
-			return true
-		}
-	}
-	if hasConcreteParam {
-		return false // concrete params present but none matched
-	}
-	// All params are interface{} - use the curated semantic list.
-	allowed := functionsAccepting[kind]
-	for _, name := range allowed {
-		if name == funcName {
-			return true
-		}
-	}
-	return false
-}
-
 // CompletionWithFallback is an entry point that has a fallback option
 func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	result := completionAst(nil, params)
@@ -147,37 +91,6 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	}
 }
 
-// For now builtins basically accept anything
-var functionsAccepting = map[outputKind][]string{
-	outputInt: {
-		"eq", "ne", "lt", "le", "gt", "ge",
-		"print", "printf", "println",
-		"not",
-		"and", "or",
-		"html", "js", "urlquery",
-		"len",
-		"index",
-	},
-	outputBool: {
-		"eq", "ne", "lt", "le", "gt", "ge",
-		"print", "printf", "println",
-		"not",
-		"and", "or",
-		"html", "js", "urlquery",
-		"len",
-		"index",
-	},
-	outputString: {
-		"eq", "ne", "lt", "le", "gt", "ge",
-		"print", "printf", "println",
-		"not",
-		"and", "or",
-		"html", "js", "urlquery",
-		"len",
-		"index",
-	},
-}
-
 // precedingCmd returns the command whose output flows into the current node
 func precedingCmd(cur serverTypes.Node, isInvoked bool) *serverTypes.CommandNode {
 	pipe := serverTypes.EnclosingPipe(cur)
@@ -209,26 +122,26 @@ func precedingCmd(cur serverTypes.Node, isInvoked bool) *serverTypes.CommandNode
 	return pipe.Cmds[idx]
 }
 
-// pipeOutputInfo returns the value type and output kind produced by the command
-// preceding the cursor's position in the enclosing pipe.
-func pipeOutputInfo(cur serverTypes.Node, isInvoked bool) (types.Type, outputKind) {
+// pipeOutputType returns the value type produced by the command preceding the
+// cursor's position in the enclosing pipe, or nil when there is none.
+func pipeOutputType(cur serverTypes.Node, isInvoked bool) types.Type {
 	cmd := precedingCmd(cur, isInvoked)
 	if cmd == nil {
-		return nil, outputAny
+		return nil
 	}
 	t := cmd.ValueType()
 	if t == nil {
-		return nil, outputAny
+		return nil
 	}
 	// analyseCommand represents a partially-applied function (pipe target) as a
 	// curried *types.Signature. Unwrap it to obtain the actual return type.
 	if sig, isSig := t.Underlying().(*types.Signature); isSig {
 		if sig.Results().Len() == 0 {
-			return nil, outputAny
+			return nil
 		}
 		t = sig.Results().At(0).Type()
 	}
-	return t, typeToOutputKind(t)
+	return t
 }
 
 // chainContext returns the type whose fields/methods should be suggested for a `.` trigger at cur
@@ -250,21 +163,17 @@ func chainContext(cur serverTypes.Node) (types.Type, bool) {
 	case *serverTypes.PipeNode:
 		return arg.ValueType(), true
 	case *serverTypes.VariableNode:
-		return chainPrefix(n.Base, n.Ident[1:]), true
+		return n.PrefixType(), true
 	case *serverTypes.FieldNode:
 		if cur != arg {
 			return n.ValueType(), true
 		}
-		return chainPrefix(dotTypeAt(cur), n.Ident), true
+		return n.PrefixType(), true
 	case *serverTypes.ChainNode:
 		if cur != arg {
 			return n.ValueType(), true
 		}
-		var base types.Type
-		if n.Node != nil {
-			base = n.Node.ValueType()
-		}
-		return chainPrefix(base, n.Field), true
+		return n.PrefixType(), true
 	}
 	for i, a := range cmd.Args {
 		if a != arg || i == 0 {
@@ -303,40 +212,6 @@ func toNamed(t types.Type) *types.Named {
 	return n
 }
 
-// walkChainType walks idents from base through fields/methods and returns the
-// resulting type, or nil if any step fails to resolve.
-func walkChainType(base types.Type, idents []string) types.Type {
-	cur := base
-	for _, name := range idents {
-		if cur == nil {
-			return nil
-		}
-		obj, _, _ := types.LookupFieldOrMethod(cur, true, nil, name)
-		switch o := obj.(type) {
-		case *types.Var:
-			cur = o.Type()
-		case *types.Func:
-			sig, ok := o.Type().Underlying().(*types.Signature)
-			if !ok || sig.Results().Len() == 0 {
-				return nil
-			}
-			cur = sig.Results().At(0).Type()
-		default:
-			return nil
-		}
-	}
-	return cur
-}
-
-// chainPrefix returns the type reached by walking all but the last ident of
-// path from base. Used when the cursor is mid-typing the trailing component.
-func chainPrefix(base types.Type, path []string) types.Type {
-	if len(path) <= 1 {
-		return base
-	}
-	return walkChainType(base, path[:len(path)-1])
-}
-
 // suggest builds the completion list for cur, deriving all scope information
 // from the typed tree (parent chain, enclosing list/pipe/command, value types).
 func suggest(
@@ -355,20 +230,20 @@ func suggest(
 		return varsItemsT(serverTypes.VisibleVarsAt(cur), true, wordRange)
 	}
 
-	// argKind is the output kind required at cur's position by the function that consumes the value here
-	argKind := targetKindForArg(cur, offset, text)
+	// argType is the type required at cur's position by the function that consumes the value here
+	argType := targetTypeForArg(cur, offset, text)
 
 	if sChar == '.' {
 		if t, inChain := chainContext(cur); inChain {
 			if t == nil {
 				return []protocol.CompletionItem{}
 			}
-			items := fieldChainItemsT(t, argKind, wordRange)
+			items := fieldChainItemsT(t, argType, wordRange)
 			items = append(items, chainExpansionItems(cur, t, "", offset, text, wordRange)...)
 			return items
 		}
-		pipeIn, kind := pipeOutputInfo(cur, false)
-		items := dotItemsT(cur, true, pipeIn, kind, argKind, wordRange)
+		pipeIn := pipeOutputType(cur, false)
+		items := dotItemsT(cur, true, pipeIn, argType, wordRange)
 		items = append(
 			items,
 			chainExpansionItems(cur, dotTypeAt(cur), "", offset, text, wordRange)...)
@@ -377,21 +252,16 @@ func suggest(
 
 	switch cur.Parent().(type) {
 	case *serverTypes.ChainNode, *serverTypes.TemplateNode:
-		items := dotItemsT(cur, false, nil, outputAny, argKind, wordRange)
+		items := dotItemsT(cur, false, nil, argType, wordRange)
 		return append(items, varsItemsT(serverTypes.VisibleVarsAt(cur), false, wordRange)...)
 	}
 
-	pipeIn, kind := pipeOutputInfo(cur, isInvoked)
+	pipeIn := pipeOutputType(cur, isInvoked)
 	// cursor value slot prevents the bug of suggestion fields overflowing to the next pipe
 	if cursorInValueSlot(cur, offset, text) {
 		pipeIn = nil
-		kind = outputAny
 	}
-	inputType := pipeIn
-	if inputType == nil && kind == outputAny {
-		inputType = dotTypeAt(cur)
-	}
-	items := pipeFilteredItemsT(cur, kind, inputType, pipeIn, argKind, wordRange)
+	items := pipeFilteredItemsT(cur, pipeIn, argType, wordRange)
 	if pipeIn == nil {
 		items = append(
 			items,
@@ -400,73 +270,42 @@ func suggest(
 	return items
 }
 
-// funcReturnsKind reports whether funcName's first result type matches kind.
-// It is the output-direction counterpart of funcAcceptsKind: it keeps only
-// functions that *produce* the required kind.
-func funcReturnsKind(funcName string, kind outputKind) bool {
-	if kind == outputAny || kind == outputUntyped {
-		return true
-	}
-	if builtinFuncs[funcName] {
-		return true
-	}
-	fn := serverTypes.GlobalFuncs()[funcName]
-	if fn == nil {
+// funcReturnsType reports whether fn's first result type is assignable to
+// argType. Signatures with dynamic (interface{}) results always match.
+func funcReturnsType(fn *types.Func, argType types.Type) bool {
+	if serverTypes.IsEmptyInterface(argType) {
 		return true
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok || sig.Results().Len() == 0 {
 		return true
 	}
-	res := sig.Results().At(0).Type()
-	if _, isBasic := res.Underlying().(*types.Basic); !isBasic {
-		return true // dynamic / interface{} result - can't exclude it
-	}
-	return basicTypeMatchesKind(res, kind)
+	return serverTypes.TypeConvertibleTo(sig.Results().At(0).Type(), argType)
 }
 
-// pipeFilteredItemsT assembles the suggestion list.
+// pipeFilteredItemsT assembles the suggestion list: dot's fields/methods,
+// visible variables, and global funcs whose signature is compatible with the
+// pipe input (as accepted last param) and argType (as returned result).
 func pipeFilteredItemsT(
 	cur serverTypes.Node,
-	kind outputKind,
 	inputType types.Type,
-	pipeInputType types.Type,
-	argKind outputKind,
+	argType types.Type,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
-	items := dotItemsT(cur, false, pipeInputType, kind, argKind, wordRange)
+	items := dotItemsT(cur, false, inputType, argType, wordRange)
 	items = append(items, varsItemsT(serverTypes.VisibleVarsAt(cur), false, wordRange)...)
-
-	effectiveKind := kind
-	if effectiveKind == outputAny && inputType != nil {
-		effectiveKind = typeToOutputKind(inputType)
-	}
-	funcs := serverTypes.GlobalFuncs()
-	if _, ok := functionsAccepting[effectiveKind]; !ok {
-		if pipeInputType == nil && (argKind == outputAny || argKind == outputUntyped) {
-			return append(items, builtinItems(wordRange)...)
-		}
-		for name, fn := range funcs {
-			accepts, concrete := funcAcceptsPipeInput(fn, pipeInputType)
-			if !accepts || !funcReturnsKind(name, argKind) {
-				continue
-			}
-			item := newItem(name, protocol.CompletionItemKindFunction, wordRange)
-			sortText := pipeSortPrefix(concrete) + name
-			item.SortText = &sortText
-			items = append(items, item)
-		}
-		return items
-	}
-	for name, fn := range funcs {
-		accepts, concrete := funcAcceptsPipeInput(fn, pipeInputType)
-		if !funcAcceptsKind(name, effectiveKind) || !funcReturnsKind(name, argKind) || !accepts {
+	for name, fn := range serverTypes.GlobalFuncs() {
+		accepts, concrete := funcAcceptsPipeInput(fn, inputType)
+		if !accepts || !funcReturnsType(fn, argType) {
 			continue
 		}
 		item := newItem(name, protocol.CompletionItemKindFunction, wordRange)
 		sortText := pipeSortPrefix(concrete) + name
 		item.SortText = &sortText
 		items = append(items, item)
+	}
+	if inputType == nil && serverTypes.IsEmptyInterface(argType) {
+		items = append(items, templateActionItems(wordRange)...)
 	}
 	return items
 }
@@ -481,7 +320,9 @@ func pipeSortPrefix(concrete bool) string {
 
 func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) (accepts bool, concrete bool) {
 	if pipeInputType == nil {
-		return true, true
+		// No pipe input to match: concreteness is meaningless, so don't
+		// promote funcs above fields/methods in the sort order.
+		return true, false
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
@@ -509,58 +350,100 @@ func dotItemsT(
 	cur serverTypes.Node,
 	delSign bool,
 	inputType types.Type,
-	pipeKind outputKind,
-	argKind outputKind,
+	argType types.Type,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	items := []protocol.CompletionItem{}
-	if (inputType != nil && !serverTypes.IsEmptyInterface(inputType)) ||
-		(pipeKind != outputAny && pipeKind != outputUntyped) {
+	if inputType != nil && !serverTypes.IsEmptyInterface(inputType) {
 		return items
 	}
 	prefix := ""
 	if !delSign {
-		if argKind == outputAny || argKind == outputUntyped ||
-			basicTypeMatchesKind(dotTypeAt(cur), argKind) {
+		if serverTypes.TypeConvertibleTo(dotTypeAt(cur), argType) {
 			items = append(items, newItem(".", protocol.CompletionItemKindVariable, wordRange))
 		}
 		prefix = "."
 	}
-	if named := toNamed(dotTypeAt(cur)); named != nil {
-		items = append(items, namedItems(named, inputType, pipeKind, argKind, prefix, wordRange)...)
-	}
+	items = append(items, getItems(dotTypeAt(cur), inputType, argType, prefix, wordRange)...)
 	return items
 }
 
 // fieldChainItemsT returns fields/methods of t, with no prefix (the dot
-// trigger has already been consumed). argKind, when concrete, restricts the
-// result to fields/methods producing that kind.
+// trigger has already been consumed). argType, when non-nil, restricts the
+// result to fields/methods producing a compatible type.
 func fieldChainItemsT(
 	t types.Type,
-	argKind outputKind,
+	argType types.Type,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
-	named := toNamed(t)
-	if named == nil {
-		return []protocol.CompletionItem{}
-	}
-	return namedItems(named, nil, outputAny, argKind, "", wordRange)
+	return getItems(t, nil, argType, "", wordRange)
 }
 
-// namedItems returns the field + filtered method completions for a named type,
-// each prefixed with prefix (used to keep or strip the leading dot).
-func namedItems(
-	named *types.Named,
+// getItems renders the field + method completions for t. Named types contribute
+// both; dicts contribute only their keys as fields. Any other type yields no
+// items. Each item is prefixed with prefix (used to keep or strip the leading
+// dot).
+func getItems(
+	t types.Type,
 	inputType types.Type,
-	pipeKind outputKind,
-	argKind outputKind,
+	argType types.Type,
 	prefix string,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
-	items := fieldCompletionItems(serverTypes.StructFields(named), argKind, prefix, wordRange)
-	return append(items, methodCompletionItems(
-		serverTypes.NamedMethods(named), inputType, pipeKind, argKind, prefix, wordRange,
-	)...)
+	fields, methods := collectFieldsAndMethods(t)
+	fields = filterFieldsByReturn(fields, argType)
+	methods = filterMethods(methods, inputType, argType)
+	items := fieldCompletionItems(fields, prefix, wordRange)
+	return append(items, methodCompletionItems(methods, prefix, wordRange)...)
+}
+
+// collectFieldsAndMethods returns the raw fields and methods reachable from t.
+// Dicts contribute keys as fields and no methods; named types contribute both.
+func collectFieldsAndMethods(t types.Type) ([]serverTypes.TypeField, []serverTypes.MethodType) {
+	if dict, ok := t.(*serverTypes.DictType); ok && dict != nil {
+		return serverTypes.DictTypeFields(dict), nil
+	}
+	named := toNamed(t)
+	if named == nil {
+		return nil, nil
+	}
+	return serverTypes.StructFields(named), serverTypes.NamedMethods(named)
+}
+
+// filterFieldsByReturn keeps only fields whose type is assignable to argType.
+func filterFieldsByReturn(
+	fields []serverTypes.TypeField,
+	argType types.Type,
+) []serverTypes.TypeField {
+	if serverTypes.IsEmptyInterface(argType) {
+		return fields
+	}
+	out := fields[:0:0]
+	for _, f := range fields {
+		if serverTypes.TypeConvertibleTo(f.Type, argType) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// filterMethods keeps only usable methods that accept inputType and whose
+// return type is assignable to argType.
+func filterMethods(
+	methods []serverTypes.MethodType,
+	inputType, argType types.Type,
+) []serverTypes.MethodType {
+	out := methods[:0:0]
+	for _, m := range methods {
+		if !methodIsUsable(m) || !methodAcceptsInput(m, inputType) {
+			continue
+		}
+		if !serverTypes.TypeConvertibleTo(m.ReturnType, argType) {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 // varsItemsT renders visible variables as completion items.
@@ -600,40 +483,6 @@ func varsItemsT(
 		})
 	}
 	return items
-}
-
-// typeToOutputKind maps a concrete Go type to the outputKind used to filter builtins.
-func typeToOutputKind(t types.Type) outputKind {
-	basic, ok := t.Underlying().(*types.Basic)
-	if !ok {
-		return outputUntyped
-	}
-	switch {
-	case basic.Info()&types.IsString != 0:
-		return outputString
-	case basic.Info()&types.IsInteger != 0:
-		return outputInt
-	case basic.Info()&types.IsBoolean != 0:
-		return outputBool
-	}
-	return outputUntyped
-}
-
-// basicTypeMatchesKind reports whether t is compatible with the given output kind.
-func basicTypeMatchesKind(t types.Type, kind outputKind) bool {
-	basic, ok := t.Underlying().(*types.Basic)
-	if !ok {
-		return false
-	}
-	switch kind {
-	case outputInt:
-		return basic.Info()&types.IsInteger != 0
-	case outputBool:
-		return basic.Info()&types.IsBoolean != 0
-	case outputString:
-		return basic.Info()&types.IsString != 0
-	}
-	return false
 }
 
 // methodIsUsable checks whether there are issues in the function definition
@@ -684,21 +533,15 @@ func newDetailItem(
 	return item
 }
 
-// fieldCompletionItems returns the list of fields with or without the dot.
-// When argKind is concrete, only fields whose type produces that kind are kept.
+// fieldCompletionItems renders fields as completion items with an optional prefix.
 func fieldCompletionItems(
 	fields []serverTypes.TypeField,
-	argKind outputKind,
 	prefix string,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(fields))
 	funcs := serverTypes.GlobalFuncs()
 	for _, f := range fields {
-		if argKind != outputAny && argKind != outputUntyped &&
-			!basicTypeMatchesKind(f.Type, argKind) {
-			continue
-		}
 		item := newDetailItem(
 			prefix+f.Name, f.TypeName, protocol.CompletionItemKindField, wordRange,
 		)
@@ -712,47 +555,27 @@ func fieldCompletionItems(
 }
 
 // methodAcceptsInput checks whether the function can accept the input
-func methodAcceptsInput(m serverTypes.MethodType, inputType types.Type, pipeKind outputKind) bool {
-	if inputType != nil && !serverTypes.IsEmptyInterface(inputType) {
-		for _, p := range m.Params {
-			if types.Identical(p.Type, inputType) || serverTypes.IsEmptyInterface(p.Type) ||
-				serverTypes.IsEmptyInterface(inputType) {
-				return true
-			}
-		}
-		return false
+func methodAcceptsInput(m serverTypes.MethodType, inputType types.Type) bool {
+	if inputType == nil || serverTypes.IsEmptyInterface(inputType) {
+		return true
 	}
-	if pipeKind != outputAny && pipeKind != outputUntyped {
-		if len(m.Params) == 0 {
-			return false
+	for _, p := range m.Params {
+		if types.Identical(p.Type, inputType) || serverTypes.IsEmptyInterface(p.Type) {
+			return true
 		}
-		lastParam := m.Params[len(m.Params)-1]
-		return basicTypeMatchesKind(lastParam.Type, pipeKind)
 	}
-	return true
+	return false
 }
 
-// methodCompletionItems builds the function completion list with or without the
-// dot. inputType/pipeKind filter by what a method accepts; argKind, when
-// concrete, additionally filters by what a method returns.
+// methodCompletionItems renders methods as completion items with an optional prefix.
 func methodCompletionItems(
 	methods []serverTypes.MethodType,
-	inputType types.Type,
-	pipeKind outputKind,
-	argKind outputKind,
 	prefix string,
 	wordRange protocol.Range,
 ) []protocol.CompletionItem {
 	items := make([]protocol.CompletionItem, 0, len(methods))
 	funcs := serverTypes.GlobalFuncs()
 	for _, m := range methods {
-		if !methodIsUsable(m) || !methodAcceptsInput(m, inputType, pipeKind) {
-			continue
-		}
-		if argKind != outputAny && argKind != outputUntyped &&
-			!basicTypeMatchesKind(m.ReturnType, argKind) {
-			continue
-		}
 		item := newDetailItem(
 			prefix+m.Name, m.ReturnName, protocol.CompletionItemKindMethod, wordRange,
 		)
@@ -770,14 +593,13 @@ func methodCompletionItems(
 // These are NOT in any FuncMap so they are kept separately from GlobalFuncs.
 var templateActionNames = []string{"if", "range"}
 
-func builtinItems(wordRange protocol.Range) []protocol.CompletionItem {
-	funcs := serverTypes.GlobalFuncs()
-	items := make([]protocol.CompletionItem, 0, len(funcs)+len(templateActionNames))
-	for name := range funcs {
-		items = append(items, newItem(name, protocol.CompletionItemKindFunction, wordRange))
-	}
+func templateActionItems(wordRange protocol.Range) []protocol.CompletionItem {
+	items := make([]protocol.CompletionItem, 0, len(templateActionNames))
 	for _, name := range templateActionNames {
-		items = append(items, newItem(name, protocol.CompletionItemKindKeyword, wordRange))
+		item := newItem(name, protocol.CompletionItemKindKeyword, wordRange)
+		sortText := "1_" + name
+		item.SortText = &sortText
+		items = append(items, item)
 	}
 	return items
 }

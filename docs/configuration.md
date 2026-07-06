@@ -43,6 +43,9 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `unknownRangeType`     | `"warning"`   | Range over a value whose type could not be determined     |
 | `emptyDefineName`      | `"warning"`   | Define block has an empty name                            |
 | `variableReassigned`   | `"warning"`   | Variable reassigned to a value of a different concrete type |
+| `malformedHint`        | `"error"`     | `gotype` hint syntax could not be parsed (e.g. malformed `map{...}`) |
+| `invalidDictKey`       | `"information"` | Key lookup on a map-shaped `gotype` hint failed         |
+| `conflictingHint`      | `"warning"`   | Additional `gotype` hint in the same template disagrees with the first one |
 
 ## Configuration Hierarchy
 
@@ -77,7 +80,10 @@ You can create a `gotmpl.config.json` file in your project root to configure the
     "hintLoadFailure": "warning",
     "unknownRangeType": "warning",
     "emptyDefineName": "warning",
-    "variableReassigned": "warning"
+    "variableReassigned": "warning",
+    "malformedHint": "error",
+    "invalidDictKey": "information",
+    "conflictingHint": "warning"
   },
   "enableAutocompletion": true,
   "trace": {

@@ -1,0 +1,18 @@
+{{- /*
+  pointer-call.tmpl
+  Demonstrates a {{template}} call where the argument is *T and the target
+  expects T. Go's text/template auto-dereferences pointers, so this is a valid
+  call and no diagnostic should fire.
+*/ -}}
+
+{{- define "person-card" -}}
+{{- /*gotype: text-template-server/src/model.Person*/ -}}
+Name:  {{ .Name }}
+Age:   {{ .Age }}
+Email: {{ .Email }}
+{{- end -}}
+
+{{- define "company-page" -}}
+{{- /*gotype: text-template-server/src/model.Company*/ -}}
+{{ template "person-card" .Owner }}
+{{- end -}}
