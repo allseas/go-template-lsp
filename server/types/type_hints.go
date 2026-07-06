@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
+	"iter"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,6 +47,60 @@ type TypeHint struct {
 // body could not be parsed.
 func (h TypeHint) IsMalformed() bool { return h.Type == typeHintMalformedDict }
 
+// describe returns a short human-readable rendering of the hint for use in
+// diagnostic messages.
+func (h TypeHint) describe() string {
+	switch h.Type {
+	case typeHintStruct:
+		return h.Text
+	case typeHintDict:
+		return "map{" + h.Text + "}"
+	case typeHintMalformedDict:
+		return "malformed map{...}"
+	default:
+		return "<none>"
+	}
+}
+
+// parseHintText parses the raw body of a comment (with or without leading
+// whitespace) into a TypeHint. Line is left at 0; callers that need position
+// information should use ParseHintComment instead.
+func parseHintText(commentText string) (TypeHint, bool) {
+	if dictHintRe.MatchString(commentText) {
+		if h, ok := parseDictHint(commentText, 0); ok {
+			return h, true
+		}
+		return TypeHint{Type: typeHintMalformedDict}, true
+	}
+	return parseStructHint(commentText, 0)
+}
+
+// hintsEqual reports whether two hints refer to the same type. Line numbers
+// are ignored.
+func hintsEqual(a, b TypeHint) bool {
+	if a.Type != b.Type {
+		return false
+	}
+	switch a.Type {
+	case typeHintStruct:
+		return a.Text == b.Text
+	case typeHintDict:
+		if len(a.Dict) != len(b.Dict) {
+			return false
+		}
+		for k, v := range a.Dict {
+			if b.Dict[k] != v {
+				return false
+			}
+		}
+		return true
+	case typeHintMalformedDict:
+		return true
+	default:
+		return true
+	}
+}
+
 var (
 	structHintRe = regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
 	dictHintRe   = regexp.MustCompile(`gotype:\s*map\s*\{`)
@@ -53,7 +108,9 @@ var (
 )
 
 // FindTreeHints scans each parse tree for a `gotype:` comment and returns a
-// map of template names to the first hint found in that tree.
+// map of template names to the first hint found in that tree. Any additional
+// hint comments in the same tree are ignored here; they are detected during
+// analysis and reported as ErrorTypeConflictingHint diagnostics.
 func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHint {
 	result := make(map[string]TypeHint)
 
@@ -61,37 +118,47 @@ func FindTreeHints(text string, trees map[string]*parse.Tree) map[string]TypeHin
 		if tree == nil || tree.Root == nil {
 			continue
 		}
-		var hint TypeHint
-		inspectParsed(tree.Root, func(node parse.Node) {
-			if hint.Type != typeHintNone {
-				return
-			}
-			c, ok := node.(*parse.CommentNode)
-			if !ok {
-				return
-			}
-			line := strings.Count(text[:int(c.Pos)], "\n") + 1
-			// A dict marker takes priority: even if the body is malformed we
-			// must not fall back to struct parsing, otherwise the leading
-			// `dict` identifier would be captured as a struct type name.
-			if dictHintRe.MatchString(c.Text) {
-				if h, ok := parseDictHint(c.Text, line); ok {
-					hint = h
-				} else {
-					hint = TypeHint{Type: typeHintMalformedDict, Line: line}
-				}
-				return
-			}
-			if h, ok := parseStructHint(c.Text, line); ok {
-				hint = h
-			}
-		})
-		if hint.Type != typeHintNone {
-			result[name] = hint
+		if h, ok := findFirstTreeHint(text, tree.Root); ok {
+			result[name] = h
 		}
 	}
 
 	return result
+}
+
+// findFirstTreeHint walks root and returns the first gotype hint comment found,
+// stopping the traversal as soon as one is discovered.
+func findFirstTreeHint(text string, root parse.Node) (TypeHint, bool) {
+	for node := range walkParsed(root) {
+		c, isComment := node.(*parse.CommentNode)
+		if !isComment {
+			continue
+		}
+		if h, ok := ParseHintComment(text, c); ok {
+			return h, true
+		}
+	}
+	return TypeHint{}, false
+}
+
+// ParseHintComment inspects a CommentNode and returns the gotype hint it
+// carries, if any. A dict marker takes priority over struct parsing so a
+// malformed `map{...}` body is not silently reinterpreted as a struct hint.
+func ParseHintComment(text string, c *parse.CommentNode) (TypeHint, bool) {
+	if c == nil {
+		return TypeHint{}, false
+	}
+	line := strings.Count(text[:int(c.Pos)], "\n") + 1
+	if dictHintRe.MatchString(c.Text) {
+		if h, ok := parseDictHint(c.Text, line); ok {
+			return h, true
+		}
+		return TypeHint{Type: typeHintMalformedDict, Line: line}, true
+	}
+	if h, ok := parseStructHint(c.Text, line); ok {
+		return h, true
+	}
+	return TypeHint{}, false
 }
 
 // parseDictHint tries to interpret commentText as `gotype: map{...}`. It
@@ -155,13 +222,26 @@ func parseStructHint(commentText string, line int) (TypeHint, bool) {
 	}, true
 }
 
-func inspectParsed(node parse.Node, f func(node parse.Node)) {
-	if node == nil {
-		return
+// walkParsed returns an iterator over node and its descendants in pre-order.
+// The caller can break out of the range loop to stop the walk early.
+func walkParsed(root parse.Node) iter.Seq[parse.Node] {
+	var visit func(parse.Node, func(parse.Node) bool) bool
+	visit = func(n parse.Node, yield func(parse.Node) bool) bool {
+		if n == nil {
+			return true
+		}
+		if !yield(n) {
+			return false
+		}
+		for _, child := range parseNodeChildren(n) {
+			if !visit(child, yield) {
+				return false
+			}
+		}
+		return true
 	}
-	f(node)
-	for _, child := range parseNodeChildren(node) {
-		inspectParsed(child, f)
+	return func(yield func(parse.Node) bool) {
+		visit(root, yield)
 	}
 }
 

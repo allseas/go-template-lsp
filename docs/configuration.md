@@ -45,6 +45,7 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `variableReassigned`   | `"warning"`   | Variable reassigned to a value of a different concrete type |
 | `malformedHint`        | `"error"`     | `gotype` hint syntax could not be parsed (e.g. malformed `map{...}`) |
 | `invalidDictKey`       | `"information"` | Key lookup on a map-shaped `gotype` hint failed         |
+| `conflictingHint`      | `"warning"`   | Additional `gotype` hint in the same template disagrees with the first one |
 
 ## Configuration Hierarchy
 
@@ -81,7 +82,8 @@ You can create a `gotmpl.config.json` file in your project root to configure the
     "emptyDefineName": "warning",
     "variableReassigned": "warning",
     "malformedHint": "error",
-    "invalidDictKey": "information"
+    "invalidDictKey": "information",
+    "conflictingHint": "warning"
   },
   "enableAutocompletion": true,
   "trace": {

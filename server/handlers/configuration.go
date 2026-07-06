@@ -101,6 +101,7 @@ var (
 			types.ErrorTypeVariableReassigned: DiagnosticSeverityWarning,
 			types.ErrorTypeMalformedHint:      DiagnosticSeverityError,
 			types.ErrorTypeInvalidDictKey:     DiagnosticSeverityInformation,
+			types.ErrorTypeConflictingHint:    DiagnosticSeverityWarning,
 		},
 		EnableAutocompletion: true,
 		PipeChainCompletion:  "step",

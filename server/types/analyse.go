@@ -68,6 +68,8 @@ const (
 	ErrorTypeMalformedHint
 	// ErrorTypeInvalidDictKey Key lookup on a map-shaped gotype hint failed
 	ErrorTypeInvalidDictKey
+	// ErrorTypeConflictingHint A gotype hint comment conflicts with the first hint in the same tree
+	ErrorTypeConflictingHint
 	// Add more error types as needed
 )
 
@@ -89,6 +91,7 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeVariableReassigned: "variableReassigned",
 	ErrorTypeMalformedHint:      "malformedHint",
 	ErrorTypeInvalidDictKey:     "invalidDictKey",
+	ErrorTypeConflictingHint:    "conflictingHint",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
@@ -532,13 +535,36 @@ func analyseIf(n *parse.IfNode, parent Node, ctx *analysisCtx) Node {
 	return i
 }
 
-func analyseComment(n *parse.CommentNode, parent Node, _ *analysisCtx) Node {
-	return &CommentNode{
+func analyseComment(n *parse.CommentNode, parent Node, ctx *analysisCtx) Node {
+	c := &CommentNode{
 		NodeType: NodeComment,
 		Pos:      Pos(n.Position()),
 		Text:     n.Text,
 		parent:   parent,
 	}
+	if ctx == nil {
+		return c
+	}
+	hint, ok := parseHintText(n.Text)
+	if !ok {
+		return c
+	}
+	if ctx.firstHint == nil {
+		h := hint
+		ctx.firstHint = &h
+		return c
+	}
+	if hintsEqual(*ctx.firstHint, hint) {
+		return c
+	}
+	ctx.errorf(
+		c,
+		ErrorTypeConflictingHint,
+		"gotype hint %s conflicts with earlier hint %s in the same template",
+		hint.describe(),
+		ctx.firstHint.describe(),
+	)
+	return c
 }
 
 func analyseString(n *parse.StringNode, parent Node, _ *analysisCtx) Node {
@@ -1330,4 +1356,5 @@ type analysisCtx struct {
 	funcs              map[string]*types.Func // Available functions with their signatures
 	tree               *Tree                  // Reference to the tree being built, for error reporting
 	templateInputTypes map[string]types.Type  // Expected input type per template name (from gotype hints on {{define}} blocks)
+	firstHint          *TypeHint              // First gotype hint seen while analysing this tree, used to diagnose conflicting hints
 }

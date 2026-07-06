@@ -120,7 +120,8 @@
                         "emptyDefineName": "warning",
                         "variableReassigned": "warning",
                         "malformedHint": "error",
-                        "invalidDictKey": "information"
+                        "invalidDictKey": "information",
+                        "conflictingHint": "warning"
                     },
                     "additionalProperties": {
                         "type": "string",

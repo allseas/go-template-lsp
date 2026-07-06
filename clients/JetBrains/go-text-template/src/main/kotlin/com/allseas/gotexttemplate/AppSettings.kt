@@ -31,6 +31,7 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
                 "emptyDefineName" to "warning",
                 "malformedHint" to "error",
                 "invalidDictKey" to "information",
+                "conflictingHint" to "warning",
             ),
         var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
