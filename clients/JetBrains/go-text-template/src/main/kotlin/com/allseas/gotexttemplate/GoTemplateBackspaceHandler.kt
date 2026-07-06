@@ -39,8 +39,8 @@ class GoTemplateBackspaceHandler : BackspaceHandlerDelegate() {
         listOf(
             // `{{|}}`  --backspace-->  `{|}}`
             Collapse('{', "{", "}}"),
-            // `{{-  |  -}}`  --backspace-->  `{{- | -}}` (deletes one space)
-            Collapse(' ', "{{-", " -}}"),
+            // `{{- |}}`  --backspace-->  `{{-|}}` (deletes the trailing space)
+            Collapse(' ', "{{-", "}}"),
             // `{{/**/}}`  --backspace-->  `{{/|*/}}` (deletes one `*`; the
             // surviving `*` shifts left so the right side reads `*/}}`)
             Collapse('*', "{{/", "*/}}"),

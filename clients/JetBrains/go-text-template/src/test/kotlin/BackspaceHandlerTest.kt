@@ -127,9 +127,9 @@ class BackspaceHandlerTest : CustomPlatformTestCase() {
         )
     }
 
-    // Trim-marker delimiter: `{{-  |  -}}` collapses to empty on one backspace.
+    // Trim-marker delimiter: `{{- |}}` collapses to empty on one backspace.
     fun testBackspaceInsideEmptyTrimDelimiterDeletesEverything() {
-        myFixture.configureByText("test.tmpl", "{{- <caret> -}}")
+        myFixture.configureByText("test.tmpl", "{{- <caret>}}")
         backspace()
         assertEquals("", myFixture.editor.document.text)
         assertEquals(0, myFixture.editor.caretModel.offset)
@@ -138,7 +138,7 @@ class BackspaceHandlerTest : CustomPlatformTestCase() {
     fun testTypeTrimDelimiterThenBackspaceRoundTrip() {
         myFixture.configureByText("test.tmpl", "foo<caret>bar")
         myFixture.type("{{-")
-        assertEquals("foo{{-  -}}bar", myFixture.editor.document.text)
+        assertEquals("foo{{- }}bar", myFixture.editor.document.text)
         backspace()
         assertEquals("foobar", myFixture.editor.document.text)
         assertEquals(3, myFixture.editor.caretModel.offset)
@@ -146,9 +146,9 @@ class BackspaceHandlerTest : CustomPlatformTestCase() {
 
     // Non-empty trim delimiter must not collapse: only the one space vanishes.
     fun testBackspaceInsideNonEmptyTrimDelimiterDeletesOneChar() {
-        myFixture.configureByText("test.tmpl", "{{- expr <caret>-}}")
+        myFixture.configureByText("test.tmpl", "{{- expr <caret>}}")
         backspace()
-        assertEquals("{{- expr-}}", myFixture.editor.document.text)
+        assertEquals("{{- expr}}", myFixture.editor.document.text)
     }
 
     // Comment delimiter: `{{/*|*/}}` collapses to empty on one backspace.
@@ -205,7 +205,7 @@ class BackspaceHandlerTest : CustomPlatformTestCase() {
 
     // Trim collapse must be scoped to `.tmpl` files.
     fun testBackspaceTrimInNonTmplFileIsNotHandledByUs() {
-        myFixture.configureByText("test.html", "{{- <caret> -}}")
+        myFixture.configureByText("test.html", "{{- <caret>}}")
         backspace()
         val text = myFixture.editor.document.text
         assertFalse(
@@ -216,7 +216,7 @@ class BackspaceHandlerTest : CustomPlatformTestCase() {
 
     // Adjacent brace runs must still veto the trim/comment collapses.
     fun testBackspaceInsideTrimWithAdjacentBraceDoesNotCollapse() {
-        myFixture.configureByText("test.tmpl", "{{{- <caret> -}}")
+        myFixture.configureByText("test.tmpl", "{{{- <caret>}}")
         backspace()
         val text = myFixture.editor.document.text
         assertTrue("Trim collapse fired unexpectedly on adjacent brace: '$text'", text.length >= 4)
