@@ -1,10 +1,14 @@
 {
     "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
     "fileTypes": ["js.tmpl", "js.gotmpl"],
-    "patterns": [
-        { "include": "source.gotmpl#comment" },
-        { "include": "source.gotmpl#action" },
-        { "include": "source.js" }
-    ],
+    "injections": {
+        "L:source.gotmpl.js - meta.embedded.gotmpl - comment.block.gotmpl": {
+            "patterns": [
+                { "include": "source.gotmpl#comment" },
+                { "include": "source.gotmpl#action" }
+            ]
+        }
+    },
+    "patterns": [{ "include": "source.js" }],
     "scopeName": "source.gotmpl.js"
 }

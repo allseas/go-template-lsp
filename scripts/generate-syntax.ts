@@ -38,7 +38,7 @@ for (const file of generated) {
   );
 }
 
-// gotemplate.tmLanguage.json -> gotmpl.tmLanguage.json (base)
+// gotemplate.tmLanguage.json       -> gotmpl.tmLanguage.json       (base)
 // gotemplate-<key>.tmLanguage.json -> gotmpl-<key>.tmLanguage.json (derived)
 function destName(file: string): string {
   if (file === "gotemplate.tmLanguage.json") return "gotmpl.tmLanguage.json";

@@ -7,6 +7,27 @@
 - Serialization into the proper format
 In place of verifying a manually written json file all at once.
 
+## Embedded languages
+
+Compound files like `*.json.tmpl` use one grammar per host language: `gotmpl-<lang>.tmLanguage.json` with scope `source.gotmpl.<lang>`. It passes through to `source.<lang>` for host tokenization and carries an `injections` block that contributes `source.gotmpl#comment` and `source.gotmpl#action` at every nesting level of the host:
+
+```json
+"injections": {
+  "L:source.gotmpl.<lang> - meta.embedded.gotmpl - comment.block.gotmpl": {
+    "patterns": [
+      { "include": "source.gotmpl#comment" },
+      { "include": "source.gotmpl#action" }
+    ]
+  }
+}
+```
+
+`L:` gives the injection higher priority than the host's own rules; the exclusions stop recursion inside actions/comments.
+
+The `injections` dict (classic TextMate form, local to the grammar) is used instead of a separate grammar with a top-level `injectionSelector`, because JetBrains' TextMate reader only recognizes the former.
+
+VS Code registers each grammar under `contributes.grammars`. JetBrains picks them up from the bundle's `Syntaxes/` directory via `TextMateBundleProvider`.
+
 ## Module Structure
 
 ```files

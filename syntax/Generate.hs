@@ -132,6 +132,7 @@ syntax = TmSyntax
   []
   [TmInclude "comment", TmInclude "action"]
   allEntries
+  []
 
 -- Host languages embedded inside TextNode based on the compound file extension.
 -- Each entry: (extension key, host scope name).
@@ -152,19 +153,34 @@ hostLanguages =
   , ("cpp", "source.cpp")
   ]
 
--- Derived grammar for a host language. Includes the base gotmpl action/comment
--- patterns from source.gotmpl, then falls through to the host language grammar
--- so TextNode content is highlighted by the host.
+-- Derived grammar for a host language. Falls through to the host language
+-- grammar as the base tokenisation, and uses an in-grammar 'injections' rule
+-- to contribute go-template action/comment patterns at every nesting level of
+-- the host grammar (including inside its begin/end regions and strings) --
+-- not only at the top level. The in-grammar 'injections' form (as opposed to
+-- a separate injection grammar with 'injectionSelector') works in both VS
+-- Code (vscode-textmate) and JetBrains (only the in-grammar form is
+-- recognised by the JetBrains TextMate parser -- it reads only the
+-- 'injections' key, not top-level 'injectionSelector').
+--
+-- The selector excludes meta.embedded.gotmpl (already inside an action) and
+-- comment.block.gotmpl (already inside a template comment) to avoid recursing
+-- into ourselves. The 'L:' prefix gives the injection higher priority than
+-- the host grammar's patterns.
 derivedSyntax :: (String, String) -> TmSyntax
 derivedSyntax (key, hostScope) = TmSyntax
   ("source.gotmpl." ++ key)
   [key ++ ".tmpl", key ++ ".gotmpl"]
   []
-  [ TmIncludeScope "source.gotmpl#comment"
-  , TmIncludeScope "source.gotmpl#action"
-  , TmIncludeScope hostScope
-  ]
+  [ TmIncludeScope hostScope ]
   []
+  [ ( "L:source.gotmpl." ++ key
+        ++ " - meta.embedded.gotmpl - comment.block.gotmpl"
+    , [ TmIncludeScope "source.gotmpl#comment"
+      , TmIncludeScope "source.gotmpl#action"
+      ]
+    )
+  ]
 
 -- ==========================================================================
 -- Main

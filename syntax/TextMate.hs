@@ -16,6 +16,8 @@ type Capture = (CaptureKey, ScopeName)
 type Captures = [Capture]
 type RepoKey = String
 type Named = (RepoKey, TmPattern)
+type Selector = String
+type Injection = (Selector, [TmPattern])
 
 -- datatype representing the regexes for a single object
 data TmPattern
@@ -49,17 +51,18 @@ instance ToJSON TmPattern where
 
 -- datatype representing the whole syntax file
 data TmSyntax
-  = TmSyntax String [String] [String] [TmPattern] [Named]
-  --          scope  types    exts    top-patterns repository
+  = TmSyntax String [String] [String] [TmPattern] [Named] [Injection]
+  --          scope  types    exts    top-patterns repository  injections (selector -> patterns)
 
 instance ToJSON TmSyntax where
-  toJSON (TmSyntax scopeName fileTypes fileExts patterns repo) = object $ catMaybes
-    [ Just $ "$schema"       .= ("https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json" :: String)
-    , Just $ "scopeName"     .= scopeName
-    , ("fileTypes" .=)       <$> omitEmpty fileTypes
-    , ("fileExtensions" .=)  <$> omitEmpty fileExts
-    , ("patterns" .=)        <$> omitEmpty patterns
+  toJSON (TmSyntax scopeName fileTypes fileExts patterns repo injections) = object $ catMaybes
+    [ Just $ "$schema"          .= ("https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json" :: String)
+    , Just $ "scopeName"        .= scopeName
+    , ("fileTypes" .=)          <$> omitEmpty fileTypes
+    , ("fileExtensions" .=)     <$> omitEmpty fileExts
+    , ("patterns" .=)           <$> omitEmpty patterns
     , ("repository" .=) . Map.fromList <$> omitEmpty repo
+    , ("injections" .=) . Map.fromList <$> omitEmpty [(sel, object ["patterns" .= ps]) | (sel, ps) <- injections]
     ]
 
 

@@ -86,17 +86,17 @@
                 },
                 "configuration": "./language-configuration.json"
             },
-            { "id": "gotmpl-sql",  "aliases": ["Go text/template (SQL)"],       "filenamePatterns": ["*.sql.tmpl",  "*.sql.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-html", "aliases": ["Go text/template (HTML)"],      "filenamePatterns": ["*.html.tmpl", "*.html.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-json", "aliases": ["Go text/template (JSON)"],      "filenamePatterns": ["*.json.tmpl", "*.json.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-yaml", "aliases": ["Go text/template (YAML)"],      "filenamePatterns": ["*.yaml.tmpl", "*.yaml.gotmpl", "*.yml.tmpl", "*.yml.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-css",  "aliases": ["Go text/template (CSS)"],       "filenamePatterns": ["*.css.tmpl",  "*.css.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-js",   "aliases": ["Go text/template (JavaScript)"],"filenamePatterns": ["*.js.tmpl",   "*.js.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-xml",  "aliases": ["Go text/template (XML)"],       "filenamePatterns": ["*.xml.tmpl",  "*.xml.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-md",   "aliases": ["Go text/template (Markdown)"],  "filenamePatterns": ["*.md.tmpl",   "*.md.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-sh",   "aliases": ["Go text/template (Shell)"],     "filenamePatterns": ["*.sh.tmpl",   "*.sh.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-scl",  "aliases": ["Go text/template (SCL)"],       "filenamePatterns": ["*.scl.tmpl",  "*.scl.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
-            { "id": "gotmpl-cpp",  "aliases": ["Go text/template (C++)"],       "filenamePatterns": ["*.cpp.tmpl",  "*.cpp.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" }
+            { "id": "gotmpl-sql",  "aliases": ["Go text/template (SQL)"],       "extensions": [".sql.tmpl",  ".sql.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-html", "aliases": ["Go text/template (HTML)"],      "extensions": [".html.tmpl", ".html.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-json", "aliases": ["Go text/template (JSON)"],      "extensions": [".json.tmpl", ".json.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-yaml", "aliases": ["Go text/template (YAML)"],      "extensions": [".yaml.tmpl", ".yaml.gotmpl", ".yml.tmpl", ".yml.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-css",  "aliases": ["Go text/template (CSS)"],       "extensions": [".css.tmpl",  ".css.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-js",   "aliases": ["Go text/template (JavaScript)"],"extensions": [".js.tmpl",   ".js.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-xml",  "aliases": ["Go text/template (XML)"],       "extensions": [".xml.tmpl",  ".xml.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-md",   "aliases": ["Go text/template (Markdown)"],  "extensions": [".md.tmpl",   ".md.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-sh",   "aliases": ["Go text/template (Shell)"],     "extensions": [".sh.tmpl",   ".sh.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-scl",  "aliases": ["Go text/template (SCL)"],       "extensions": [".scl.tmpl",  ".scl.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-cpp",  "aliases": ["Go text/template (C++)"],       "extensions": [".cpp.tmpl",  ".cpp.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" }
         ],
         "grammars": [
             {
