@@ -57,7 +57,18 @@
         "configurationDefaults": {
             "[gotmpl]": {
                 "editor.wordBasedSuggestions": "off"
-            }
+            },
+            "[gotmpl-sql]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-html]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-json]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-yaml]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-css]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-js]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-xml]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-md]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-sh]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-scl]": { "editor.wordBasedSuggestions": "off" },
+            "[gotmpl-cpp]": { "editor.wordBasedSuggestions": "off" }
         },
         "languages": [
             {
@@ -74,14 +85,36 @@
                     "dark": "./icons/icon.svg"
                 },
                 "configuration": "./language-configuration.json"
-            }
+            },
+            { "id": "gotmpl-sql",  "aliases": ["Go text/template (SQL)"],       "filenamePatterns": ["*.sql.tmpl",  "*.sql.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-html", "aliases": ["Go text/template (HTML)"],      "filenamePatterns": ["*.html.tmpl", "*.html.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-json", "aliases": ["Go text/template (JSON)"],      "filenamePatterns": ["*.json.tmpl", "*.json.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-yaml", "aliases": ["Go text/template (YAML)"],      "filenamePatterns": ["*.yaml.tmpl", "*.yaml.gotmpl", "*.yml.tmpl", "*.yml.gotmpl"], "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-css",  "aliases": ["Go text/template (CSS)"],       "filenamePatterns": ["*.css.tmpl",  "*.css.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-js",   "aliases": ["Go text/template (JavaScript)"],"filenamePatterns": ["*.js.tmpl",   "*.js.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-xml",  "aliases": ["Go text/template (XML)"],       "filenamePatterns": ["*.xml.tmpl",  "*.xml.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-md",   "aliases": ["Go text/template (Markdown)"],  "filenamePatterns": ["*.md.tmpl",   "*.md.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-sh",   "aliases": ["Go text/template (Shell)"],     "filenamePatterns": ["*.sh.tmpl",   "*.sh.gotmpl"],   "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-scl",  "aliases": ["Go text/template (SCL)"],       "filenamePatterns": ["*.scl.tmpl",  "*.scl.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" },
+            { "id": "gotmpl-cpp",  "aliases": ["Go text/template (C++)"],       "filenamePatterns": ["*.cpp.tmpl",  "*.cpp.gotmpl"],  "icon": { "light": "./icons/icon.svg", "dark": "./icons/icon.svg" }, "configuration": "./language-configuration.json" }
         ],
         "grammars": [
             {
                 "language": "gotmpl",
                 "scopeName": "source.gotmpl",
                 "path": "./syntaxes/gotmpl.tmLanguage.json"
-            }
+            },
+            { "language": "gotmpl-sql",  "scopeName": "source.gotmpl.sql",  "path": "./syntaxes/gotmpl-sql.tmLanguage.json"  },
+            { "language": "gotmpl-html", "scopeName": "source.gotmpl.html", "path": "./syntaxes/gotmpl-html.tmLanguage.json" },
+            { "language": "gotmpl-json", "scopeName": "source.gotmpl.json", "path": "./syntaxes/gotmpl-json.tmLanguage.json" },
+            { "language": "gotmpl-yaml", "scopeName": "source.gotmpl.yaml", "path": "./syntaxes/gotmpl-yaml.tmLanguage.json" },
+            { "language": "gotmpl-css",  "scopeName": "source.gotmpl.css",  "path": "./syntaxes/gotmpl-css.tmLanguage.json"  },
+            { "language": "gotmpl-js",   "scopeName": "source.gotmpl.js",   "path": "./syntaxes/gotmpl-js.tmLanguage.json"   },
+            { "language": "gotmpl-xml",  "scopeName": "source.gotmpl.xml",  "path": "./syntaxes/gotmpl-xml.tmLanguage.json"  },
+            { "language": "gotmpl-md",   "scopeName": "source.gotmpl.md",   "path": "./syntaxes/gotmpl-md.tmLanguage.json"   },
+            { "language": "gotmpl-sh",   "scopeName": "source.gotmpl.sh",   "path": "./syntaxes/gotmpl-sh.tmLanguage.json"   },
+            { "language": "gotmpl-scl",  "scopeName": "source.gotmpl.scl",  "path": "./syntaxes/gotmpl-scl.tmLanguage.json"  },
+            { "language": "gotmpl-cpp",  "scopeName": "source.gotmpl.cpp",  "path": "./syntaxes/gotmpl-cpp.tmLanguage.json"  }
         ],
         "configuration": {
             "title": "text/template Support",
@@ -166,7 +199,18 @@
             {
                 "language": "gotmpl",
                 "path": "snippets/snippets.json"
-            }
+            },
+            { "language": "gotmpl-sql",  "path": "snippets/snippets.json" },
+            { "language": "gotmpl-html", "path": "snippets/snippets.json" },
+            { "language": "gotmpl-json", "path": "snippets/snippets.json" },
+            { "language": "gotmpl-yaml", "path": "snippets/snippets.json" },
+            { "language": "gotmpl-css",  "path": "snippets/snippets.json" },
+            { "language": "gotmpl-js",   "path": "snippets/snippets.json" },
+            { "language": "gotmpl-xml",  "path": "snippets/snippets.json" },
+            { "language": "gotmpl-md",   "path": "snippets/snippets.json" },
+            { "language": "gotmpl-sh",   "path": "snippets/snippets.json" },
+            { "language": "gotmpl-scl",  "path": "snippets/snippets.json" },
+            { "language": "gotmpl-cpp",  "path": "snippets/snippets.json" }
         ]
     },
     "prettier": {

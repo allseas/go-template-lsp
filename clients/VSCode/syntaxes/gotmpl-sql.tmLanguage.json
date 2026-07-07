@@ -1,0 +1,10 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "fileTypes": ["sql.tmpl", "sql.gotmpl"],
+    "patterns": [
+        { "include": "source.gotmpl#comment" },
+        { "include": "source.gotmpl#action" },
+        { "include": "source.sql" }
+    ],
+    "scopeName": "source.gotmpl.sql"
+}

@@ -23,6 +23,8 @@ data TmPattern
   | TmRegion  (Maybe ScopeName) Regex Regex Captures Captures [TmPattern]
   --           name              begin end   beginCaps  endCaps   inner
   | TmInclude RepoKey
+  | TmIncludeScope String
+  --           full reference, e.g. "source.sql" or "source.gotmpl#comment"
 
 capturesJSON :: Captures -> Value
 capturesJSON caps = toJSON $ Map.fromList [(k, object ["name" .= v]) | (k, v) <- caps]
@@ -43,6 +45,7 @@ instance ToJSON TmPattern where
     , ("patterns" .=) <$> omitEmpty inner
     ]
   toJSON (TmInclude rk) = object ["include" .= ('#' : rk)]
+  toJSON (TmIncludeScope s) = object ["include" .= s]
 
 -- datatype representing the whole syntax file
 data TmSyntax

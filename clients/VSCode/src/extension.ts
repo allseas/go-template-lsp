@@ -80,7 +80,20 @@ export async function activate(context: ExtensionContext) {
     console.log("Server binary:", serverModule);
 
     const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: "file", language: "gotmpl" }],
+        documentSelector: [
+            { scheme: "file", language: "gotmpl" },
+            { scheme: "file", language: "gotmpl-sql" },
+            { scheme: "file", language: "gotmpl-html" },
+            { scheme: "file", language: "gotmpl-json" },
+            { scheme: "file", language: "gotmpl-yaml" },
+            { scheme: "file", language: "gotmpl-css" },
+            { scheme: "file", language: "gotmpl-js" },
+            { scheme: "file", language: "gotmpl-xml" },
+            { scheme: "file", language: "gotmpl-md" },
+            { scheme: "file", language: "gotmpl-sh" },
+            { scheme: "file", language: "gotmpl-scl" },
+            { scheme: "file", language: "gotmpl-cpp" },
+        ],
         synchronize: {
             fileEvents: watchers,
             configurationSection: "goTmplSupport",

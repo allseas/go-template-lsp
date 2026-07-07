@@ -133,6 +133,39 @@ syntax = TmSyntax
   [TmInclude "comment", TmInclude "action"]
   allEntries
 
+-- Host languages embedded inside TextNode based on the compound file extension.
+-- Each entry: (extension key, host scope name).
+-- A file named foo.<key>.tmpl gets highlighting for that host language between
+-- go-template actions/comments.
+hostLanguages :: [(String, String)]
+hostLanguages =
+  [ ("sql",  "source.sql")
+  , ("html", "text.html.basic")
+  , ("json", "source.json")
+  , ("yaml", "source.yaml")
+  , ("css",  "source.css")
+  , ("js",   "source.js")
+  , ("xml",  "text.xml")
+  , ("md",   "text.html.markdown")
+  , ("sh",   "source.shell")
+  , ("scl",  "source.scl")
+  , ("cpp", "source.cpp")
+  ]
+
+-- Derived grammar for a host language. Includes the base gotmpl action/comment
+-- patterns from source.gotmpl, then falls through to the host language grammar
+-- so TextNode content is highlighted by the host.
+derivedSyntax :: (String, String) -> TmSyntax
+derivedSyntax (key, hostScope) = TmSyntax
+  ("source.gotmpl." ++ key)
+  [key ++ ".tmpl", key ++ ".gotmpl"]
+  []
+  [ TmIncludeScope "source.gotmpl#comment"
+  , TmIncludeScope "source.gotmpl#action"
+  , TmIncludeScope hostScope
+  ]
+  []
+
 -- ==========================================================================
 -- Main
 -- ==========================================================================
@@ -140,6 +173,12 @@ syntax = TmSyntax
 main :: IO ()
 main = do
   createDirectoryIfMissing True "syntaxes"
-  let path   = "syntaxes/gotemplate.tmLanguage.json"
-  LBS.writeFile path (syntaxToJson syntax)
-  putStrLn $ "Generated: " ++ path
+  let basePath = "syntaxes/gotemplate.tmLanguage.json"
+  LBS.writeFile basePath (syntaxToJson syntax)
+  putStrLn $ "Generated: " ++ basePath
+  mapM_ writeDerived hostLanguages
+  where
+    writeDerived entry@(key, _) = do
+      let path = "syntaxes/gotemplate-" ++ key ++ ".tmLanguage.json"
+      LBS.writeFile path (syntaxToJson (derivedSyntax entry))
+      putStrLn $ "Generated: " ++ path
