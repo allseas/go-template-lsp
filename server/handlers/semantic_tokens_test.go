@@ -902,6 +902,35 @@ func decodeAbsTokens(data []uint32) []absToken {
 	return out
 }
 
+// TestCommentTokenDoesNotSwallowFollowingContent is a regression test for a bug
+// where the CommentNode boundary calculation used strings.LastIndex to locate
+// the comment terminator, causing a top-level comment to swallow all content up
+// through a later comment's "*/}}" (highlighting a whole define block as a
+// single comment token).
+func TestCommentTokenDoesNotSwallowFollowingContent(t *testing.T) {
+	src := "{{/* outer */ -}}\n{{- define \"foo\" }}\n{{/* inner */}}\n{{ end }}"
+	uri := "file:///regression-comment-swallow.tmpl"
+	setDocFromSource(t, uri, src)
+	defer store.Delete(uri)
+
+	result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	var commentTokens []absToken
+	for _, tok := range decodeAbsTokens(result.Data) {
+		if tok.tokenType == ttComment {
+			commentTokens = append(commentTokens, tok)
+		}
+	}
+
+	require.Len(t, commentTokens, 2, "expected exactly two comment tokens")
+	assert.Equal(t, uint32(len("/* outer */")), commentTokens[0].length,
+		"outer comment token must cover only /* outer */, not swallow following content")
+	assert.Equal(t, uint32(len("/* inner */")), commentTokens[1].length,
+		"inner comment token must cover only /* inner */")
+}
+
 // TestPlainTextKeywordsNotHighlighted is a regression test for two bugs that
 // caused plain-text occurrences of "else" and "template" to be emitted as
 // keyword tokens.

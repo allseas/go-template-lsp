@@ -94,9 +94,7 @@ export async function getEmbeddedGrammar(
 ): Promise<vsctm.IGrammar> {
     await ensureOniguruma();
     const wrapperScope = `source.gotmpl.${variant}`;
-    const wrapperPath = localGrammarPath(
-        `gotmpl-${variant}.tmLanguage.json`,
-    );
+    const wrapperPath = localGrammarPath(`gotmpl-${variant}.tmLanguage.json`);
     const gotmplPath = localGrammarPath("gotmpl.tmLanguage.json");
 
     const registry = new vsctm.Registry({

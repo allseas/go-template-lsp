@@ -87,7 +87,7 @@ var setEndsForTreeTestCases = []boundariesTestCase{
 		input: `{{/* hello */}}`,
 		expected: []struct{ start, end Pos }{
 			{start: 2, end: 15}, // ListNode
-			{start: 2, end: 15}, // CommentNode
+			{start: 2, end: 13}, // CommentNode
 		},
 	},
 	{
