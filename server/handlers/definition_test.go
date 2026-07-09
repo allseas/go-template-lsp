@@ -221,17 +221,15 @@ func setDocWithType(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	for name, tr := range treeSet {
 		typedTrees[name] = buildTypedTree(tr, lt, nil)
 	}
-	var typed *serverTypes.Tree
+	rootName := ""
 	if tree != nil {
-		typed = typedTrees[tree.Name]
+		rootName = tree.Name
 	}
 	store.mu.Lock()
 	store.docs[uri] = &document{
 		text:       src,
-		tree:       tree,
+		rootName:   rootName,
 		trees:      treeSet,
-		loadedType: lt,
-		typedTree:  typed,
 		typedTrees: typedTrees,
 	}
 	store.mu.Unlock()

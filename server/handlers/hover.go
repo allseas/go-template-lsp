@@ -26,7 +26,7 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, erro
 		return nil, nil
 	}
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || doc.typedTree == nil {
+	if !ok || doc.rootTypedTree() == nil {
 		return nil, errors.New("document not found or failed to parse")
 	}
 

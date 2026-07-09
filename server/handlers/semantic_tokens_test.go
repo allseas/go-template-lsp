@@ -40,16 +40,18 @@ func setDocWithTypedTree(t *testing.T, uri, src string, lt *serverTypes.Tree) {
 	t.Helper()
 	tree, treeSet, err := tryParse(src)
 	require.NoError(t, err)
-	typedTree := buildTypedTree(tree, lt, nil)
 	typedTrees := make(map[string]*serverTypes.Tree, len(treeSet))
 	for name, tr := range treeSet {
 		typedTrees[name] = buildTypedTree(tr, lt, nil)
 	}
+	rootName := ""
+	if tree != nil {
+		rootName = tree.Name
+	}
 	doc := &document{
 		text:       src,
-		tree:       tree,
-		loadedType: lt,
-		typedTree:  typedTree,
+		rootName:   rootName,
+		trees:      treeSet,
 		typedTrees: typedTrees,
 	}
 	for _, tt := range typedTrees {

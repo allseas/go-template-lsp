@@ -41,28 +41,21 @@ func setDocMulti(t *testing.T, uri, src string, perTree map[string]*serverTypes.
 	tree, treeSet, err := tryParse(src)
 	require.NoError(t, err)
 
-	loadedTypes := make(map[string]*serverTypes.Tree, len(treeSet))
 	typedTrees := make(map[string]*serverTypes.Tree, len(treeSet))
 	for name, tr := range treeSet {
-		lt := perTree[name]
-		if lt != nil {
-			loadedTypes[name] = lt
-		}
-		typedTrees[name] = buildTypedTree(tr, lt, nil)
+		typedTrees[name] = buildTypedTree(tr, perTree[name], nil)
 	}
-	var typed *serverTypes.Tree
+	rootName := ""
 	if tree != nil {
-		typed = typedTrees[tree.Name]
+		rootName = tree.Name
 	}
 
 	store.mu.Lock()
 	store.docs[uri] = &document{
-		text:        src,
-		tree:        tree,
-		trees:       treeSet,
-		typedTree:   typed,
-		loadedTypes: loadedTypes,
-		typedTrees:  typedTrees,
+		text:       src,
+		rootName:   rootName,
+		trees:      treeSet,
+		typedTrees: typedTrees,
 	}
 	store.mu.Unlock()
 }

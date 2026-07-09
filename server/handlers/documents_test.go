@@ -71,7 +71,7 @@ func TestDocumentStore(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, invalidContent, val.text, "Content should be stored even if parsing fails")
 		// tree is not nil with the new parser
-		assert.NotNil(t, val.tree, "Tree should not be nil if parsing fails")
+		assert.NotNil(t, val.trees[val.rootName], "Tree should not be nil if parsing fails")
 	})
 
 	// ai
@@ -82,7 +82,7 @@ func TestDocumentStore(t *testing.T) {
 
 		assert.True(t, ok)
 		assert.Equal(t, validContent, val.text)
-		assert.NotNil(t, val.tree, "Tree should be set for valid content")
+		assert.NotNil(t, val.trees[val.rootName], "Tree should be set for valid content")
 	})
 
 	// ai
@@ -101,7 +101,7 @@ func TestDocumentStore(t *testing.T) {
 
 		assert.True(t, ok)
 		assert.Equal(t, emptyContent, val.text, "Content should be stored even if it's empty")
-		assert.NotNil(t, val.tree, "Tree should be set for empty content (valid template)")
+		assert.NotNil(t, val.trees[val.rootName], "Tree should be set for empty content (valid template)")
 	})
 
 	// ai
@@ -231,7 +231,7 @@ func TestDocumentMultipleDefines(t *testing.T) {
 	assert.Equal(t, "cg/model.A", hints["A"].Text)
 	assert.Equal(t, "cg/model.B", hints["B"].Text)
 
-	doc := &document{text: src, tree: tree, trees: treeSet}
+	doc := &document{text: src, rootName: tree.Name, trees: treeSet}
 
 	// treeAt: positions inside each define body -> correct define tree
 	offA := strings.Index(src, "alpha-body")
@@ -289,7 +289,7 @@ func TestTreeAtMultiDefinesWithRoot(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, tree)
 
-	doc := &document{text: src, tree: tree, trees: treeSet}
+	doc := &document{text: src, rootName: tree.Name, trees: treeSet}
 
 	// --- positions inside define bodies -> correct define tree ---
 

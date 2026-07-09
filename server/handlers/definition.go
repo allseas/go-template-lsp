@@ -40,8 +40,6 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		return nil, nil
 	}
 
-	loadedType := doc.loadedTypeAtTyped(types.Pos(offset))
-
 	switch target := node.(type) {
 	case *types.VariableNode:
 		varName := target.Ident[0]
@@ -54,7 +52,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 			for _, decl := range decls {
 				if decl.ValueType() != nil {
 					return resolveFieldChainDefinition(
-						loadedType,
+						tree,
 						decl.ValueType(),
 						target.Ident[1:],
 						identIdx-1,
@@ -100,7 +98,7 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 		}
 		return nil, nil
 	case *types.FieldNode:
-		return fieldNodeDefinition(loadedType, dotTypeAt(target), target, offset)
+		return fieldNodeDefinition(tree, dotTypeAt(target), target, offset)
 	case *types.IdentifierNode:
 		return definitionIdentifier(target)
 	case *types.TemplateNode:

@@ -47,6 +47,13 @@ type TypeHint struct {
 // body could not be parsed.
 func (h TypeHint) IsMalformed() bool { return h.Type == typeHintMalformedDict }
 
+// HintFailure records a gotype hint that could not be resolved during tree
+// construction. It is attached to the Tree the hint belongs to.
+type HintFailure struct {
+	Hint TypeHint
+	Err  string
+}
+
 // describe returns a short human-readable rendering of the hint for use in
 // diagnostic messages.
 func (h TypeHint) describe() string {

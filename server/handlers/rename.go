@@ -13,7 +13,7 @@ import (
 // Rename renames the symbol under the cursor across the relevant template.
 func Rename(_ *glsp.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || doc.typedTree == nil {
+	if !ok || doc.rootTypedTree() == nil {
 		log.Debug().Msg("rename: doc or tree is nil")
 		return nil, nil
 	}
