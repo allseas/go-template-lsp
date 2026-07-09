@@ -166,12 +166,13 @@ func TestCompletionAst(t *testing.T) {
 				store.Set(tc.uri, tc.content)
 				t.Cleanup(func() { store.Remove(tc.uri) })
 			}
-			result := completionAst(nil, &protocol.CompletionParams{
+			result, err := CompletionAst(nil, &protocol.CompletionParams{
 				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 					TextDocument: protocol.TextDocumentIdentifier{URI: tc.uri},
 					Position:     protocol.Position{Line: tc.line, Character: tc.character},
 				},
 			})
+			require.NoError(t, err)
 			if tc.wantNil {
 				assert.Nil(t, result)
 				return
@@ -182,27 +183,6 @@ func TestCompletionAst(t *testing.T) {
 				require.True(t, ok)
 				assert.False(t, list.IsIncomplete)
 				assert.Contains(t, labelsFrom(t, result), tc.wantLabels[0])
-			}
-		})
-	}
-}
-
-func TestCompletionWithFallback(t *testing.T) {
-	for _, tc := range completionFallbackTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			enableAutocompletion(t)
-			store.Set(tc.uri, tc.content)
-			t.Cleanup(func() { store.Remove(tc.uri) })
-			resp, err := CompletionWithFallback(nil, &protocol.CompletionParams{
-				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
-					TextDocument: protocol.TextDocumentIdentifier{URI: tc.uri},
-					Position:     protocol.Position{Line: tc.line, Character: tc.character},
-				},
-			})
-			require.NoError(t, err)
-			if tc.wantList {
-				_, ok := resp.(protocol.CompletionList)
-				assert.True(t, ok, "expected CompletionList")
 			}
 		})
 	}
@@ -432,7 +412,7 @@ func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
 	t.Cleanup(func() { store.Remove(uri) })
 
 	const pos protocol.UInteger = 16
-	result := completionAst(nil, &protocol.CompletionParams{
+	result, err := CompletionAst(nil, &protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
 			Position:     protocol.Position{Line: 0, Character: pos},
@@ -440,6 +420,7 @@ func TestCompletionAstInvokedDollarPrefixShowsVariables(t *testing.T) {
 		Context: &protocol.CompletionContext{TriggerKind: protocol.CompletionTriggerKindInvoked},
 	})
 
+	require.NoError(t, err)
 	require.NotNil(t, result)
 	labels := labelsFrom(t, result)
 	assert.Contains(t, labels, "top")
@@ -467,12 +448,13 @@ func TestCompletionAstMultiDefines(t *testing.T) {
 			pos := posOfSubStr(t, src, tc.posSubStr, tc.posOccurrence)
 			pos.Character += uint32(tc.posCharOffset) //nolint:gosec
 
-			result := completionAst(nil, &protocol.CompletionParams{
+			result, err := CompletionAst(nil, &protocol.CompletionParams{
 				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
 					Position:     pos,
 				},
 			})
+			require.NoError(t, err)
 			require.NotNil(t, result)
 			labels := labelsFrom(t, result)
 			for _, want := range tc.wantContains {
@@ -490,12 +472,13 @@ func TestCompletionAstMultiDefines(t *testing.T) {
 func completionLabelsAt(t *testing.T, uri, src string, offset int) []string {
 	t.Helper()
 	pos := offsetToPosition(src, offset)
-	result := completionAst(nil, &protocol.CompletionParams{
+	result, err := CompletionAst(nil, &protocol.CompletionParams{
 		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 			TextDocument: protocol.TextDocumentIdentifier{URI: uri},
 			Position:     pos,
 		},
 	})
+	require.NoError(t, err)
 	require.NotNil(t, result)
 	return labelsFrom(t, result)
 }

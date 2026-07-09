@@ -835,34 +835,6 @@ var completionAstTestCases = []completionAstTestCase{
 	},
 }
 
-// completionWithFallback handler test cases
-
-type completionFallbackTestCase struct {
-	name      string
-	content   string
-	uri       string
-	line      uint32
-	character uint32
-	wantList  bool
-}
-
-var completionFallbackTestCases = []completionFallbackTestCase{
-	{
-		name:      "returns ast result when ast succeeds",
-		content:   "{{.}}",
-		uri:       "file:///fallback-ok.tmpl",
-		character: 2,
-		wantList:  true,
-	},
-	{
-		name:      "falls back to regex when ast returns nil",
-		content:   "{{$x := .}}\nplain",
-		uri:       "file:///fallback-nil.tmpl",
-		line:      1,
-		character: 2,
-	},
-}
-
 // varsItemsT unit test cases
 
 type varsItemsTTestCase struct {
