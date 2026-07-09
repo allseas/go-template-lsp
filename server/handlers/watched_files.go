@@ -49,13 +49,16 @@ func DidChangeWatchedFiles(ctx *glsp.Context, params *protocol.DidChangeWatchedF
 		return nil
 	}
 
+	// Invalidate the type-hint cache first so ComputeGlobalFuncs can re-seed
+	// it with the packages it type-checks. See RegisterLoadedPackage.
+	types.InvalidateTypeHintCache()
+
 	funcs, err := types.ComputeGlobalFuncs(WorkspaceRoot)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to reload global tmpl:func hints")
 		return nil
 	}
 	types.SetGlobalFuncs(funcs)
-	types.InvalidateTypeHintCache()
 	log.Debug().Int("count", len(funcs)).Msg("reloaded global tmpl:func hints")
 
 	RefreshAllDocuments(ctx)

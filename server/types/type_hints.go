@@ -414,6 +414,29 @@ func InvalidateTypeHintCache() {
 	loadedPackages = make(map[string]*loadedPackage)
 }
 
+// RegisterLoadedPackage caches a *types.Package under the same
+// (importPath, workspaceRoot) key that loadPackageCached uses. It lets other
+// loaders (e.g. LoadGlobalFuncs) seed the cache with packages they have
+// already type-checked so that subsequent hint lookups reuse the exact same
+// *types.Package — and therefore share *types.Named identity for
+// types.Identical / types.Implements checks. First registration wins so
+// callers can register speculatively without racing.
+func RegisterLoadedPackage(
+	importPath, workspaceRoot string,
+	pkg *types.Package,
+	fset *token.FileSet,
+) {
+	if pkg == nil || importPath == "" {
+		return
+	}
+	key := importPath + "\x00" + workspaceRoot
+	typeHintCacheMu.Lock()
+	defer typeHintCacheMu.Unlock()
+	if _, ok := loadedPackages[key]; !ok {
+		loadedPackages[key] = &loadedPackage{pkg: pkg, fset: fset}
+	}
+}
+
 // CachedLoadTypeFromHint is like LoadTypeFromHint but returns the previously
 // computed result when the same (hint, workspaceRoot) pair has been resolved
 // before and the cache has not been invalidated.

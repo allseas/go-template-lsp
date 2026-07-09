@@ -105,10 +105,13 @@ func LoadGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
 	}
 
 	for _, root := range packageRoots {
+		fset := token.NewFileSet()
 		cfg := &packages.Config{
 			Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
-				packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
-			Dir: root,
+				packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports |
+				packages.NeedDeps,
+			Dir:  root,
+			Fset: fset,
 		}
 		pkgs, err := packages.Load(cfg, "./...")
 		if err != nil {
@@ -121,6 +124,18 @@ func LoadGlobalFuncs(workspaceRoot string) (map[string]*types.Func, error) {
 				collectGlobalFuncs(file, pkg.TypesInfo, pkg.Fset, funcDocs, entries)
 			}
 		}
+
+		// Seed the type-hint package cache with every package loaded here
+		// (and every transitive dependency). Hint loads for the same import
+		// path will then reuse this *types.Package, keeping *types.Named
+		// identity consistent between funcmap signatures and hint-resolved
+		// types. Without this, an interface parameter on a workspace-defined
+		// function and a hint-loaded concrete implementation would each own
+		// a distinct *types.Named for the same source-level type, and
+		// types.Implements would spuriously report non-satisfaction.
+		packages.Visit(pkgs, nil, func(p *packages.Package) {
+			RegisterLoadedPackage(p.PkgPath, workspaceRoot, p.Types, p.Fset)
+		})
 	}
 
 	SetGlobalFuncEntries(entries)
