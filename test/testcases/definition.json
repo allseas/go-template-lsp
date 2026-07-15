@@ -77,5 +77,20 @@
     "expected": {
       "noResult": true
     }
+  },
+  {
+    "name": "Template invocation jumps to define block",
+    "content": "{{ template \"My<cursor>Tpl\" . }}\n\n\n{{ define \"MyTpl\" }}hello{{ end }}",
+    "expected": {
+      "minCount": 1
+    }
+  },
+  {
+    "name": "Template invocation with unknown name returns no results",
+    "content": "{{ template \"Miss<cursor>ing\" . }}",
+    "vscodeOnly": true,
+    "expected": {
+      "noResult": true
+    }
   }
 ]
