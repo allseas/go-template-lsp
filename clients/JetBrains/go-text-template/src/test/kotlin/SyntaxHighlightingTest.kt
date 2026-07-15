@@ -119,6 +119,15 @@ class SyntaxHighlightingTest : CustomPlatformTestCase() {
         assertScopeAt("{{- /* a comment */ -}}", 0, "comment.block.gotmpl")
     }
 
+    fun testCommentFollowedByTrailingWhitespaceAndNewlineEnds() {
+        val content = "{{/* a comment */}} \nhello\n{{ .Foo }}\nmore text\n"
+        val actualScope = getScopeAt(content, content.length - 5)
+        assertFalse(
+            "Text after comment+trailing-whitespace+newline should not be comment, got: '$actualScope'",
+            actualScope.contains("comment"),
+        )
+    }
+
     // --- Variables ---
 
     fun testVariableDeclarationIsHighlighted() {

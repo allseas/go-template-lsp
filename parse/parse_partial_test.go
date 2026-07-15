@@ -10,6 +10,9 @@ package parse
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -295,4 +298,52 @@ func compareNodes(a, b Node, path string) string {
 		return fmt.Sprintf("%s: unhandled node type %T", path, a)
 	}
 	return ""
+}
+
+func FuzzPartial(f *testing.F) {
+	for _, test := range robustTreeTests {
+		f.Add(test.input)
+	}
+	for _, seed := range loadResourceSeeds(f, "../test/resources") {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		tr := New("fuzz")
+		tr.Mode = ParsePartial | SkipFuncCheck
+		got, err := tr.Parse(s, "", "", make(map[string]*Tree), nil)
+		if err != nil {
+			t.Fatalf("unexpected error parsing %q: %v", s, err)
+		}
+		if got == nil {
+			t.Fatalf("Parse(%q) returned nil tree", s)
+		}
+		if got.Root == nil {
+			t.Fatalf("Parse(%q) returned tree with nil Root", s)
+		}
+	})
+}
+
+// loadResourceSeeds walks root and returns the contents of every .tmpl file
+// found beneath it, so real-world templates seed the fuzzer's corpus.
+func loadResourceSeeds(tb testing.TB, root string) []string {
+	tb.Helper()
+	var seeds []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || filepath.Ext(path) != ".tmpl" {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		seeds = append(seeds, string(data))
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		tb.Logf("loadResourceSeeds(%q): %v", root, err)
+	}
+	return seeds
 }
