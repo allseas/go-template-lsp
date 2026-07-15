@@ -1337,7 +1337,14 @@ func typesCompatible(want, got types.Type) bool {
 	}
 	want = dictAsMapStringAny(want)
 	got = dictAsMapStringAny(got)
-	return types.Identical(want, got) || types.AssignableTo(got, want)
+	return types.Identical(want, got) || types.AssignableTo(got, want) || implements(got, want)
+}
+
+func implements(got, want types.Type) bool {
+	if iface, ok := want.Underlying().(*types.Interface); ok {
+		return types.Implements(got, iface)
+	}
+	return false
 }
 
 // getNodeType returns the type of a node without modifying it.

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	serverTypes "text-template-server/types"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tliron/glsp"
@@ -664,4 +666,49 @@ func TestCollectDiagnostics_IncorrectWith(t *testing.T) {
 	require.NotEmpty(t, diags)
 	_, ok := findDiagnosticContaining(diags, "cannot use type string in with")
 	require.True(t, ok, "expected type error diagnostic for with, got: %v", diagMessages(diags))
+}
+
+// TestCollectDiagnostics_NamedInterfaceSatisfaction is a regression test for a
+// bug where a funcmap function whose parameter was a named interface (e.g.
+// `iface.HasType` rather than a raw `interface{...}`) rejected any argument,
+// even values whose concrete type satisfied the interface.
+//
+// Two independent code paths load Go packages: LoadGlobalFuncs (for workspace
+// funcmap discovery) and the gotype-hint loader. Historically each path ran
+// its own packages.Load, producing distinct *types.Named for the same
+// source-level interface — types.Implements then returned false because it
+// relies on pointer-equal named types. This test wires up the full pipeline
+// and asserts that no type-mismatch diagnostic is emitted.
+func TestCollectDiagnostics_NamedInterfaceSatisfaction(t *testing.T) {
+	const resourceDir = "../../test/resources/funcmap-iface-tests"
+
+	prevRoot := WorkspaceRoot
+	WorkspaceRoot = resourceDir
+	t.Cleanup(func() { WorkspaceRoot = prevRoot })
+
+	serverTypes.InvalidateTypeHintCache()
+	funcs, err := serverTypes.ComputeGlobalFuncs(resourceDir)
+	require.NoError(t, err)
+	serverTypes.SetGlobalFuncs(funcs)
+	t.Cleanup(func() {
+		serverTypes.SetGlobalFuncs(serverTypes.BuiltinFuncs())
+		serverTypes.InvalidateTypeHintCache()
+	})
+
+	require.Contains(t, funcs, "describe",
+		"workspace funcmap did not expose the describe function")
+
+	src := readTestFile(t, resourceDir+"/named-iface.tmpl")
+	const uri = "file:///named-iface.tmpl"
+	store.Set(uri, src)
+	t.Cleanup(func() { store.Remove(uri) })
+
+	diags := collectDiagnostics(src, uri)
+	_, ok := findDiagnosticContaining(diags, "expected type")
+	assert.False(
+		t,
+		ok,
+		"expected no type-mismatch diagnostic for *SignalInstance argument to iface.HasType parameter, got: %v",
+		diagMessages(diags),
+	)
 }
