@@ -300,7 +300,7 @@ func (d *document) loadedTypeAtTyped(offset types.Pos) *types.Tree {
 }
 
 // nodeRange converts a typed node into an LSP Range using its start position
-// and rendered length. It is the parse-free counterpart of nodeToRange.
+// and rendered length.
 func nodeRange(n types.Node, text string) protocol.Range {
 	start := int(n.Position())
 	length := len(n.String())
@@ -314,7 +314,6 @@ func nodeRange(n types.Node, text string) protocol.Range {
 
 // FindVarDeclarationsTyped returns all variable declaration nodes for a given
 // variable name found anywhere within the typed subtree rooted at root.
-// It is the parse-free counterpart of FindVarDeclarations.
 func FindVarDeclarationsTyped(root types.Node, varName string) []*types.VariableNode {
 	var decls []*types.VariableNode
 
@@ -368,16 +367,10 @@ func (s *documentStore) Get(uri string) (*document, bool) {
 	return d, ok
 }
 
+// Delete removes a document from the store. It is an alias for Remove, kept
+// for callers that prefer the map-style name.
 func (s *documentStore) Delete(uri string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if oldNames, ok := s.uriTemplateNames[uri]; ok {
-		for _, name := range oldNames {
-			delete(s.templateInputTypes, name)
-		}
-		delete(s.uriTemplateNames, uri)
-	}
-	delete(s.docs, uri)
+	s.Remove(uri)
 }
 
 func parseTemplate(uri, text string) (*parse.Tree, map[string]*parse.Tree, error) {
@@ -424,24 +417,28 @@ func (s *documentStore) snapshot() []struct{ URI, Text string } {
 	return out
 }
 
+// setDocument stores text for uri and, when ctx is non-nil, re-publishes
+// diagnostics for it. It centralises the parse-and-publish step shared by the
+// open/change/refresh notification handlers.
+func setDocument(ctx *glsp.Context, uri, text string) {
+	store.Set(uri, text)
+	if ctx != nil {
+		publishDiagnostics(ctx, uri, text)
+	}
+}
+
 // RefreshAllDocuments re-runs the document store pipeline (parse + typed tree)
 // for every open document and re-publishes diagnostics. Use this after the
 // workspace's global function map or other tree-wide inputs have changed.
 func RefreshAllDocuments(ctx *glsp.Context) {
 	for _, d := range store.snapshot() {
-		store.Set(d.URI, d.Text)
-		if ctx != nil {
-			publishDiagnostics(ctx, d.URI, d.Text)
-		}
+		setDocument(ctx, d.URI, d.Text)
 	}
 }
 
 // DidOpen is an LSP notification handler that registers a new document in the store when it is opened.
 func DidOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-	store.Set(params.TextDocument.URI, params.TextDocument.Text)
-	if ctx != nil {
-		publishDiagnostics(ctx, params.TextDocument.URI, params.TextDocument.Text)
-	}
+	setDocument(ctx, params.TextDocument.URI, params.TextDocument.Text)
 	return nil
 }
 
@@ -454,15 +451,9 @@ func DidChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) 
 	for _, change := range params.ContentChanges {
 		switch c := change.(type) {
 		case protocol.TextDocumentContentChangeEventWhole:
-			store.Set(params.TextDocument.URI, c.Text)
-			if ctx != nil {
-				publishDiagnostics(ctx, params.TextDocument.URI, c.Text)
-			}
+			setDocument(ctx, params.TextDocument.URI, c.Text)
 		case protocol.TextDocumentContentChangeEvent:
-			store.Set(params.TextDocument.URI, c.Text)
-			if ctx != nil {
-				publishDiagnostics(ctx, params.TextDocument.URI, c.Text)
-			}
+			setDocument(ctx, params.TextDocument.URI, c.Text)
 		}
 	}
 	return nil
