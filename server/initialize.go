@@ -16,11 +16,11 @@ import (
 var handler protocol.Handler
 
 func uriToPath(uri string) (string, error) {
-	u, err := lspuri.Parse(uri)
+	u, err := lspuri.ParseStrict(uri)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse URI")
 	}
-	return u.Filename(), nil
+	return u.FsPath(), nil
 }
 
 // setupHandlers initializes the handler configuration with the given language server name and version. This is separated from server startup to enable testing.
