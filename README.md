@@ -160,4 +160,4 @@ See [docs/jetbrains/README.md](docs/jetbrains/README.md) for more detail.
 
 ## Third-Party Notices
 
-See [docs/RESOURCES.md](docs/RESOURCES.md) for third-party attributions and licenses.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party attributions and licenses.
