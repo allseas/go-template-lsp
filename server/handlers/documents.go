@@ -475,7 +475,7 @@ func uriDir(uri string) string {
 	if err != nil {
 		return ""
 	}
-	path := u.Filename()
+	path := u.FsPath()
 	if path == "" {
 		return ""
 	}
