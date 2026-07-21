@@ -79,34 +79,44 @@ type Config struct {
 }
 
 var (
-	currentConfig = Config{
+	currentConfig = defaultConfig()
+	configMu      sync.RWMutex
+)
+
+// defaultConfig returns a fresh Config populated with the built-in defaults.
+// Every error type known to the analyser must have a default severity here;
+// an unmapped error type would default to DiagnosticSeverityDisabled (the zero
+// value) and be silently suppressed. See TestDefaultConfig_AllErrorTypesMapped.
+func defaultConfig() Config {
+	return Config{
 		EnableHover:       true,
 		EnableDefinition:  true,
 		EnableDiagnostics: true,
 		Diagnostics: DiagnosticsConfig{
-			types.ErrorTypeInvalidField:       DiagnosticSeverityError,
-			types.ErrorTypeInvalidFunction:    DiagnosticSeverityWarning,
-			types.ErrorTypeInvalidCommand:     DiagnosticSeverityError,
-			types.ErrorTypeInvalidRange:       DiagnosticSeverityError,
-			types.ErrorUndeclaredVariable:     DiagnosticSeverityError,
-			types.ErrorDoubleDeclaredVariable: DiagnosticSeverityWarning,
-			types.ErrorTypeInvalidTemplateArg: DiagnosticSeverityError,
-			types.ErrorArgumentNumberMismatch: DiagnosticSeverityError,
-			types.ErrorUnknownType:            DiagnosticSeverityInformation,
-			types.ErrorSyntaxError:            DiagnosticSeverityError,
-			types.ErrorHintLoadFailure:        DiagnosticSeverityWarning,
-			types.ErrorTypeUnknownRangeType:   DiagnosticSeverityWarning,
-			types.ErrorTypeEmptyDefineName:    DiagnosticSeverityWarning,
-			types.ErrorTypeVariableReassigned: DiagnosticSeverityWarning,
-			types.ErrorTypeMalformedHint:      DiagnosticSeverityError,
-			types.ErrorTypeInvalidDictKey:     DiagnosticSeverityInformation,
-			types.ErrorTypeConflictingHint:    DiagnosticSeverityWarning,
+			types.ErrorTypeInvalidField:             DiagnosticSeverityError,
+			types.ErrorTypeInvalidFunction:          DiagnosticSeverityWarning,
+			types.ErrorTypeInvalidCommand:           DiagnosticSeverityError,
+			types.ErrorTypeInvalidRange:             DiagnosticSeverityError,
+			types.ErrorUndeclaredVariable:           DiagnosticSeverityError,
+			types.ErrorDoubleDeclaredVariable:       DiagnosticSeverityWarning,
+			types.ErrorTypeInvalidTemplateArg:       DiagnosticSeverityError,
+			types.ErrorArgumentNumberMismatch:       DiagnosticSeverityError,
+			types.ErrorUnknownType:                  DiagnosticSeverityInformation,
+			types.ErrorSyntaxError:                  DiagnosticSeverityError,
+			types.ErrorHintLoadFailure:              DiagnosticSeverityWarning,
+			types.ErrorTypeUnknownRangeType:         DiagnosticSeverityWarning,
+			types.ErrorTypeEmptyDefineName:          DiagnosticSeverityWarning,
+			types.ErrorTypeVariableReassigned:       DiagnosticSeverityWarning,
+			types.ErrorTypeMalformedHint:            DiagnosticSeverityError,
+			types.ErrorTypeInvalidDictKey:           DiagnosticSeverityInformation,
+			types.ErrorTypeConflictingHint:          DiagnosticSeverityWarning,
+			types.ErrorTypeMissingTemplateArgField:  DiagnosticSeverityError,
+			types.ErrorTypeTemplateArgFieldMismatch: DiagnosticSeverityError,
 		},
 		EnableAutocompletion: true,
 		PipeChainCompletion:  "step",
 	}
-	configMu sync.RWMutex
-)
+}
 
 // GetConfig safely retrieves the current configuration settings. It uses a read lock to ensure thread-safe access to the global configuration variable.
 func GetConfig() Config {

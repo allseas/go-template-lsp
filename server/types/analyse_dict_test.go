@@ -175,9 +175,9 @@ func TestAnalyseDict_TemplateArg_DictToDict_DifferentShapeFails(t *testing.T) {
 		map[string]types.Type{"child": expectedDict},
 	)
 	require.Len(t, tree.TypeErrors, 1)
-	if tree.TypeErrors[0].typ != ErrorTypeInvalidTemplateArg {
-		t.Fatalf("expected ErrorTypeInvalidTemplateArg (%d), got %d: %s",
-			ErrorTypeInvalidTemplateArg, tree.TypeErrors[0].typ, tree.TypeErrors[0].Err)
+	if tree.TypeErrors[0].typ != ErrorTypeMissingTemplateArgField {
+		t.Fatalf("expected ErrorTypeMissingTemplateArgField (%d), got %d: %s",
+			ErrorTypeMissingTemplateArgField, tree.TypeErrors[0].typ, tree.TypeErrors[0].Err)
 	}
 	if !strings.Contains(tree.TypeErrors[0].Err, "Address") ||
 		!strings.Contains(tree.TypeErrors[0].Err, "Order") {

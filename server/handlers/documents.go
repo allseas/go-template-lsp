@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"path/filepath"
+	"sort"
 	"sync"
 	parse "text-template-parser"
 	"text-template-server/types"
@@ -163,10 +164,10 @@ func (s *documentStore) Set(uri, text string) {
 		delete(s.uriTemplateNames, uri)
 	}
 
-	typedTrees := make(map[string]*types.Tree, len(treeSet))
-	for name, tr := range treeSet {
-		typedTrees[name] = buildTypedTree(tr, loadedTypes[name], s.templateInputTypes)
-	}
+	// Build typed trees. The root tree is analysed first so that input types
+	// inferred from its {{template}} call sites take priority; the remaining
+	// trees follow in a stable order.
+	typedTrees := buildTypedTrees(treeSet, tree, loadedTypes, s.templateInputTypes)
 	var typed *types.Tree
 	if tree != nil {
 		typed = typedTrees[tree.Name]
@@ -187,6 +188,44 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 	s.docs[uri] = doc
+}
+
+// buildTypedTrees analyses every parse tree in treeSet, returning the typed
+// trees keyed by name. The root tree is analysed first so that input types
+// inferred from its {{template}} call sites take priority; the remaining trees
+// follow in a stable, sorted order. baseInputTypes is copied locally so that
+// types inferred from call sites (as opposed to explicit gotype hints) don't
+// leak across documents or accumulate in the persistent registry.
+func buildTypedTrees(
+	treeSet map[string]*parse.Tree,
+	root *parse.Tree,
+	loadedTypes map[string]*types.Tree,
+	baseInputTypes map[string]gotypes.Type,
+) map[string]*types.Tree {
+	localInputTypes := make(map[string]gotypes.Type, len(baseInputTypes))
+	for name, typ := range baseInputTypes {
+		localInputTypes[name] = typ
+	}
+
+	order := make([]string, 0, len(treeSet))
+	for name := range treeSet {
+		if root != nil && name == root.Name {
+			continue
+		}
+		order = append(order, name)
+	}
+	sort.Strings(order)
+	if root != nil {
+		if _, ok := treeSet[root.Name]; ok {
+			order = append([]string{root.Name}, order...)
+		}
+	}
+
+	typedTrees := make(map[string]*types.Tree, len(treeSet))
+	for _, name := range order {
+		typedTrees[name] = buildTypedTree(treeSet[name], loadedTypes[name], localInputTypes)
+	}
+	return typedTrees
 }
 
 // buildTypedTree returns the analysed (typed) tree if the parse tree exists.
@@ -211,6 +250,11 @@ func buildTypedTree(
 			dotType = lt.DotType
 		}
 		pkg = lt.Pkg
+	} else if inferred, ok := templateInputTypes[tree.Name]; ok && inferred != nil {
+		// No explicit gotype hint for this block, but its input type was
+		// inferred from a {{template}} call site; use it as the dot type so
+		// the block is analysed against a concrete type.
+		dotType = inferred
 	}
 	t := types.NewTree(*tree, types.GlobalFuncs(), dotType, pkg, templateInputTypes)
 	if lt != nil {
@@ -218,6 +262,15 @@ func buildTypedTree(
 		t.DictType = lt.DictType
 		t.Pkg = lt.Pkg
 		t.Fset = lt.Fset
+	} else {
+		switch dt := dotType.(type) {
+		case nil:
+			// no dot type to record
+		case *types.DictType:
+			t.DictType = dt
+		default:
+			t.DotType = dt
+		}
 	}
 	return &t
 }

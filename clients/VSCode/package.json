@@ -121,7 +121,9 @@
                         "variableReassigned": "warning",
                         "malformedHint": "error",
                         "invalidDictKey": "information",
-                        "conflictingHint": "warning"
+                        "conflictingHint": "warning",
+                        "missingTemplateArgField": "error",
+                        "templateArgFieldMismatch": "error"
                     },
                     "additionalProperties": {
                         "type": "string",

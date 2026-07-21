@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"text-template-server/types"
 
 	"github.com/rs/zerolog"
 	"github.com/tliron/glsp"
@@ -12,6 +13,26 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+// TestDefaultConfig_AllErrorTypesMapped guards against an analyser error type
+// being added without a matching default severity. An unmapped error type would
+// resolve to DiagnosticSeverityDisabled (the zero value) and be silently
+// suppressed. Error types are enumerated via MarshalText, which fails once the
+// contiguous ErrorType iota range is exhausted.
+func TestDefaultConfig_AllErrorTypesMapped(t *testing.T) {
+	def := defaultConfig()
+	for i := 0; ; i++ {
+		et := types.ErrorType(i)
+		name, err := et.MarshalText()
+		if err != nil {
+			break
+		}
+		_, ok := def.Diagnostics[et]
+		assert.Truef(t, ok,
+			"error type %q has no default severity and would be silently disabled",
+			string(name))
+	}
+}
 
 func TestApplyTraceLevel(t *testing.T) {
 	t.Run("TraceValueOff sets log level to Info", func(t *testing.T) {

@@ -68,6 +68,10 @@ const (
 	ErrorTypeInvalidDictKey
 	// ErrorTypeConflictingHint A gotype hint comment conflicts with the first hint in the same tree
 	ErrorTypeConflictingHint
+	// ErrorTypeMissingTemplateArgField A dict argument to a template is missing a key the template's expected dict type requires
+	ErrorTypeMissingTemplateArgField
+	// ErrorTypeTemplateArgFieldMismatch A dict argument to a template has a key whose value type is incompatible with the expected dict type
+	ErrorTypeTemplateArgFieldMismatch
 	// Add more error types as needed
 )
 
@@ -89,6 +93,9 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeMalformedHint:      "malformedHint",
 	ErrorTypeInvalidDictKey:     "invalidDictKey",
 	ErrorTypeConflictingHint:    "conflictingHint",
+
+	ErrorTypeMissingTemplateArgField:  "missingTemplateArgField",
+	ErrorTypeTemplateArgFieldMismatch: "templateArgFieldMismatch",
 }
 
 // MarshalText implements encoding.TextMarshaler so ErrorType is serialized as a string (e.g. in JSON map keys).
@@ -250,27 +257,61 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 	}
 	t.Pipe = analysePipe(n.Pipe, t, ctx)
 
-	// Type-check the argument against the template's declared input type (if known).
+	// Infer and/or type-heck the argument against the template's declared
+	// input type.c
 	if t.Pipe != nil && ctx.templateInputTypes != nil {
-		if expectedType, ok := ctx.templateInputTypes[n.Name]; ok && expectedType != nil {
-			argType := t.Pipe.ValueType()
+		argType := t.Pipe.ValueType()
+		expectedType, ok := ctx.templateInputTypes[n.Name]
+		if (!ok || expectedType == nil) && argType != nil && !IsEmptyInterface(argType) {
+			// The target template has no gotype hint. Infer its input type from
+			// this call site's pipeline result so the define block can be
+			// analysed against a concrete dot type and later calls checked.
+			ctx.templateInputTypes[n.Name] = argType
+			expectedType, ok = argType, true
+		}
+		if ok && expectedType != nil {
 			_, expectedIsDict := expectedType.(*DictType)
 			_, argIsDict := argType.(*DictType)
 			switch {
 			case expectedIsDict && argIsDict:
-				// Both sides are dicts: compare by String() (DictType.String
-				// is stable and captures keys + per-key value types). This is
-				// the only case where dict shape is checked exactly.
-				if !IsEmptyInterface(argType) &&
-					argType.String() != expectedType.String() {
-					ctx.errorf(
-						t,
-						ErrorTypeInvalidTemplateArg,
-						"template %q expects argument of type %s, but got %s",
-						n.Name,
-						expectedType.String(),
-						argType.String(),
-					)
+				// Both sides are dicts: check each expected key is present in
+				// the argument and that its value type is compatible using the
+				// same pointer-tolerant semantics as ordinary parameter checks.
+				if !IsEmptyInterface(argType) {
+					expectedDict := expectedType.(*DictType)
+					argDict := argType.(*DictType)
+					for _, key := range expectedDict.DictKeys() {
+						wantF, _ := expectedDict.LookupDictKey(key)
+						gotF, has := argDict.LookupDictKey(key)
+						if !has {
+							ctx.errorf(
+								t,
+								ErrorTypeMissingTemplateArgField,
+								"template %q expects argument of type %s, but got %s: missing key %q",
+								n.Name,
+								expectedType.String(),
+								argType.String(),
+								key,
+							)
+							continue
+						}
+						effWant := dictAsMapStringAny(wantF)
+						effGot := dictAsMapStringAny(gotF)
+						if IsEmptyInterface(effWant) || IsEmptyInterface(effGot) {
+							continue
+						}
+						if !templateArgAssignable(effGot, effWant) {
+							ctx.errorf(
+								t,
+								ErrorTypeTemplateArgFieldMismatch,
+								"template %q argument key %q expects type %s, but got %s",
+								n.Name,
+								key,
+								wantF.String(),
+								gotF.String(),
+							)
+						}
+					}
 				}
 			default:
 				// If exactly one side is a dict, project it to map[string]any
@@ -352,6 +393,18 @@ func pointerElemMatches(arg, expected types.Type) bool {
 	return types.Identical(elem, expected) ||
 		types.AssignableTo(elem, expected) ||
 		elem.String() == expected.String()
+}
+
+// templateArgAssignable reports whether an argument of type arg may be passed
+// where a template parameter of type want is expected, using the same tolerance
+// as ordinary parameter checks: identical, assignable, convertible, or a
+// pointer whose element matches (text/template auto-dereferences pointers).
+func templateArgAssignable(arg, want types.Type) bool {
+	return arg == want ||
+		types.Identical(arg, want) ||
+		types.AssignableTo(arg, want) ||
+		types.ConvertibleTo(arg, want) ||
+		pointerElemMatches(arg, want)
 }
 
 func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
