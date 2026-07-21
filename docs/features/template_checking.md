@@ -10,6 +10,8 @@ When a template is called with an argument whose type doesn't match the template
 | --------------------------------- | ------------------------------- | ------------------------------------------------------------------------------- |
 | `{{- /*gotype: models.User*/ -}}` | `{{template "UserTpl" .Order}}` | `template "UserTpl" expects argument of type models.User, but got models.Order` |
 | `{{- /*gotype: string*/ -}}`      | `{{template "NameTpl" .User}}`  | `template "NameTpl" expects argument of type string, but got models.User`       |
+| `{{- /*gotype: map{"user": models.User}*/ -}}` | `{{template "T" (dict "other" .User)}}` | `template "T" ... missing key "user"` (`missingTemplateArgField`) |
+| `{{- /*gotype: map{"user": models.User}*/ -}}` | `{{template "T" (dict "user" .Order)}}` | `template "T" argument key "user" expects type models.User, but got models.Order` (`templateArgFieldMismatch`) |
 
 ## How it works
 
@@ -32,7 +34,7 @@ flowchart TD
     B --> C["For each template call - resolve argument type"]
     C --> D{types match?}
     D -->|yes| E[no error]
-    D -->|no| F[ErrorTypeInvalidTemplateArg]
+    D -->|no| F["template-arg diagnostic (invalidTemplateArg / missingTemplateArgField / templateArgFieldMismatch)"]
 ```
 
 ### 3. Error Reporting
@@ -43,7 +45,7 @@ Mismatches are stored as `TypeErrors` in the typed tree and surfaced to the user
 flowchart TD
     A["collectDiagnostics(uri)"] --> B[AST errors - syntax / variables]
     A --> C["TypeErrors from each typed tree"]
-    C --> D[filter ErrorTypeInvalidTemplateArg -> protocol.Diagnostic]
+    C --> D["each non-disabled TypeError -> protocol.Diagnostic"]
     B & D --> E[publishDiagnostics]
 ```
 
@@ -158,32 +160,34 @@ Template names are **global** within the registry. If File A calls `{{template "
 
 ## Type Comparison
 
-Type matching uses **string equality** on the type's `String()` representation:
+Comparison depends on the shape of the expected and argument types.
 
-```go
-if argType.String() != expectedType.String() {
-    // -> error
-}
-```
-
-This means:
+**Non-dict types** are matched with pointer-tolerant compatibility (`typesCompatible`). A dict on either side is first projected to `map[string]any`:
 
 - `*models.User` and `*models.User` -> match
-- `models.User` and `*models.User` -> mismatch (different pointer levels)
-- `text-template-server/src/models.User` and `text-template-server/src/models.User` -> match (full qualified path)
+- `models.User` where `*models.User` is expected -> match (text/template auto-dereferences pointers)
+- `models.User` where `string` is expected -> mismatch
+
+**Dict-to-dict** (both the expected input hint and the argument are `map{...}` shapes) is checked **field by field** rather than by exact shape:
+
+- For every key the expected dict declares, the argument must contain that key, otherwise a `missingTemplateArgField` diagnostic is raised.
+- When the key is present, its value type must be compatible using the same pointer-tolerant rules (`templateArgAssignable`: identical, assignable, convertible, or pointer-to-element), otherwise a `templateArgFieldMismatch` diagnostic is raised.
+- Extra keys in the argument that the expected dict does not declare are **not** flagged — a dict only pins down its known keys (see [type_hints.md](type_hints.md)).
 
 ## Missing Type Hints
 
-If a template has **no type hint**, the language server cannot perform type checking for calls to that template:
+If a called template has **no type hint**, its expected input type is instead **inferred from the first call site** whose argument type is known (and not the empty interface). The inferred type is recorded in `templateInputTypes` so that the define block is analysed against a concrete dot type and later calls are checked against it:
 
 ```gotmpl
 {{define "NoHintTpl"}}
-{{ . }}
+{{ .Name }}
 {{end}}
 
-<!-- No type checking performed -->
+<!-- Infers NoHintTpl's input as the type of . at this call site -->
 {{ template "NoHintTpl" . }}
 ```
+
+Inference augments a per-document copy of the registry rather than the persistent global map, so a type inferred from a call site does not leak across documents. When no call site provides a usable type, no checking is performed.
 
 ## Implementation Details
 
@@ -194,8 +198,8 @@ If a template has **no type hint**, the language server cannot perform type chec
   - `buildTypedTree()`: Passes `templateInputTypes` to type analysis
 
 - **analyse.go** (types package): Validates template calls
-  - `analyseTemplate()`: Checks argument type against expected type
-  - Records `ErrorTypeInvalidTemplateArg` on mismatch
+  - `analyseTemplate()`: Infers the target's input type from the call site when it has no hint, then checks the argument type against the expected type
+  - Records `ErrorTypeInvalidTemplateArg` (whole-argument mismatch) or, for dict-to-dict arguments, `ErrorTypeMissingTemplateArgField` / `ErrorTypeTemplateArgFieldMismatch` per key
 
 - **diagnostics.go**: Surfaces errors to user
   - `collectTemplateArgTypeDiagnostics()`: Converts type errors to diagnostics
