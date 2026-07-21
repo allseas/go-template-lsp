@@ -102,11 +102,30 @@ and exposed via `FieldNode.IdentIsMethod(i int) bool`, allowing downstream
 consumers (e.g. semantic-token highlighting) to distinguish `.Address`
 (property) from `.DisplayName` (function call).
 
+Both chain walkers also handle two non-struct bases:
+
+- **`*DictType`** (a map-shaped `gotype` hint): a path step is resolved via
+  `LookupDictKey`. A key the dict does not declare emits an
+  `ErrorTypeInvalidDictKey` (default **info**) and resolves to `any`, because a
+  dict only pins down its *known* keys — unknown keys may still be populated
+  downstream and pass through without cascading further errors.
+- **Go maps** (`map[K]V`): text/template's `.Key` field syntax resolves to the
+  map's value type `V` when the key type admits a string; a non-string key type
+  emits `ErrorTypeInvalidDictKey`.
+
 ### Pipelines and commands
 
 - `analyseCommand` types a command from its head argument. If the head is a
   function, and is not the first command in a pipeline, the output of the previous command is appended to the argument list.
   The arguments are checked for matching the signature and the type is set to the output of the functions. There are special cases for iter functions, as they can be directly ranged over, with the arg provided by the template engine. The second special case is for the builtin call function, which calls its first argument, so the type checking is shifted by one.
+- The `index` builtin is typed by walking the collection's element type once per
+  index argument (`index coll i j` → element of the element), validating each
+  index against the collection's key/index type and reporting
+  `ErrorTypeInvalidCommand` for a non-indexable collection or an index of the
+  wrong type.
+- The `dict` builtin is typed to a `*DictType` built from its alternating
+  `"key" value` arguments, so field access on the result resolves per key. Keys
+  must be string literals and the argument count must be even.
 - `analysePipe` types a pipe as the type of its last command.
 - Declarations on a pipe (`{{ $x := … }}`) bind `$x` to the pipe's type and
   push it onto `ctx.vars`. Redeclaration in the same scope produces an
