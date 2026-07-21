@@ -33,7 +33,6 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `invalidFunction`      | `"warning"`   | Unknown or incorrectly called function                    |
 | `invalidCommand`       | `"error"`     | Command type mismatch                                     |
 | `invalidRange`         | `"error"`     | Range over a non-rangeable type                           |
-| `invalidWith`          | `"error"`     | With dot is not a struct/interface                        |
 | `undeclaredVariable`   | `"error"`     | Variable used without declaration                         |
 | `doubleDeclaredVariable` | `"warning"` | Variable declared more than once in the same scope        |
 | `invalidTemplateArg`   | `"error"`     | Template called with an argument of the wrong type        |
@@ -71,7 +70,6 @@ You can create a `gotmpl.config.json` file in your project root to configure the
     "invalidFunction": "warning",
     "invalidCommand": "error",
     "invalidRange": "error",
-    "invalidWith": "error",
     "undeclaredVariable": "error",
     "doubleDeclaredVariable": "warning",
     "invalidTemplateArg": "error",

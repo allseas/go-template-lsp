@@ -42,8 +42,6 @@ const (
 	ErrorTypeInvalidCommand
 	// ErrorTypeInvalidRange Range over non-rangeable type
 	ErrorTypeInvalidRange
-	// ErrorTypeInvalidWith With dot is not a struct/interface
-	ErrorTypeInvalidWith
 	// ErrorUndeclaredVariable Variable used without declaration
 	ErrorUndeclaredVariable
 	// ErrorDoubleDeclaredVariable Variable declared more than once in the same scope
@@ -78,7 +76,6 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeInvalidFunction:    "invalidFunction",
 	ErrorTypeInvalidCommand:     "invalidCommand",
 	ErrorTypeInvalidRange:       "invalidRange",
-	ErrorTypeInvalidWith:        "invalidWith",
 	ErrorUndeclaredVariable:     "undeclaredVariable",
 	ErrorDoubleDeclaredVariable: "doubleDeclaredVariable",
 	ErrorTypeInvalidTemplateArg: "invalidTemplateArg",
@@ -342,19 +339,6 @@ func dictAsMapStringAny(t types.Type) types.Type {
 	return t
 }
 
-// unalias resolves alias types and dereferences pointers recursively, returning
-// the underlying named/struct/etc. type. nil in -> nil out.
-func unalias(t types.Type) types.Type {
-	for {
-		t = types.Unalias(t)
-		p, ok := t.(*types.Pointer)
-		if !ok {
-			return t
-		}
-		t = p.Elem()
-	}
-}
-
 // pointerElemMatches reports whether arg is *T where T matches expected.
 // Go's text/template auto-dereferences pointer values, so a *T argument is
 // acceptable wherever a T parameter is declared. The reverse (T where *T is
@@ -382,18 +366,6 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	keepDot := ctx.dotType
 	keepVars := len(ctx.vars)
 	w.Pipe = analysePipe(n.Pipe, w, ctx)
-	if w.Pipe.typ != nil && !IsEmptyInterface(w.Pipe.typ) {
-		if _, isDict := w.Pipe.typ.(*DictType); !isDict {
-			if _, ok := unalias(w.Pipe.typ).Underlying().(*types.Struct); !ok {
-				ctx.errorf(
-					w.Pipe,
-					ErrorTypeInvalidWith,
-					"cannot use type %v in with statement; expected struct type",
-					w.Pipe.typ,
-				)
-			}
-		}
-	}
 	ctx.dotType = w.Pipe.typ
 	if ctx.dotType == nil {
 		ctx.dotType = AnyType()

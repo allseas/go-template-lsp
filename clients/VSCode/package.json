@@ -109,7 +109,6 @@
                         "invalidFunction": "warning",
                         "invalidCommand": "error",
                         "invalidRange": "error",
-                        "invalidWith": "error",
                         "undeclaredVariable": "error",
                         "doubleDeclaredVariable": "warning",
                         "invalidTemplateArg": "error",
