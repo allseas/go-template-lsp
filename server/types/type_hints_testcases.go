@@ -203,13 +203,14 @@ var splitTypeHintTestCases = []splitTypeHintTestCase{
 // LoadTypeFromHint test cases
 
 type loadTypeHintTestCase struct {
-	name         string
-	hint         string
-	root         string
-	wantErr      bool
-	wantTypeName string
-	wantFields   []string
-	wantMethods  []string
+	name           string
+	hint           string
+	root           string
+	wantErr        bool
+	wantTypeName   string
+	wantTypeString string
+	wantFields     []string
+	wantMethods    []string
 }
 
 var loadTypeHintTestCases = []loadTypeHintTestCase{
@@ -228,6 +229,32 @@ var loadTypeHintTestCases = []loadTypeHintTestCase{
 			"Paid",
 		},
 		wantMethods: []string{"DisplayName", "Summary", "ItemCount", "IsLargeOrder", "Format"},
+	},
+	{
+		name:           "loads pointer to Order, unwrapping fields and methods",
+		hint:           "*text-template-server/src/model.Order",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeName:   "Order",
+		wantTypeString: "*text-template-server/src/model.Order",
+		wantFields:     []string{"ID", "Address", "Items"},
+		wantMethods:    []string{"DisplayName", "ItemCount"},
+	},
+	{
+		name:           "loads builtin int",
+		hint:           "int",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "int",
+	},
+	{
+		name:           "loads pointer to builtin string",
+		hint:           "*string",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "*string",
+	},
+	{
+		name: "loads alias to a builtin (non-named type)",
+		hint: "text-template-server/src/model.Fahrenheit",
+		root: "../../test/resources/typehints-tests",
 	},
 	{
 		name:    "returns error for invalid import path",

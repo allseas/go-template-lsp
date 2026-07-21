@@ -75,7 +75,14 @@ type Order struct {
 	Items        []Item
 	TotalAmount  float64
 	Paid         bool
+	Meta         map[string]string
+	Counts       map[int]string
 }
+
+// Fahrenheit is an alias to a predeclared type. It exercises gotype hints that
+// resolve to a non-named type (the loader must accept any *types.TypeName, not
+// only *types.Named).
+type Fahrenheit = float64
 
 // Tree is a tree
 type Tree struct {

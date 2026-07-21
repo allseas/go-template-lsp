@@ -74,7 +74,13 @@ func TestLoadTypeFromHint(t *testing.T) {
 			require.NotNil(t, lt)
 
 			if tc.wantTypeName != "" {
-				assert.Equal(t, tc.wantTypeName, lt.DotType.Obj().Name())
+				named := namedTypeOf(lt.DotType)
+				require.NotNil(t, named, "expected a named (or pointer-to-named) dot type")
+				assert.Equal(t, tc.wantTypeName, named.Obj().Name())
+			}
+
+			if tc.wantTypeString != "" {
+				assert.Equal(t, tc.wantTypeString, types.TypeString(lt.DotType, nil))
 			}
 
 			fields := StructFields(lt.DotType)
