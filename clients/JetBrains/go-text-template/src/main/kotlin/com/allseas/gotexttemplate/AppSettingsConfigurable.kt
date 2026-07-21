@@ -50,6 +50,8 @@ class AppSettingsConfigurable : BoundConfigurable("Go Text Template Support") {
                         "malformedHint" to "Malformed gotype hint",
                         "invalidDictKey" to "Invalid map key access",
                         "conflictingHint" to "Conflicting gotype hint",
+                        "missingTemplateArgField" to "Missing template argument field",
+                        "templateArgFieldMismatch" to "Template argument field type mismatch",
                     )
                 for ((key, label) in diagnosticEntries) {
                     val k = key
