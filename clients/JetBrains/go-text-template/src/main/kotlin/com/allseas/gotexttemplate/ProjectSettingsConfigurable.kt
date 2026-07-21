@@ -45,7 +45,6 @@ class ProjectSettingsConfigurable(
                         "invalidFunction" to "Invalid function call",
                         "invalidCommand" to "Invalid command",
                         "invalidRange" to "Invalid range",
-                        "invalidWith" to "Invalid with expression",
                         "undeclaredVariable" to "Undeclared variable",
                         "doubleDeclaredVariable" to "Duplicate variable declaration",
                         "invalidTemplateArg" to "Invalid template argument",
