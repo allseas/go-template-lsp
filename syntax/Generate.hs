@@ -132,6 +132,55 @@ syntax = TmSyntax
   []
   [TmInclude "comment", TmInclude "action"]
   allEntries
+  []
+
+-- Host languages embedded inside TextNode based on the compound file extension.
+-- Each entry: (extension key, host scope name).
+-- A file named foo.<key>.tmpl gets highlighting for that host language between
+-- go-template actions/comments.
+hostLanguages :: [(String, String)]
+hostLanguages =
+  [ ("sql",  "source.sql")
+  , ("html", "text.html.basic")
+  , ("json", "source.json")
+  , ("yaml", "source.yaml")
+  , ("css",  "source.css")
+  , ("js",   "source.js")
+  , ("xml",  "text.xml")
+  , ("md",   "text.html.markdown")
+  , ("sh",   "source.shell")
+  , ("scl",  "source.scl")
+  , ("cpp", "source.cpp")
+  ]
+
+-- Derived grammar for a host language. Falls through to the host language
+-- grammar as the base tokenisation, and uses an in-grammar 'injections' rule
+-- to contribute go-template action/comment patterns at every nesting level of
+-- the host grammar (including inside its begin/end regions and strings) --
+-- not only at the top level. The in-grammar 'injections' form (as opposed to
+-- a separate injection grammar with 'injectionSelector') works in both VS
+-- Code (vscode-textmate) and JetBrains (only the in-grammar form is
+-- recognised by the JetBrains TextMate parser -- it reads only the
+-- 'injections' key, not top-level 'injectionSelector').
+--
+-- The selector excludes meta.embedded.gotmpl (already inside an action) and
+-- comment.block.gotmpl (already inside a template comment) to avoid recursing
+-- into ourselves. The 'L:' prefix gives the injection higher priority than
+-- the host grammar's patterns.
+derivedSyntax :: (String, String) -> TmSyntax
+derivedSyntax (key, hostScope) = TmSyntax
+  ("source.gotmpl." ++ key)
+  [key ++ ".tmpl", key ++ ".gotmpl"]
+  []
+  [ TmIncludeScope hostScope ]
+  []
+  [ ( "L:source.gotmpl." ++ key
+        ++ " - meta.embedded.gotmpl - comment.block.gotmpl"
+    , [ TmIncludeScope "source.gotmpl#comment"
+      , TmIncludeScope "source.gotmpl#action"
+      ]
+    )
+  ]
 
 -- ==========================================================================
 -- Main
@@ -140,6 +189,12 @@ syntax = TmSyntax
 main :: IO ()
 main = do
   createDirectoryIfMissing True "syntaxes"
-  let path   = "syntaxes/gotemplate.tmLanguage.json"
-  LBS.writeFile path (syntaxToJson syntax)
-  putStrLn $ "Generated: " ++ path
+  let basePath = "syntaxes/gotemplate.tmLanguage.json"
+  LBS.writeFile basePath (syntaxToJson syntax)
+  putStrLn $ "Generated: " ++ basePath
+  mapM_ writeDerived hostLanguages
+  where
+    writeDerived entry@(key, _) = do
+      let path = "syntaxes/gotemplate-" ++ key ++ ".tmLanguage.json"
+      LBS.writeFile path (syntaxToJson (derivedSyntax entry))
+      putStrLn $ "Generated: " ++ path

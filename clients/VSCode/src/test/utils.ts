@@ -27,10 +27,10 @@ export async function cleanupDocument(fileUri: Uri) {
 }
 // Oniguruma is required by vscode-textmate to execute TextMate grammar rules; VSCode uses the same regex engine internally.
 let _grammar: vsctm.IGrammar | null = null;
+let _wasmLoaded = false;
 
-export async function getGrammar(): Promise<vsctm.IGrammar> {
-    if (_grammar) return _grammar;
-
+async function ensureOniguruma() {
+    if (_wasmLoaded) return;
     const wasmBin = fs.readFileSync(
         path.join(
             __dirname,
@@ -38,7 +38,30 @@ export async function getGrammar(): Promise<vsctm.IGrammar> {
         ),
     );
     await oniguruma.loadWASM(wasmBin.buffer as ArrayBuffer);
+    _wasmLoaded = true;
+}
 
+function localGrammarPath(fileName: string): string {
+    return path.join(__dirname, "../../syntaxes/" + fileName);
+}
+
+// stubGrammar creates a minimal grammar whose only rule tags every character
+// with a marker scope. It lets us verify that an outer grammar's
+// `include: source.X` reference correctly hands off tokenization to `source.X`
+// without needing VSCode's built-in language grammars to be loaded.
+function stubGrammar(scopeName: string): vsctm.IRawGrammar {
+    return vsctm.parseRawGrammar(
+        JSON.stringify({
+            scopeName,
+            patterns: [{ match: ".", name: `${scopeName}.stub.marker` }],
+        }),
+        `${scopeName}.stub.json`,
+    );
+}
+
+export async function getGrammar(): Promise<vsctm.IGrammar> {
+    if (_grammar) return _grammar;
+    await ensureOniguruma();
     const registry = new vsctm.Registry({
         onigLib: Promise.resolve({
             createOnigScanner: (patterns: string[]) =>
@@ -47,20 +70,61 @@ export async function getGrammar(): Promise<vsctm.IGrammar> {
         }),
         loadGrammar: async (scopeName: string) => {
             if (scopeName === "source.gotmpl") {
-                const grammarPath = path.join(
-                    __dirname,
-                    "../../syntaxes/gotmpl.tmLanguage.json",
+                const grammarPath = localGrammarPath("gotmpl.tmLanguage.json");
+                return vsctm.parseRawGrammar(
+                    fs.readFileSync(grammarPath, "utf-8"),
+                    grammarPath,
                 );
-                const content = fs.readFileSync(grammarPath, "utf-8");
-                return vsctm.parseRawGrammar(content, grammarPath);
+            }
+            return null;
+        },
+    });
+    const grammar = await registry.loadGrammar("source.gotmpl");
+    if (!grammar) throw new Error("Failed to load gotmpl grammar");
+    _grammar = grammar;
+    return grammar;
+}
+
+// getEmbeddedGrammar loads a gotmpl-<lang> grammar (e.g. "gotmpl-cpp") together
+// with the base gotmpl grammar and a stub for the embedded language scope
+// (e.g. "source.cpp"). Returns a tokenizer for the wrapper grammar.
+export async function getEmbeddedGrammar(
+    variant: string,
+    embeddedScope: string,
+): Promise<vsctm.IGrammar> {
+    await ensureOniguruma();
+    const wrapperScope = `source.gotmpl.${variant}`;
+    const wrapperPath = localGrammarPath(`gotmpl-${variant}.tmLanguage.json`);
+    const gotmplPath = localGrammarPath("gotmpl.tmLanguage.json");
+
+    const registry = new vsctm.Registry({
+        onigLib: Promise.resolve({
+            createOnigScanner: (patterns: string[]) =>
+                new oniguruma.OnigScanner(patterns),
+            createOnigString: (s: string) => new oniguruma.OnigString(s),
+        }),
+        loadGrammar: async (scopeName: string) => {
+            if (scopeName === wrapperScope) {
+                return vsctm.parseRawGrammar(
+                    fs.readFileSync(wrapperPath, "utf-8"),
+                    wrapperPath,
+                );
+            }
+            if (scopeName === "source.gotmpl") {
+                return vsctm.parseRawGrammar(
+                    fs.readFileSync(gotmplPath, "utf-8"),
+                    gotmplPath,
+                );
+            }
+            if (scopeName === embeddedScope) {
+                return stubGrammar(embeddedScope);
             }
             return null;
         },
     });
 
-    const grammar = await registry.loadGrammar("source.gotmpl");
-    if (!grammar) throw new Error("Failed to load gotmpl grammar");
-    _grammar = grammar;
+    const grammar = await registry.loadGrammar(wrapperScope);
+    if (!grammar) throw new Error(`Failed to load ${wrapperScope} grammar`);
     return grammar;
 }
 

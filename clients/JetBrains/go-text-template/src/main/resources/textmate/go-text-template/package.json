@@ -21,14 +21,36 @@
           ".tmpl"
         ],
         "configuration": "./language-configuration.json"
-      }
+      },
+      { "id": "gotmpl-sql",  "aliases": ["Go text/template (SQL)"],        "extensions": [".sql.tmpl",  ".sql.gotmpl"],  "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-html", "aliases": ["Go text/template (HTML)"],       "extensions": [".html.tmpl", ".html.gotmpl"], "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-json", "aliases": ["Go text/template (JSON)"],       "extensions": [".json.tmpl", ".json.gotmpl"], "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-yaml", "aliases": ["Go text/template (YAML)"],       "extensions": [".yaml.tmpl", ".yaml.gotmpl", ".yml.tmpl", ".yml.gotmpl"], "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-css",  "aliases": ["Go text/template (CSS)"],        "extensions": [".css.tmpl",  ".css.gotmpl"],  "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-js",   "aliases": ["Go text/template (JavaScript)"], "extensions": [".js.tmpl",   ".js.gotmpl"],   "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-xml",  "aliases": ["Go text/template (XML)"],        "extensions": [".xml.tmpl",  ".xml.gotmpl"],  "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-md",   "aliases": ["Go text/template (Markdown)"],   "extensions": [".md.tmpl",   ".md.gotmpl"],   "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-sh",   "aliases": ["Go text/template (Shell)"],      "extensions": [".sh.tmpl",   ".sh.gotmpl"],   "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-scl",  "aliases": ["Go text/template (SCL)"],        "extensions": [".scl.tmpl",  ".scl.gotmpl"],  "configuration": "./language-configuration.json" },
+      { "id": "gotmpl-cpp",  "aliases": ["Go text/template (C++)"],        "extensions": [".cpp.tmpl",  ".cpp.gotmpl"],  "configuration": "./language-configuration.json" }
     ],
     "grammars": [
       {
         "language": "gotmpl",
         "scopeName": "source.gotmpl",
         "path": "./Syntaxes/gotmpl.tmLanguage.json"
-      }
+      },
+      { "language": "gotmpl-sql",  "scopeName": "source.gotmpl.sql",  "path": "./Syntaxes/gotmpl-sql.tmLanguage.json"  },
+      { "language": "gotmpl-html", "scopeName": "source.gotmpl.html", "path": "./Syntaxes/gotmpl-html.tmLanguage.json" },
+      { "language": "gotmpl-json", "scopeName": "source.gotmpl.json", "path": "./Syntaxes/gotmpl-json.tmLanguage.json" },
+      { "language": "gotmpl-yaml", "scopeName": "source.gotmpl.yaml", "path": "./Syntaxes/gotmpl-yaml.tmLanguage.json" },
+      { "language": "gotmpl-css",  "scopeName": "source.gotmpl.css",  "path": "./Syntaxes/gotmpl-css.tmLanguage.json"  },
+      { "language": "gotmpl-js",   "scopeName": "source.gotmpl.js",   "path": "./Syntaxes/gotmpl-js.tmLanguage.json"   },
+      { "language": "gotmpl-xml",  "scopeName": "source.gotmpl.xml",  "path": "./Syntaxes/gotmpl-xml.tmLanguage.json"  },
+      { "language": "gotmpl-md",   "scopeName": "source.gotmpl.md",   "path": "./Syntaxes/gotmpl-md.tmLanguage.json"   },
+      { "language": "gotmpl-sh",   "scopeName": "source.gotmpl.sh",   "path": "./Syntaxes/gotmpl-sh.tmLanguage.json"   },
+      { "language": "gotmpl-scl",  "scopeName": "source.gotmpl.scl",  "path": "./Syntaxes/gotmpl-scl.tmLanguage.json"  },
+      { "language": "gotmpl-cpp",  "scopeName": "source.gotmpl.cpp",  "path": "./Syntaxes/gotmpl-cpp.tmLanguage.json"  }
     ]
   }
 }

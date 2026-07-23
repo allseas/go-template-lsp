@@ -10,10 +10,11 @@ class SyntaxHighlightingTest : CustomPlatformTestCase() {
      * Uses the editor highlighter which produces TextMateElementType tokens for .tmpl files.
      */
     private fun getScopeAt(
+        filename: String,
         content: String,
         offset: Int,
     ): String {
-        myFixture.configureByText("test.tmpl", content)
+        myFixture.configureByText(filename, content)
         val editor = myFixture.editor
         val highlighter = editor.highlighter
         val iterator = highlighter.createIterator(offset)
@@ -23,6 +24,11 @@ class SyntaxHighlightingTest : CustomPlatformTestCase() {
         }
         return tokenType.toString()
     }
+
+    private fun getScopeAt(
+        content: String,
+        offset: Int,
+    ): String = getScopeAt("test.tmpl", content, offset)
 
     private fun assertScopeAt(
         content: String,
@@ -330,6 +336,26 @@ class SyntaxHighlightingTest : CustomPlatformTestCase() {
         assertFalse(
             "Expected 'range' outside brackets to NOT have keyword.control.gotmpl scope, but got '$actualScope'",
             actualScope.contains("keyword.control.gotmpl"),
+        )
+    }
+
+    // --- Embedded language highlighting ---
+
+    fun testEmbeddedHtmlTagIsHighlighted() {
+        val content = "<div>{{ .Name }}</div>"
+        val scope = getScopeAt("test.html.tmpl", content, 1)
+        assertTrue(
+            "Expected HTML scope on *.html.tmpl at offset 1, got '$scope'",
+            scope.contains("text.html.basic") || scope.contains("entity.name.tag"),
+        )
+    }
+
+    fun testEmbeddedHtmlTemplateActionKeepsGotmplScope() {
+        val content = "<div>{{ .Name }}</div>"
+        val scope = getScopeAt("test.html.tmpl", content, 5)
+        assertTrue(
+            "Expected gotmpl scope for {{ inside *.html.tmpl, got '$scope'",
+            scope.contains("gotmpl"),
         )
     }
 }
