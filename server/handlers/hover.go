@@ -26,7 +26,7 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, erro
 		return nil, nil
 	}
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || doc.typedTree == nil {
+	if !ok || doc.rootTypedTree() == nil {
 		return nil, errors.New("document not found or failed to parse")
 	}
 
@@ -58,12 +58,12 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, erro
 	r := nodeRange(target, doc.text)
 	return &protocol.Hover{
 		Range:    &r,
-		Contents: mdContent(hoverMessage(target, doc)),
+		Contents: mdContent(hoverMessage(target)),
 	}, nil
 }
 
 // hoverMessage returns the markdown body for a hover on target.
-func hoverMessage(target types.Node, _ *document) string {
+func hoverMessage(target types.Node) string {
 	log.Debug().Msgf("Hover on %T", target)
 	switch t := target.(type) {
 	case *types.IfNode:

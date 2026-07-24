@@ -28,7 +28,7 @@ func createDiagnostic(
 		sev = new(protocol.DiagnosticSeverityHint)
 	}
 
-	source := "text-template-support"
+	source := "gotmpls"
 
 	diagnostic = protocol.Diagnostic{
 		Range:    rang,
@@ -116,7 +116,7 @@ func collectDiagnostics(text, uri string) (diagnostics []protocol.Diagnostic) {
 }
 
 func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Diagnostic {
-	if doc == nil || len(doc.failedHints) == 0 {
+	if doc == nil {
 		return nil
 	}
 	cfg := GetConfig().Diagnostics
@@ -124,7 +124,11 @@ func collectHintLoadFailureDiagnostics(doc *document, text string) []protocol.Di
 	malformedSev := cfg[types.ErrorTypeMalformedHint]
 	var diagnostics []protocol.Diagnostic
 
-	for _, fh := range doc.failedHints {
+	for _, tree := range doc.typedTrees {
+		if tree == nil || tree.HintError == nil {
+			continue
+		}
+		fh := tree.HintError
 		severity := loadSev
 		msg := "gotype: could not load type: " + fh.Err
 		if fh.Hint.IsMalformed() {

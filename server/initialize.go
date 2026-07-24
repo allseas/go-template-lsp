@@ -29,7 +29,7 @@ func setupHandlers() {
 		Initialize:                      initialize,
 		Initialized:                     initialized,
 		Shutdown:                        shutdown,
-		TextDocumentCompletion:          handlers.CompletionWithFallback,
+		TextDocumentCompletion:          handlers.CompletionAst,
 		TextDocumentDidOpen:             handlers.DidOpen,
 		TextDocumentDidChange:           handlers.DidChange,
 		TextDocumentDidClose:            handlers.DidClose,

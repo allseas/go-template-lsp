@@ -28,6 +28,7 @@ type Tree struct {
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
 	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
+	HintError  *HintFailure           // set when this tree's gotype hint failed to load
 }
 
 // ErrorType categorizes the type of an error for customization of inspections.

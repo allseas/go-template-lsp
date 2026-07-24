@@ -23,7 +23,7 @@ flowchart TD
     B --> C{"cache hit?"}
     C -->|yes| E
     C -->|no| D["packages.Load via go list -> extract fields & methods"]
-    D --> E["document.loadedType - used by completions, hover, definition"]
+    D --> E["typed tree (typedTrees) - carries DotType / Pkg / Fset used by completions, hover, definition"]
 ```
 
 ### Caching
@@ -67,7 +67,7 @@ In this file `.Street` resolves against `Address`, `.CustomerName` and `.ID` res
 The parser produces one `*parse.Tree` per `{{define}}` block plus one for the root, all stored keyed by tree name. On every `didOpen`/`didChange` the server:
 
 1. Iterates every tree and looks up the hint for that tree (`hintTypeForTree`).
-2. Calls `CachedLoadTypeFromHint` for each tree that has a hint, returning a cached `*Tree` if the same hint was already resolved, or falling through to the shared per-package cache (`loadedPackages`) on a miss. Results are stored in a per-tree map (`loadedTypes`/`typedTrees`).
+2. Calls `CachedLoadTypeFromHint` for each tree that has a hint, returning a cached `*Tree` if the same hint was already resolved, or falling through to the shared per-package cache (`loadedPackages`) on a miss. The resolved dot type (`DotType` / `DictType` / `Pkg` / `Fset`) is carried on the per-tree analysed tree (`typedTrees`); a hint that fails to load is recorded on that tree's `HintError`.
 3. At query time (`hover`, `completion`, `definition`, …), `treeAt(offset)` identifies which tree owns the cursor position, and the correct per-tree type is used - independently of every other block in the same file.
 
 Because multiple `{{define}}` blocks in the same file (or across different files) often reference the same model type, caching is especially beneficial here: a file with three defines pointing to the same package only triggers one `go list` invocation instead of three.
@@ -161,7 +161,7 @@ Failure to load one of the value types produces the existing `hintLoadFailure` (
 
 - Parsing lives in `server/types/type_hints.go`: `dictHintRe` matches the marker, `parseDictHint` extracts the body, `parseDictBody` splits and validates each `"key": typeref` entry via `dictEntryRe`.
 - The synthetic type is `types.DictType` — it implements `types.Type` (its own underlying) so the analyser can hand it to code that expects a `types.Type`, but `types.LookupFieldOrMethod` does **not** work on it. All callers that walk field chains (`walkFieldChainWithMethodInfo`, completions, definition, hover) type-assert on `*DictType` first and dispatch to `LookupDictKey` / `DictKeys` / `DictTypeFields` before falling back to the normal struct path.
-- `documents.go` propagates a malformed marker to `failedHints`, which `diagnostics.go` renders using the `malformedHint` severity instead of `hintLoadFailure`.
+- `documents.go` propagates a malformed marker to the tree's `HintError`, which `diagnostics.go` renders using the `malformedHint` severity instead of `hintLoadFailure`.
 
 ### When to use which hint
 

@@ -20,26 +20,13 @@ var WorkspaceRoot string
 
 type document struct {
 	text string
-	tree *parse.Tree
+	// rootName is the name of the root parse tree; its key in trees / typedTrees.
+	rootName string
 	// trees holds every parse tree produced for this document, keyed by tree name.
 	// Includes the root tree under its own name and one entry per {{define}} block.
 	trees map[string]*parse.Tree
-	// deprecated, typedTree is enough, but functions should be rewritten
-	loadedType *types.Tree
-	typedTree  *types.Tree
-	// loadedTypes is the per-tree dot-type resolved from the gotype hint that is located directly under each tree's {{define}}
-	loadedTypes map[string]*types.Tree
-	// typedTrees is the per-tree analysed (typed) tree, paired with loadedTypes.
+	// typedTrees is the per-tree analysed (typed) tree.
 	typedTrees map[string]*types.Tree
-	// failedHints maps tree name to the hint that failed to load and the
-	// resulting error message.
-	failedHints map[string]failedHint
-}
-
-// failedHint pairs a gotype hint with the error produced when loading it.
-type failedHint struct {
-	Hint types.TypeHint
-	Err  string
 }
 
 type documentStore struct {
@@ -66,12 +53,12 @@ func (s *documentStore) Set(uri, text string) {
 	loadDirs := []string{WorkspaceRoot, uriDir(uri)}
 
 	loadedTypes := make(map[string]*types.Tree)
-	failedHints := make(map[string]failedHint)
+	failedHints := make(map[string]types.HintFailure)
 	for name := range treeSet {
 		hint := treeHints[name]
 		log.Debug().Str("name", name).Str("hint", hint.Text).Msg("found gotype hint")
 		if hint.IsMalformed() {
-			failedHints[name] = failedHint{Hint: hint, Err: "malformed map hint"}
+			failedHints[name] = types.HintFailure{Hint: hint, Err: "malformed map hint"}
 			continue
 		}
 		if hint.Text == "" {
@@ -92,7 +79,7 @@ func (s *documentStore) Set(uri, text string) {
 			break
 		}
 		if lastErr != nil {
-			failedHints[name] = failedHint{Hint: hint, Err: lastErr.Error()}
+			failedHints[name] = types.HintFailure{Hint: hint, Err: lastErr.Error()}
 		}
 	}
 
@@ -129,13 +116,14 @@ func (s *documentStore) Set(uri, text string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	rootName := ""
+	if tree != nil {
+		rootName = tree.Name
+	}
 	if err != nil {
 		if existing, ok := s.docs[uri]; ok {
-			tree = existing.tree
+			rootName = existing.rootName
 			treeSet = existing.trees
-			if existing.loadedTypes != nil {
-				loadedTypes = existing.loadedTypes
-			}
 		}
 	}
 
@@ -167,19 +155,18 @@ func (s *documentStore) Set(uri, text string) {
 	for name, tr := range treeSet {
 		typedTrees[name] = buildTypedTree(tr, loadedTypes[name], s.templateInputTypes)
 	}
-	var typed *types.Tree
-	if tree != nil {
-		typed = typedTrees[tree.Name]
+	for name, fh := range failedHints {
+		fh := fh
+		if tt := typedTrees[name]; tt != nil {
+			tt.HintError = &fh
+		}
 	}
 
 	doc := &document{
-		text:        text,
-		tree:        tree,
-		trees:       treeSet,
-		typedTree:   typed,
-		loadedTypes: loadedTypes,
-		typedTrees:  typedTrees,
-		failedHints: failedHints,
+		text:       text,
+		rootName:   rootName,
+		trees:      treeSet,
+		typedTrees: typedTrees,
 	}
 	for _, tt := range doc.typedTrees {
 		if tt != nil {
@@ -247,30 +234,19 @@ func (d *document) treeAt(offset parse.Pos) *parse.Tree {
 	if best != nil {
 		return best
 	}
-	return d.tree
+	return d.trees[d.rootName]
 }
 
-// loadedTypeAt returns the loaded type for the tree that covers offset.
-// Falls back to d.loadedType for legacy callers that did not populate loadedTypes.
-//
-// Deprecated: prefer typedTreeAt — the typed tree carries DotType / Pkg / Fset
-// just like the raw loaded type, and is the new path for type-aware features.
-func (d *document) loadedTypeAt(offset parse.Pos) *types.Tree {
+// rootTypedTree returns the typed tree of the document's root template, or nil.
+func (d *document) rootTypedTree() *types.Tree {
 	if d == nil {
 		return nil
 	}
-	if d.loadedTypes != nil {
-		if tr := d.treeAt(offset); tr != nil {
-			if lt, ok := d.loadedTypes[tr.Name]; ok {
-				return lt
-			}
-		}
-	}
-	return d.loadedType
+	return d.typedTrees[d.rootName]
 }
 
-// typedTreeAt returns the typed tree for the tree that covers offset.
-// Falls back to d.typedTree for legacy callers.
+// typedTreeAt returns the typed tree for the tree that covers offset,
+// falling back to the root typed tree.
 func (d *document) typedTreeAt(offset parse.Pos) *types.Tree {
 	if d == nil {
 		return nil
@@ -282,7 +258,7 @@ func (d *document) typedTreeAt(offset parse.Pos) *types.Tree {
 			}
 		}
 	}
-	return d.typedTree
+	return d.typedTrees[d.rootName]
 }
 
 // typedTreeAtTyped returns the typed tree for the tree that covers offset.
@@ -290,13 +266,6 @@ func (d *document) typedTreeAt(offset parse.Pos) *types.Tree {
 // remains the only file that needs to bridge to the parse package.
 func (d *document) typedTreeAtTyped(offset types.Pos) *types.Tree {
 	return d.typedTreeAt(parse.Pos(offset))
-}
-
-// loadedTypeAtTyped is the parse-free counterpart of loadedTypeAt.
-//
-// Deprecated: prefer typedTreeAtTyped where possible.
-func (d *document) loadedTypeAtTyped(offset types.Pos) *types.Tree {
-	return d.loadedTypeAt(parse.Pos(offset))
 }
 
 // nodeRange converts a typed node into an LSP Range using its start position

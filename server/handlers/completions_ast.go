@@ -11,40 +11,30 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// CompletionWithFallback is an entry point that has a fallback option
-func CompletionWithFallback(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
-	result := completionAst(nil, params)
-	if result == nil {
-		log.Debug().Msg("ast completion failed or returned nil, falling back to regex completion")
-		return completion(nil, params)
-	}
-	return result, nil
-}
-
-// completions that use the typed AST exclusively. All scope/context
+// CompletionAst that use the typed AST exclusively. All scope/context
 // information (variables, dot type, parent) is derived from traversing the typed tree
-func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
+func CompletionAst(_ *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	if !GetConfig().EnableAutocompletion {
 		log.Debug().Msg("completion requested but autocompletion is disabled by config")
-		return nil
+		return nil, nil
 	}
 	doc, ok := store.Get(params.TextDocument.URI)
 	if !ok {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document not found in store")
-		return nil
+		return nil, nil
 	}
 
 	text := doc.text
 	offset := positionToOffset(text, params.Position)
 
 	if !isInsideTemplate(text, offset) {
-		return nil
+		return nil, nil
 	}
 
 	typedTree := doc.typedTreeAtTyped(serverTypes.Pos(offset))
 	if typedTree == nil || typedTree.Root == nil {
 		log.Error().Str("uri", params.TextDocument.URI).Msg("document has no typed tree")
-		return nil
+		return nil, nil
 	}
 
 	currentWord := getWordAtOffset(text, offset)
@@ -80,7 +70,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	cur := serverTypes.NodeFind(typedTree.Root, serverTypes.Pos(findOffset))
 	if cur == nil {
 		log.Error().Msg("The target node is not found")
-		return nil
+		return nil, nil
 	}
 
 	items := suggest(cur, sChar, isInvoked, serverTypes.Pos(offset), text, wordRange)
@@ -88,7 +78,7 @@ func completionAst(_ *glsp.Context, params *protocol.CompletionParams) any {
 	return protocol.CompletionList{
 		IsIncomplete: false,
 		Items:        items,
-	}
+	}, nil
 }
 
 // precedingCmd returns the command whose output flows into the current node

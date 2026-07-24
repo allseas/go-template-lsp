@@ -11,7 +11,7 @@ import (
 // References finds and outputs all references for a selected variable or function
 func References(_ *glsp.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
 	doc, ok := store.Get(params.TextDocument.URI)
-	if !ok || doc.typedTree == nil {
+	if !ok || doc.rootTypedTree() == nil {
 		log.Debug().Msg("doc or tree is nil")
 		return nil, nil
 	}
