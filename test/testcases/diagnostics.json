@@ -53,7 +53,7 @@
           "index": 0,
           "severity": "error",
           "message": "template: t:1:4: undefined variable \"$UndefinedVariable\"",
-          "source": "text-template-support"
+          "source": "gotmpls"
         }
       ]
     }

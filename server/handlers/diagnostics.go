@@ -28,7 +28,7 @@ func createDiagnostic(
 		sev = new(protocol.DiagnosticSeverityHint)
 	}
 
-	source := "text-template-support"
+	source := "gotmpls"
 
 	diagnostic = protocol.Diagnostic{
 		Range:    rang,

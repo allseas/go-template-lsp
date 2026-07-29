@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.allseas"
-version = "1.0-SNAPSHOT"
+version = "1.2.0"
 
 repositories {
     mavenCentral()
@@ -105,7 +105,21 @@ intellijPlatform {
 
         changeNotes =
             """
-            Initial version
+            <h3>1.2.0</h3>
+            <ul>
+              <li>Go to definition on <code>{{ template "name" }}</code> calls.</li>
+              <li>Refactor rename for variables and functions.</li>
+              <li>Configuration option for a custom language server binary path.</li>
+              <li>Hover on user-defined functions shows the godoc-style comment.</li>
+              <li>Hover on functions shows input and output types.</li>
+              <li><code>map[string]any</code> type hints with completions, hover, go-to-definition and diagnostics.</li>
+              <li>Type hints can be placed anywhere in the template.</li>
+              <li>Support for more dynamically built custom func-maps.</li>
+              <li>Autoclosing of comments and combined comment + trim deletion.</li>
+              <li>Autoclosing <code>{{-</code> now works correctly.</li>
+              <li>Extension renamed to <code>gotmpls</code>.</li>
+              <li>Numerous fixes: race condition in type hint loading, pointer template arguments, package multi-loading, and more.</li>
+            </ul>
             """.trimIndent()
     }
 }

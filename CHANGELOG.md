@@ -15,6 +15,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [1.2.0] - 2026-07-02
+
+### Added
+
+- Go to definition on `{{ template "name" }}` calls jumps to the matching `{{ define }}`.
+- Refactor rename for symbols.
+- Configuration option for a custom language server binary path.
+- Hover on user-defined functions shows the godoc-style comment.
+- Hover on functions shows input and output types.
+- `map[string]any` type hints, with completions, hover, go-to-definition and diagnostics.
+- Type hints can be placed anywhere in the template.
+- Support for more dynamically built custom func-maps.
+- New diagnostic for invalid map/dict keys.
+
+JetBrains:
+
+- Autoclosing of comments and combined comment + trim deletion.
+
+### Changed
+
+- Diagnostics on `with` and `template` reworked: removed redundant ones and added more accurate ones.
+- Variable reassignment no longer changes the original variable's type.
+- Operations on `any`-typed values produce warnings instead of errors.
+- Extension renamed to `gotmpls`.
+
+### Fixed
+
+- Package multi-loading comparison issue.
+- Pointer template arguments now work correctly.
+- Loading functions from variables no longer panics.
+- Completions when using `any` are handled correctly.
+- Variable reassignment bug.
+
+JetBrains:
+
+- Autoclosing `{{-` now works correctly.
+
 ## [1.1.0] - 2026-06-21
 
 ### Added

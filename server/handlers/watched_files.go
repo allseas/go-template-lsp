@@ -83,5 +83,5 @@ func isGoURI(uri string) bool {
 	if err != nil {
 		return false
 	}
-	return filepath.Ext(u.Filename()) == ".go"
+	return filepath.Ext(u.FsPath()) == ".go"
 }
