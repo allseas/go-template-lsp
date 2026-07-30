@@ -364,7 +364,6 @@
                         "invalidFunction": "warning",
                         "invalidCommand": "error",
                         "invalidRange": "error",
-                        "invalidWith": "error",
                         "undeclaredVariable": "error",
                         "doubleDeclaredVariable": "warning",
                         "invalidTemplateArg": "error",
@@ -377,7 +376,9 @@
                         "variableReassigned": "warning",
                         "malformedHint": "error",
                         "invalidDictKey": "information",
-                        "conflictingHint": "warning"
+                        "conflictingHint": "warning",
+                        "missingTemplateArgField": "error",
+                        "templateArgFieldMismatch": "error"
                     },
                     "additionalProperties": {
                         "type": "string",

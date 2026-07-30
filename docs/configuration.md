@@ -33,7 +33,6 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `invalidFunction`      | `"warning"`   | Unknown or incorrectly called function                    |
 | `invalidCommand`       | `"error"`     | Command type mismatch                                     |
 | `invalidRange`         | `"error"`     | Range over a non-rangeable type                           |
-| `invalidWith`          | `"error"`     | With dot is not a struct/interface                        |
 | `undeclaredVariable`   | `"error"`     | Variable used without declaration                         |
 | `doubleDeclaredVariable` | `"warning"` | Variable declared more than once in the same scope        |
 | `invalidTemplateArg`   | `"error"`     | Template called with an argument of the wrong type        |
@@ -46,6 +45,8 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `malformedHint`        | `"error"`     | `gotype` hint syntax could not be parsed (e.g. malformed `map{...}`) |
 | `invalidDictKey`       | `"information"` | Key lookup on a map-shaped `gotype` hint failed         |
 | `conflictingHint`      | `"warning"`   | Additional `gotype` hint in the same template disagrees with the first one |
+| `missingTemplateArgField` | `"error"`  | A dict argument to a template is missing a key the template's expected dict type requires |
+| `templateArgFieldMismatch` | `"error"` | A dict argument to a template has a key whose value type is incompatible with the expected dict type |
 
 ## Configuration Hierarchy
 
@@ -71,7 +72,6 @@ You can create a `gotmpl.config.json` file in your project root to configure the
     "invalidFunction": "warning",
     "invalidCommand": "error",
     "invalidRange": "error",
-    "invalidWith": "error",
     "undeclaredVariable": "error",
     "doubleDeclaredVariable": "warning",
     "invalidTemplateArg": "error",
@@ -83,7 +83,9 @@ You can create a `gotmpl.config.json` file in your project root to configure the
     "variableReassigned": "warning",
     "malformedHint": "error",
     "invalidDictKey": "information",
-    "conflictingHint": "warning"
+    "conflictingHint": "warning",
+    "missingTemplateArgField": "error",
+    "templateArgFieldMismatch": "error"
   },
   "enableAutocompletion": true,
   "trace": {
