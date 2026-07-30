@@ -42,8 +42,6 @@ const (
 	ErrorTypeInvalidCommand
 	// ErrorTypeInvalidRange Range over non-rangeable type
 	ErrorTypeInvalidRange
-	// ErrorTypeInvalidWith With dot is not a struct/interface
-	ErrorTypeInvalidWith
 	// ErrorUndeclaredVariable Variable used without declaration
 	ErrorUndeclaredVariable
 	// ErrorDoubleDeclaredVariable Variable declared more than once in the same scope
@@ -78,7 +76,6 @@ var errorTypeNames = map[ErrorType]string{
 	ErrorTypeInvalidFunction:    "invalidFunction",
 	ErrorTypeInvalidCommand:     "invalidCommand",
 	ErrorTypeInvalidRange:       "invalidRange",
-	ErrorTypeInvalidWith:        "invalidWith",
 	ErrorUndeclaredVariable:     "undeclaredVariable",
 	ErrorDoubleDeclaredVariable: "doubleDeclaredVariable",
 	ErrorTypeInvalidTemplateArg: "invalidTemplateArg",
@@ -342,19 +339,6 @@ func dictAsMapStringAny(t types.Type) types.Type {
 	return t
 }
 
-// unalias resolves alias types and dereferences pointers recursively, returning
-// the underlying named/struct/etc. type. nil in -> nil out.
-func unalias(t types.Type) types.Type {
-	for {
-		t = types.Unalias(t)
-		p, ok := t.(*types.Pointer)
-		if !ok {
-			return t
-		}
-		t = p.Elem()
-	}
-}
-
 // pointerElemMatches reports whether arg is *T where T matches expected.
 // Go's text/template auto-dereferences pointer values, so a *T argument is
 // acceptable wherever a T parameter is declared. The reverse (T where *T is
@@ -382,18 +366,6 @@ func analyseWith(n *parse.WithNode, parent Node, ctx *analysisCtx) Node {
 	keepDot := ctx.dotType
 	keepVars := len(ctx.vars)
 	w.Pipe = analysePipe(n.Pipe, w, ctx)
-	if w.Pipe.typ != nil && !IsEmptyInterface(w.Pipe.typ) {
-		if _, isDict := w.Pipe.typ.(*DictType); !isDict {
-			if _, ok := unalias(w.Pipe.typ).Underlying().(*types.Struct); !ok {
-				ctx.errorf(
-					w.Pipe,
-					ErrorTypeInvalidWith,
-					"cannot use type %v in with statement; expected struct type",
-					w.Pipe.typ,
-				)
-			}
-		}
-	}
 	ctx.dotType = w.Pipe.typ
 	if ctx.dotType == nil {
 		ctx.dotType = AnyType()
@@ -683,6 +655,33 @@ func walkFieldChain(
 	currentType := base
 	stepTypes := make([]types.Type, len(path))
 	for i, name := range path {
+		// An intermediate step whose type is unknown (any) or unresolved (nil)
+		// cannot be verified further; treat the remaining path as unknown and
+		// pass through without a diagnostic, matching text/template semantics
+		// for dynamic values.
+		if IsEmptyInterface(currentType) {
+			anyt := AnyType()
+			for j := i; j < len(path); j++ {
+				stepTypes[j] = anyt
+			}
+			return anyt, true, stepTypes
+		}
+		if d, ok := currentType.(*DictType); ok {
+			valueTyp, keyOk := d.LookupDictKey(name)
+			if !keyOk {
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidDictKey,
+					"map has no key %q; known keys: %s",
+					name,
+					strings.Join(d.DictKeys(), ", "),
+				)
+				return AnyType(), false, stepTypes
+			}
+			currentType = valueTyp
+			stepTypes[i] = currentType
+			continue
+		}
 		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
 		if obj == nil {
 			ctx.errorf(
@@ -766,6 +765,17 @@ func walkFieldChainWithMethodInfo(
 	isMethod := make([]bool, len(path))
 	stepTypes := make([]types.Type, len(path))
 	for i, name := range path {
+		// An intermediate step whose type is unknown (any) or unresolved (nil)
+		// cannot be verified further; treat the remaining path as unknown and
+		// pass through without a diagnostic, matching text/template semantics
+		// for dynamic values.
+		if IsEmptyInterface(currentType) {
+			anyt := AnyType()
+			for j := i; j < len(path); j++ {
+				stepTypes[j] = anyt
+			}
+			return anyt, isMethod, stepTypes
+		}
 		if d, ok := currentType.(*DictType); ok {
 			valueTyp, keyOk := d.LookupDictKey(name)
 			if !keyOk {
@@ -785,6 +795,27 @@ func walkFieldChainWithMethodInfo(
 		}
 		obj, _, _ := types.LookupFieldOrMethod(currentType, true, pkg, name)
 		if obj == nil {
+			// text/template permits `.Key` field syntax on maps, using the
+			// field name as a string key into the map. Methods (looked up
+			// above) take precedence, so we only reach here for a genuine key
+			// access. Resolve to the map's element type when the key type
+			// admits a string; otherwise the access can never succeed.
+			if m, ok := currentType.Underlying().(*types.Map); ok {
+				if types.AssignableTo(types.Typ[types.String], m.Key()) {
+					currentType = m.Elem()
+					isMethod[i] = false
+					stepTypes[i] = currentType
+					continue
+				}
+				ctx.errorf(
+					errNode,
+					ErrorTypeInvalidDictKey,
+					"cannot access field %q on map with key type %s; expected a string-compatible key",
+					name,
+					m.Key().String(),
+				)
+				return AnyType(), isMethod, stepTypes
+			}
 			ctx.errorf(
 				errNode,
 				ErrorTypeInvalidField,
@@ -1093,6 +1124,32 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 	return typePipe
 }
 
+// indexKeyElemType returns the accessor (index/key) type and the element type
+// produced by a single `index` step on t: for maps the key and value types, and
+// for arrays/slices/strings an int index with the element type (byte for
+// strings). Pointers are dereferenced. Both returns are nil when t cannot be
+// indexed. This intentionally differs from getRangeableType, which treats a
+// string as non-rangeable; here a string is indexable by an int.
+func indexKeyElemType(t types.Type) (key, elem types.Type) {
+	switch u := t.Underlying().(type) {
+	case *types.Pointer:
+		return indexKeyElemType(u.Elem())
+	case *types.Array:
+		return types.Typ[types.Int], u.Elem()
+	case *types.Slice:
+		return types.Typ[types.Int], u.Elem()
+	case *types.Map:
+		return u.Key(), u.Elem()
+	case *types.Basic:
+		if u.Info()&types.IsString != 0 {
+			return types.Typ[types.Int], types.Typ[types.Byte]
+		}
+		return nil, nil
+	default:
+		return nil, nil
+	}
+}
+
 // analyseCommand converts a parse CommandNode to a typed CommandNode.
 func analyseCommand(
 	cmdNode *parse.CommandNode,
@@ -1143,6 +1200,92 @@ func analyseCommand(
 
 	if next {
 		args = append(args, pipedT)
+	}
+
+	// index collection idx1 idx2 ... indexes into the collection once per
+	// index argument, so the result type is the element type of the
+	// collection dereferenced len(args)-1 times.
+	if fst, ok := cmdNode.Args[0].(*parse.IdentifierNode); ok && fst.Ident == "index" {
+		if len(args) == 0 {
+			ctx.errorf(
+				typeCmd,
+				ErrorTypeInvalidCommand,
+				"index: missing collection argument",
+			)
+			return typeCmd
+		}
+		collType := args[0]
+		for i := 0; i < len(args)-1; i++ {
+			if collType == nil || IsEmptyInterface(collType) {
+				collType = AnyType()
+				break
+			}
+			key, elem := indexKeyElemType(collType)
+			if elem == nil {
+				ctx.errorf(
+					typeCmd,
+					ErrorTypeInvalidCommand,
+					"index: cannot index type %s",
+					collType.String(),
+				)
+				typeCmd.typ = AnyType()
+				return typeCmd
+			}
+			idxArg := args[i+1]
+			if !typesCompatible(key, idxArg) {
+				tstring := "nil"
+				if idxArg != nil {
+					tstring = idxArg.String()
+				}
+				ctx.errorf(
+					typeCmd,
+					ErrorTypeInvalidCommand,
+					"index: cannot use %s as index into %s (expected %s)",
+					tstring,
+					collType.String(),
+					key.String(),
+				)
+			}
+			collType = elem
+		}
+		typeCmd.typ = collType
+		return typeCmd
+	}
+
+	// dict key1 val1 key2 val2 ... builds a map from alternating arguments.
+	// The even-positioned arguments are field names (which must be string
+	// literals so the key is statically known) and the odd-positioned
+	// arguments are the corresponding field values. The result is a
+	// *DictType capturing each key's value type.
+	if fst, ok := cmdNode.Args[0].(*parse.IdentifierNode); ok && fst.Ident == "dict" {
+		dictArgs := typeCmd.Args[1:]
+		if len(dictArgs)%2 != 0 {
+			ctx.errorf(
+				typeCmd,
+				ErrorTypeInvalidCommand,
+				"dict: requires an even number of arguments (alternating keys and values)",
+			)
+		}
+		fields := make(map[string]types.Type, len(dictArgs)/2)
+		for i := 0; i+1 < len(dictArgs); i += 2 {
+			sn, ok := dictArgs[i].(*StringNode)
+			if !ok {
+				ctx.errorf(
+					typeCmd,
+					ErrorTypeInvalidCommand,
+					"dict: key %d must be a string literal",
+					i/2+1,
+				)
+				continue
+			}
+			valType := dictArgs[i+1].ValueType()
+			if valType == nil {
+				valType = AnyType()
+			}
+			fields[sn.Text] = valType
+		}
+		typeCmd.typ = &DictType{Fields: fields}
+		return typeCmd
 	}
 
 	// TODO: special case for `call` builtin
