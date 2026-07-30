@@ -102,9 +102,9 @@ func hintsEqual(a, b TypeHint) bool {
 }
 
 var (
-	structHintRe = regexp.MustCompile(`gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)`)
+	structHintRe = regexp.MustCompile(`gotype:\s*(\*?[A-Za-z_][A-Za-z0-9_/.-]*)`)
 	dictHintRe   = regexp.MustCompile(`gotype:\s*map\s*\{`)
-	dictEntryRe  = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*([A-Za-z_][A-Za-z0-9_/.-]*)\s*$`)
+	dictEntryRe  = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*(\*?[A-Za-z_][A-Za-z0-9_/.-]*)\s*$`)
 )
 
 // FindTreeHints scans each parse tree for a `gotype:` comment and returns a
@@ -589,7 +589,9 @@ func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error)
 	}
 	fset := token.NewFileSet()
 	cfg := &packages.Config{
-		Mode: packages.NeedTypes,
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
+			packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo |
+			packages.NeedSyntax,
 		Dir:  dir,
 		Fset: fset,
 		Env:  goEnv(),
@@ -627,9 +629,25 @@ func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error)
 }
 
 // LoadTypeFromHint loads the Go package identified by the hint and returns a
-// Tree with DotType and Pkg set.
+// Tree with DotType and Pkg set. A leading `*` in the hint (e.g.
+// `*example.com/m.Order`) makes DotType a pointer to the named type.
 func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
+	isPointer := strings.HasPrefix(hint, "*")
+	hint = strings.TrimPrefix(hint, "*")
 	importPath, typeName := splitTypeHint(hint)
+
+	// Predeclared types (int, string, bool, …) live in types.Universe rather
+	// than in any package scope. When the hint has no package qualifier, try
+	// resolving it as a builtin before attempting to load a package.
+	if importPath == "." {
+		if obj, ok := types.Universe.Lookup(typeName).(*types.TypeName); ok {
+			dot := obj.Type()
+			if isPointer {
+				dot = types.NewPointer(dot)
+			}
+			return &Tree{DotType: dot}, nil
+		}
+	}
 
 	log.Debug().
 		Str("hint", hint).
@@ -652,20 +670,28 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
 	}
 
-	named, ok := obj.Type().(*types.Named)
+	// The hint must name a type (not a func/var/const). Accept any type,
+	// including non-named ones such as a defined alias to a builtin
+	// (`type Int = int`); field/method enumeration downstream simply yields
+	// nothing for types without a named base.
+	tn, ok := obj.(*types.TypeName)
 	if !ok {
-		log.Error().Str("typeName", typeName).Msg("LoadTypeFromHint: type is not a named type")
-		return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
+		log.Error().Str("typeName", typeName).Msg("LoadTypeFromHint: object is not a type")
+		return nil, fmt.Errorf("%q is not a type in package %q", typeName, importPath)
+	}
+
+	dot := tn.Type()
+	if isPointer {
+		dot = types.NewPointer(dot)
 	}
 
 	log.Debug().
 		Str("typeName", typeName).
 		Str("importPath", importPath).
-		Int("numFields", named.Underlying().(*types.Struct).NumFields()).
-		Int("numMethods", named.NumMethods()).
+		Bool("pointer", isPointer).
 		Msg("LoadTypeFromHint: type loaded successfully")
 
-	tree := &Tree{DotType: named, Pkg: lp.pkg, Fset: lp.fset}
+	tree := &Tree{DotType: dot, Pkg: lp.pkg, Fset: lp.fset}
 	return tree, nil
 }
 
@@ -678,8 +704,27 @@ func splitTypeHint(hint string) (importPath, typeName string) {
 	return hint[:idx], hint[idx+1:]
 }
 
-// NamedMethods extracts the methods from the model
-func NamedMethods(named *types.Named) []MethodType {
+// namedTypeOf unwraps pointer indirection and aliases to reach the underlying
+// *types.Named, returning nil when t is not (a pointer to) a named type.
+func namedTypeOf(t types.Type) *types.Named {
+	switch u := types.Unalias(t).(type) {
+	case *types.Named:
+		return u
+	case *types.Pointer:
+		if n, ok := types.Unalias(u.Elem()).(*types.Named); ok {
+			return n
+		}
+	}
+	return nil
+}
+
+// NamedMethods extracts the methods from the model. The dot type may be a
+// named type or a pointer to one.
+func NamedMethods(dot types.Type) []MethodType {
+	named := namedTypeOf(dot)
+	if named == nil {
+		return nil
+	}
 	var methods []MethodType
 	for i := range named.NumMethods() {
 		fn := named.Method(i)
@@ -718,8 +763,13 @@ func NamedMethods(named *types.Named) []MethodType {
 	return methods
 }
 
-// StructFields returns the exported fields of the struct
-func StructFields(named *types.Named) []TypeField {
+// StructFields returns the exported fields of the struct. The dot type may be
+// a named struct type or a pointer to one.
+func StructFields(dot types.Type) []TypeField {
+	named := namedTypeOf(dot)
+	if named == nil {
+		return nil
+	}
 	// Underlying returns structs fields and types
 	st, ok := named.Underlying().(*types.Struct)
 	if !ok {

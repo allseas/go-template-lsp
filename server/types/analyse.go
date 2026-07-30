@@ -23,7 +23,7 @@ type Tree struct {
 	Errors     []error                // errors collected during partial parsing; only populated when Mode&ParsePartial != 0.
 	End        Pos                    // position of the end of the template text; only set after parsing.
 	funcs      map[string]*types.Func // available functions with their signatures
-	DotType    *types.Named           // optional: named type of dot context (from struct-shaped gotype hint)
+	DotType    types.Type             // optional: type of dot context (from struct-shaped gotype hint); a named type or a pointer to one
 	DictType   *DictType              // optional: dict-shaped dot context (from `gotype: map{...}` hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary

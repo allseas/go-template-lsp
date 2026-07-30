@@ -14,6 +14,12 @@ Any of the following forms are recognised:
 | ----------------------------------- | ------------------------------------------------------------- |
 | `{{/*gotype: models.User*/}}`       | type `User` in local package `models`                         |
 | `{{- /* gotype: models.User */ -}}` | same - trimming dashes and surrounding whitespace are ignored |
+| `{{/*gotype: example.com/m.User*/}}`| type `User` in the fully-qualified import path                |
+| `{{/*gotype: *example.com/m.User*/}}`| **pointer** to `User`; `.` binds to `*User` (fields/methods are resolved through the pointer, and method sets that require a pointer receiver are available) |
+| `{{/*gotype: int*/}}`               | the predeclared builtin `int` (any predeclared type: `string`, `bool`, `float64`, …) |
+| `{{/*gotype: *string*/}}`           | pointer to a builtin                                          |
+
+Builtin (predeclared) names are resolved from `types.Universe` rather than by loading a package, so they need no workspace or module to be present. A hint may also name a defined alias to a builtin (e.g. `type Celsius = float64`); the loader accepts any type name, not only named struct types (field/method enumeration simply yields nothing for a non-struct base).
 
 ## Resolution flow
 
@@ -74,11 +80,11 @@ Because multiple `{{define}}` blocks in the same file (or across different files
 
 ## Implementation details
 
-**Parsing**: Lines without `gotype:` are skipped. The regex `gotype:\s*([A-Za-z_][A-Za-z0-9_/.-]*)` extracts the hint token; only the first match per file is used.
+**Parsing**: Lines without `gotype:` are skipped. The regex `gotype:\s*(\*?[A-Za-z_][A-Za-z0-9_/.-]*)` extracts the hint token (an optional leading `*` marks a pointer); only the first match per file is used.
 
-**Splitting**: `splitTypeHint` finds the last `.` with no `/` to its right to separate import path from type name. A bare `User` (no dot) uses `.` as the import path.
+**Splitting**: `splitTypeHint` finds the last `.` with no `/` to its right to separate import path from type name. A bare `User` (no dot) uses `.` as the import path. When the import path is `.`, `LoadTypeFromHint` first tries `types.Universe` so predeclared names (`int`, `string`, …) resolve without a package load.
 
-**Loading**: `CachedLoadTypeFromHint` checks an in-memory `*Tree` cache first. On a miss it resolves the underlying package via `loadPackageCached`, which itself keeps a per-`(importPath, workspaceRoot)` cache of `*types.Package` results from `packages.Load` (mode `packages.NeedTypes`). Every hint that resolves to the same import path therefore shares a single `*types.Package` — and consequently a single `*types.Named` per declared type — so `types.Identical` comparisons across hints work as expected. Any load error is logged as a warning; the document is stored without a type. Both caches are cleared by `InvalidateTypeHintCache` when any `.go` file in the workspace changes.
+**Loading**: `CachedLoadTypeFromHint` checks an in-memory `*Tree` cache first. On a miss it resolves the underlying package via `loadPackageCached`, which itself keeps a per-`(importPath, workspaceRoot)` cache of `*types.Package` results from `packages.Load`. The load mode requests syntax (`NeedName | NeedFiles | NeedCompiledGoFiles | NeedImports | NeedTypes | NeedTypesInfo | NeedSyntax`) so that resolved objects carry valid source positions — this is what lets **go-to-definition** jump into the model even when the package is otherwise available as compiled export data. Every hint that resolves to the same import path shares a single `*types.Package` — and consequently a single `*types.Named` per declared type — so `types.Identical` comparisons across hints work as expected. A leading `*` wraps the resolved type in a `types.Pointer`. Any load error is logged as a warning; the document is stored without a type. Both caches are cleared by `InvalidateTypeHintCache` when any `.go` file in the workspace changes.
 
 **Fields**: `structFields` collects exported fields as `[]TypeField` (name, type string, raw `types.Type`, `Embedded` flag). `TypeField.Kind()` classifies each as `String`, `Bool`, `Int`, `Float`, `Slice`, `Map`, `Struct`, or `Other`.
 
@@ -106,7 +112,7 @@ map{ "<key>": <typeref> ( , "<key>": <typeref> )* }
 ```
 
 - Keys are double-quoted strings.
-- Each `<typeref>` uses the same shape as a struct hint (`import/path.TypeName` or bare `TypeName` for the local package).
+- Each `<typeref>` uses the same shape as a struct hint (`import/path.TypeName`, bare `TypeName` for the local package, a builtin such as `int`, or a pointer form like `*import/path.TypeName`).
 - Whitespace around tokens is ignored.
 - An empty body (`map{}`) is rejected — a hint with no keys carries no information.
 
