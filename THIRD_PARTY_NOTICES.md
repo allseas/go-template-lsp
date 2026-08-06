@@ -1,9 +1,11 @@
 # Third-Party Notices
 
-This project — the `text/template Support` VS Code extension and the
-`Go-Text-Template` JetBrains plugin — is distributed under the MIT License
-(see the `LICENSE` file in the repository root and the per-artifact license
-files inside the packaged extension/plugin).
+This project's source code, as published in this repository, is licensed under
+the MIT License (see the `LICENSE` file in the repository root).
+
+The published `gotmpls` VS Code extension and JetBrains plugin are distributed
+to end users under the Allseas End User License Agreement (EULA); see the
+`LICENSE.txt` file inside each packaged extension/plugin.
 
 The distributed artifacts additionally include, in bundled or compiled form,
 several third-party software components. The notices, copyright statements,
@@ -24,7 +26,10 @@ under [Regeneration](#regeneration).
 
 ## 1. File-type icon (VS Code extension)
 
-The extension's file-type icon (`clients/VSCode/icons/icon.svg`) is derived
+The extension's file-type icon (`clients/VSCode/icons/icon.svg`, and the
+`clients/VSCode/icons/icon.png` Marketplace icon rendered from it), together
+with the JetBrains plugin logo (`pluginIcon.svg` / `pluginIcon_dark.svg` under
+`clients/JetBrains/go-text-template/src/main/resources/META-INF/`), is derived
 from `file_type_json.svg` in the
 [vscode-icons](https://github.com/vscode-icons/vscode-icons) project.
 
