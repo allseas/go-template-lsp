@@ -7,3 +7,6 @@ node_modules/
 .vscode-test/
 test/resources/**
 !test/resources/.gitkeep
+
+# Copied from the repository root at package time (see package scripts).
+THIRD_PARTY_NOTICES.md
