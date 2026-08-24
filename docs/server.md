@@ -63,6 +63,26 @@ graph TD
 - Entry point for the server
 - Sets up logging (using `zerolog`)
 - Initializes handlers and starts the server
+- Dispatches to batch mode when invoked as `gotmpls check …` (see below), otherwise starts the stdio LSP server
+
+#### Batch mode (`check` subcommand)
+
+Running the binary with `check` analyses files and prints diagnostics instead of starting the LSP server — useful for CI, pre-commit hooks, or ad-hoc linting:
+
+```
+gotmpls check [flags] <file|glob> [<file|glob>...]
+```
+
+| Flag             | Default   | Purpose                                                             |
+| ---------------- | --------- | ------------------------------------------------------------------- |
+| `--format`       | `text`    | `text` (`path:line:col: severity: message`) or `json`               |
+| `--root`         | cwd       | Workspace root for gotype-hint type resolution                      |
+| `--min-severity` | `error`   | Severity that makes the exit code non-zero: `error`/`warning`/`information`/`hint` |
+| `--verbose`      | off       | Emit server debug logging on stderr                                 |
+
+A `-` argument reads a single template from stdin. Exit codes: `0` clean, `1` a diagnostic at or above the threshold, `2` a usage or file-read error.
+
+The command reuses the exact diagnostics path that powers editor squiggles: [handlers.AnalyzeDocument](../server/handlers/cli.go) runs `store.Set` + `collectDiagnostics`, then removes the document so each file is analysed independently (root parse trees all share the internal name `t`, so leaving them in the store would let one file's inferred input types bleed into the next). The CLI wiring and output formatting live in [server/cli.go](../server/cli.go).
 
 #### `handlers/` Package
 
