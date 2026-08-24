@@ -17,6 +17,12 @@ func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, NoColor: true})
 
+	// Batch mode: `gotmpls check <files...>` analyses files and exits, instead
+	// of starting the stdio LSP server (the default with no arguments).
+	if len(os.Args) > 1 && os.Args[1] == "check" {
+		os.Exit(runCheck(os.Args[2:], os.Stdout, os.Stderr, os.Stdin))
+	}
+
 	log.Print("starting server")
 
 	err := Init()
