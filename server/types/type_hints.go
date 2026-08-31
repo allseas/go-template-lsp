@@ -575,6 +575,7 @@ func LoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
 	fields := make(map[string]types.Type, len(hint.Dict))
 	var pkg *types.Package
 	var fset *token.FileSet
+	fsets := make(map[*types.Package]*token.FileSet)
 	for _, k := range sortedKeys(hint.Dict) {
 		ref := hint.Dict[k]
 		lt, err := LoadTypeFromHint(ref, workspaceRoot)
@@ -588,11 +589,17 @@ func LoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
 		if fset == nil {
 			fset = lt.Fset
 		}
+		for p, fs := range lt.Fsets {
+			if _, ok := fsets[p]; !ok {
+				fsets[p] = fs
+			}
+		}
 	}
 	return &Tree{
 		DictType: &DictType{Fields: fields},
 		Pkg:      pkg,
 		Fset:     fset,
+		Fsets:    fsets,
 	}, nil
 }
 
@@ -682,7 +689,7 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		Str("workspaceRoot", workspaceRoot).
 		Msg("LoadTypeFromHint: attempting to resolve type hint")
 
-	dot, pkg, fset, err := resolveTypeExpr(hint, workspaceRoot)
+	dot, pkg, fset, fsets, err := resolveTypeExpr(hint, workspaceRoot)
 	if err != nil {
 		log.Error().Err(err).Str("hint", hint).Msg("LoadTypeFromHint: failed to resolve type hint")
 		return nil, err
@@ -693,7 +700,35 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		Str("type", types.TypeString(dot, nil)).
 		Msg("LoadTypeFromHint: type resolved successfully")
 
-	return &Tree{DotType: dot, Pkg: pkg, Fset: fset}, nil
+	return &Tree{DotType: dot, Pkg: pkg, Fset: fset, Fsets: fsets}, nil
+}
+
+// LocateTypeDecl resolves the source declaration position of the type named
+// typeName in the package importPath, loading the package if necessary. ok is
+// false when the package or type cannot be found or has no source position.
+func LocateTypeDecl(importPath, typeName, workspaceRoot string) (token.Position, bool) {
+	lp, err := loadPackageCached(importPath, workspaceRoot)
+	if err != nil || lp == nil || lp.pkg == nil || lp.fset == nil {
+		return token.Position{}, false
+	}
+	obj := lp.pkg.Scope().Lookup(typeName)
+	if obj == nil || !obj.Pos().IsValid() {
+		return token.Position{}, false
+	}
+	return lp.fset.Position(obj.Pos()), true
+}
+
+// HintRefAt returns the import path and type name of the slash-qualified type
+// token that covers byteOffset within commentText (a gotype comment's raw
+// text). ok is false when no qualified token spans that offset.
+func HintRefAt(commentText string, byteOffset int) (importPath, typeName string, ok bool) {
+	for _, m := range qualifiedTypeRe.FindAllStringSubmatchIndex(commentText, -1) {
+		// m[0:2] full match; m[2:4] group 1 (import path); m[4:6] group 2 (type).
+		if byteOffset >= m[0] && byteOffset <= m[1] {
+			return commentText[m[2]:m[3]], commentText[m[4]:m[5]], true
+		}
+	}
+	return "", "", false
 }
 
 // preprocessHint rewrites every `import/path/with/slashes.Type` reference in a
@@ -784,28 +819,37 @@ type hintResolver struct {
 	imports       map[string]string
 	pkg           *types.Package
 	fset          *token.FileSet
+	// fsets records every package the resolver loaded together with the
+	// FileSet its positions belong to, so cross-package definition lookups can
+	// pick the right FileSet for an object.
+	fsets map[*types.Package]*token.FileSet
 }
 
 // resolveTypeExpr preprocesses, parses and resolves a raw hint into a
 // go/types.Type. It also returns the package and fset of the first named type
-// encountered (nil for pure-builtin hints such as `int` or `[]string`).
+// encountered (nil for pure-builtin hints such as `int` or `[]string`) and the
+// per-package FileSet map covering every package the hint touched.
 func resolveTypeExpr(
 	hint, workspaceRoot string,
-) (types.Type, *types.Package, *token.FileSet, error) {
+) (types.Type, *types.Package, *token.FileSet, map[*types.Package]*token.FileSet, error) {
 	rewritten, imports, err := preprocessHint(hint)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	expr, err := parser.ParseExpr(rewritten)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("cannot parse type hint %q: %w", hint, err)
+		return nil, nil, nil, nil, fmt.Errorf("cannot parse type hint %q: %w", hint, err)
 	}
-	r := &hintResolver{workspaceRoot: workspaceRoot, imports: imports}
+	r := &hintResolver{
+		workspaceRoot: workspaceRoot,
+		imports:       imports,
+		fsets:         make(map[*types.Package]*token.FileSet),
+	}
 	t, err := r.resolve(expr)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return t, r.pkg, r.fset, nil
+	return t, r.pkg, r.fset, r.fsets, nil
 }
 
 // resolve recursively converts a type-expression AST node into a
@@ -954,6 +998,11 @@ func (r *hintResolver) lookupType(importPath, typeName string) (types.Type, erro
 	if r.pkg == nil {
 		r.pkg = lp.pkg
 		r.fset = lp.fset
+	}
+	if r.fsets != nil && lp.pkg != nil && lp.fset != nil {
+		if _, ok := r.fsets[lp.pkg]; !ok {
+			r.fsets[lp.pkg] = lp.fset
+		}
 	}
 	obj := lp.pkg.Scope().Lookup(typeName)
 	if obj == nil {

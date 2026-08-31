@@ -27,7 +27,13 @@ type Tree struct {
 	DictType   *DictType              // optional: dict-shaped dot context (from `gotype: map{...}` hint)
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
-	Fset       *token.FileSet         // FileSet for resolving token positions to file locations
+	Fset       *token.FileSet         // FileSet for the primary (first) named type; used to resolve its token positions
+	// Fsets maps each package touched while resolving the hint to the FileSet
+	// its positions belong to. A hint may span several packages (a generic
+	// type argument, dict values, composed elements), and each package is
+	// loaded with its own FileSet, so a single Fset cannot resolve them all.
+	// Definition lookups pick the FileSet by the object's package.
+	Fsets map[*types.Package]*token.FileSet
 }
 
 // ErrorType categorizes the type of an error for customization of inspections.

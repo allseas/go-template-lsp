@@ -13,6 +13,8 @@ The definition provider enables jump-to-definition (Ctrl+Click) for nodes. It is
 | `.FieldName` (field access)                     | Jumps to the field or method declaration in the Go source file        |
 | `.Nested.Field` (nested field access)           | Jumps to whichever identifier the cursor is on                        |
 | `kebabCase` (user defined global function)      | Jumps to the function declaration in the Go source file               |
+| type token inside a `gotype:` comment           | Jumps to that type's declaration in the Go source file                |
+| `.` in a template with a hint but no `range`/`with` scope | Jumps to the `gotype:` hint comment                          |
 
 ## Supported node types
 
@@ -42,6 +44,17 @@ When the cursor is on a `DotNode`, the handler uses `buildPath` to reconstruct t
 {{- end }}
 ```
 
+When there is no enclosing `range`/`with` but the template carries a `gotype:` hint, the dot instead jumps to the hint comment, giving a discoverable anchor for the dot's type. From the hint comment, each type token is itself a definition target (see below).
+
+### Type tokens inside a `gotype:` comment
+
+When the cursor is on a slash-qualified type token inside a `gotype:` comment (e.g. `cg/model/controlmodel.Instance` in a composite or generic hint), the handler resolves that token's package and jumps to the type declaration in the Go source. This makes the hint comment the hub for navigating to every type a composite or generic hint references.
+
+```gotmpl
+{{- /*gotype: cg/template.View[cg/model/controlmodel.Instance]*/ -}}
+{{-/* ctrl+click on View -> View decl; on Instance -> Instance decl */-}}
+```
+
 ### Fields (`.FieldName`)
 
 When the cursor is on a `FieldNode`, the handler resolves the Go type using the `gotype` hint comment (e.g. `{{/*gotype: cg/model.Order*/}}`) and calls `gotypes.LookupFieldOrMethod` to locate the field or method declaration in the Go source. It returns a `Location` pointing to the exact line in the Go source file.
@@ -49,6 +62,8 @@ When the cursor is on a `FieldNode`, the handler resolves the Go type using the 
 For chained access like `.Address.City`, the handler determines which identifier the cursor is over by comparing byte offsets, resolves each intermediate type in turn, and jumps to the correct target.
 
 Methods are also supported: the handler follows the method's return type when resolving chained access through a method call.
+
+Field and method jumps resolve to the correct source file even when the chain crosses package boundaries — for example a generic type argument or a dict value declared in a different package than the hint's base type. Each package a hint touches is loaded with its own `token.FileSet`, and the handler selects the FileSet by the resolved object's package.
 
 If no `gotype` hint is present, or the type cannot be loaded, the handler returns `nil`.
 
