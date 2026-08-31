@@ -77,7 +77,7 @@ gotmpls check [flags] <file|glob> [<file|glob>...]
 | ---------------- | --------- | ------------------------------------------------------------------- |
 | `--format`       | `text`    | `text` (`path:line:col: severity: message`) or `json`               |
 | `--root`         | cwd       | Workspace root for gotype-hint type resolution                      |
-| `--min-severity` | `error`   | Severity that makes the exit code non-zero: `error`/`warning`/`information`/`hint` |
+| `--min-severity` | `error`   | Minimum severity to report and to make the exit code non-zero: `error`/`warning`/`information`/`hint`. Diagnostics below it are omitted from the output |
 | `--verbose`      | off       | Emit server debug logging on stderr                                 |
 
 A `-` argument reads a single template from stdin. Exit codes: `0` clean, `1` a diagnostic at or above the threshold, `2` a usage or file-read error.
