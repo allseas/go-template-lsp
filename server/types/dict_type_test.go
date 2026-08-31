@@ -10,14 +10,10 @@ import (
 )
 
 func TestLoadDictFromHint(t *testing.T) {
-	hint := TypeHint{
-		Type: typeHintDict,
-		Dict: map[string]string{
-			"Order":   "text-template-server/src/model.Order",
-			"Address": "text-template-server/src/model.Address",
-		},
-	}
-	tree, err := LoadDictFromHint(hint, "../../test/resources/typehints-tests")
+	tree, err := LoadTypeFromHint(
+		`map{"Order": text-template-server/src/model.Order, "Address": text-template-server/src/model.Address}`,
+		"../../test/resources/typehints-tests",
+	)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 	require.NotNil(t, tree.DictType)
@@ -34,20 +30,12 @@ func TestLoadDictFromHint(t *testing.T) {
 }
 
 func TestLoadDictFromHint_PropagatesEntryError(t *testing.T) {
-	hint := TypeHint{
-		Type: typeHintDict,
-		Dict: map[string]string{
-			"Bad": "nonexistent/pkg.Foo",
-		},
-	}
-	_, err := LoadDictFromHint(hint, "../../test/resources/typehints-tests")
+	_, err := LoadTypeFromHint(
+		`map{"Bad": nonexistent/pkg.Foo}`,
+		"../../test/resources/typehints-tests",
+	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Bad")
-}
-
-func TestLoadDictFromHint_RejectsNonDict(t *testing.T) {
-	_, err := LoadDictFromHint(TypeHint{Type: typeHintStruct, Text: "Foo"}, ".")
-	require.Error(t, err)
 }
 
 func TestCachedLoadHint_DispatchesByKind(t *testing.T) {
@@ -57,7 +45,7 @@ func TestCachedLoadHint_DispatchesByKind(t *testing.T) {
 	}
 	dictHint := TypeHint{
 		Type: typeHintDict,
-		Dict: map[string]string{"Order": "text-template-server/src/model.Order"},
+		Text: `map{"Order": text-template-server/src/model.Order}`,
 	}
 
 	root := "../../test/resources/typehints-tests"
