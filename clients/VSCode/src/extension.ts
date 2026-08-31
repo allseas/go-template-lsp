@@ -38,13 +38,17 @@ export async function activate(context: ExtensionContext) {
             process.arch === "arm64" ? "gotmpl-server-arm64" : "gotmpl-server";
     }
 
-    const distPath = context.asAbsolutePath(
-        path.join("dist", "server", "bin", binaryName),
-    );
     const outPath = context.asAbsolutePath(
         path.join("out", "server", "bin", binaryName),
     );
-    const serverModule = fs.existsSync(distPath) ? distPath : outPath;
+    const distPath = context.asAbsolutePath(
+        path.join("dist", "server", "bin", binaryName),
+    );
+    // The build pipeline (esbuild + npm scripts) always refreshes
+    // out/server/bin, so prefer it. dist/server/bin is only a fallback for
+    // alternative packaging layouts and must never shadow a freshly built
+    // out/ binary.
+    const serverModule = fs.existsSync(outPath) ? outPath : distPath;
 
     const serverOptions: ServerOptions = {
         command: serverModule,
