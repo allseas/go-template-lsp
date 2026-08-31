@@ -3,6 +3,8 @@ package types
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"iter"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	parse "text-template-parser"
@@ -102,9 +105,19 @@ func hintsEqual(a, b TypeHint) bool {
 }
 
 var (
-	structHintRe = regexp.MustCompile(`gotype:\s*(\*?[A-Za-z_][A-Za-z0-9_/.-]*)`)
-	dictHintRe   = regexp.MustCompile(`gotype:\s*map\s*\{`)
-	dictEntryRe  = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*(\*?[A-Za-z_][A-Za-z0-9_/.-]*)\s*$`)
+	dictHintRe = regexp.MustCompile(`gotype:\s*map\s*\{`)
+	// dictEntryRe splits a single `"key": typeref` dict entry. The value is
+	// captured loosely so that full type expressions (slices, maps, pointers,
+	// nesting) reach resolveTypeExpr; it is validated with looksLikeTypeExpr.
+	dictEntryRe = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*(.+?)\s*$`)
+	// qualifiedTypeRe matches a slash-bearing import path followed by `.Type`
+	// (e.g. `cg/model/controlmodel.Block`). Such references parse as a
+	// division expression in go/parser, so preprocessHint rewrites them to
+	// `lastSegment.Type` before ParseExpr runs. Group 1 is the import path,
+	// group 2 the type name.
+	qualifiedTypeRe = regexp.MustCompile(
+		`([A-Za-z_][A-Za-z0-9_.\-]*(?:/[A-Za-z0-9_.\-]+)+)\.([A-Za-z_][A-Za-z0-9_]*)`,
+	)
 )
 
 // FindTreeHints scans each parse tree for a `gotype:` comment and returns a
@@ -190,7 +203,8 @@ func parseDictHint(commentText string, line int) (TypeHint, bool) {
 
 // parseDictBody parses the comma-separated `"key": typeref` entries between
 // the braces of a dict hint. An empty body or any malformed entry rejects
-// the whole hint.
+// the whole hint. Values are stored verbatim (with any slash import paths);
+// they are resolved later through resolveTypeExpr.
 func parseDictBody(body string) (map[string]string, bool) {
 	entries := strings.Split(body, ",")
 	dict := make(map[string]string, len(entries))
@@ -202,7 +216,11 @@ func parseDictBody(body string) (map[string]string, bool) {
 		if m == nil {
 			return nil, false
 		}
-		dict[m[1]] = m[2]
+		key, value := m[1], m[2]
+		if !looksLikeTypeExpr(value) {
+			return nil, false
+		}
+		dict[key] = value
 	}
 	if len(dict) == 0 {
 		return nil, false
@@ -211,15 +229,38 @@ func parseDictBody(body string) (map[string]string, bool) {
 }
 
 func parseStructHint(commentText string, line int) (TypeHint, bool) {
-	m := structHintRe.FindStringSubmatch(commentText)
-	if len(m) < 2 {
+	raw, ok := extractStructHintText(commentText)
+	if !ok {
 		return TypeHint{}, false
 	}
 	return TypeHint{
 		Type: typeHintStruct,
-		Text: m[1],
+		Text: raw,
 		Line: line,
 	}, true
+}
+
+// extractStructHintText pulls the raw type expression that follows `gotype:`
+// out of a comment. The comment's trailing `*/` marker and surrounding
+// whitespace are stripped. It returns ok=false when no `gotype:` marker is
+// present or the remainder does not look like a Go type expression, so a
+// stray comment is not misreported as a broken hint.
+func extractStructHintText(commentText string) (string, bool) {
+	idx := strings.Index(commentText, "gotype:")
+	if idx < 0 {
+		return "", false
+	}
+	rest := commentText[idx+len("gotype:"):]
+	rest = strings.TrimSpace(rest)
+	rest = strings.TrimSuffix(rest, "*/")
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return "", false
+	}
+	if !looksLikeTypeExpr(rest) {
+		return "", false
+	}
+	return rest, true
 }
 
 // walkParsed returns an iterator over node and its descendants in pre-order.
@@ -628,80 +669,240 @@ func loadPackageCached(importPath, workspaceRoot string) (*loadedPackage, error)
 	return lp, nil
 }
 
-// LoadTypeFromHint loads the Go package identified by the hint and returns a
-// Tree with DotType and Pkg set. A leading `*` in the hint (e.g.
-// `*example.com/m.Order`) makes DotType a pointer to the named type.
+// LoadTypeFromHint resolves the type expression carried by a struct-shaped
+// gotype hint and returns a Tree with DotType, Pkg and Fset set. The hint may
+// be an arbitrary Go type expression: a package-qualified named type
+// (`pkg/path.Type`), a builtin (`int`), a pointer, slice, array, map, or any
+// nesting of these (e.g. `map[string][]*pkg/path.Type`). Pkg/Fset are those of
+// the first named type encountered during the walk, so go-to-definition keeps
+// working.
 func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
-	isPointer := strings.HasPrefix(hint, "*")
-	hint = strings.TrimPrefix(hint, "*")
-	importPath, typeName := splitTypeHint(hint)
+	log.Debug().
+		Str("hint", hint).
+		Str("workspaceRoot", workspaceRoot).
+		Msg("LoadTypeFromHint: attempting to resolve type hint")
 
-	// Predeclared types (int, string, bool, …) live in types.Universe rather
-	// than in any package scope. When the hint has no package qualifier, try
-	// resolving it as a builtin before attempting to load a package.
-	if importPath == "." {
-		if obj, ok := types.Universe.Lookup(typeName).(*types.TypeName); ok {
-			dot := obj.Type()
-			if isPointer {
-				dot = types.NewPointer(dot)
-			}
-			return &Tree{DotType: dot}, nil
-		}
+	dot, pkg, fset, err := resolveTypeExpr(hint, workspaceRoot)
+	if err != nil {
+		log.Error().Err(err).Str("hint", hint).Msg("LoadTypeFromHint: failed to resolve type hint")
+		return nil, err
 	}
 
 	log.Debug().
 		Str("hint", hint).
-		Str("importPath", importPath).
-		Str("typeName", typeName).
-		Str("workspaceRoot", workspaceRoot).
-		Msg("LoadTypeFromHint: attempting to load type")
+		Str("type", types.TypeString(dot, nil)).
+		Msg("LoadTypeFromHint: type resolved successfully")
 
-	lp, err := loadPackageCached(importPath, workspaceRoot)
+	return &Tree{DotType: dot, Pkg: pkg, Fset: fset}, nil
+}
+
+// preprocessHint rewrites every `import/path/with/slashes.Type` reference in a
+// raw hint to `lastSegment.Type` so that go/parser.ParseExpr can parse it (a
+// slash-bearing qualified name otherwise parses as a division expression). It
+// records lastSegment -> full import path for later resolution and reports a
+// conflict when two different import paths share the same last segment.
+func preprocessHint(hint string) (rewritten string, imports map[string]string, err error) {
+	imports = make(map[string]string)
+	var conflict error
+	rewritten = qualifiedTypeRe.ReplaceAllStringFunc(hint, func(match string) string {
+		sub := qualifiedTypeRe.FindStringSubmatch(match)
+		importPath, typeName := sub[1], sub[2]
+		seg := importPath[strings.LastIndex(importPath, "/")+1:]
+		if existing, ok := imports[seg]; ok && existing != importPath {
+			if conflict == nil {
+				conflict = fmt.Errorf(
+					"conflicting import paths %q and %q map to the same package name %q",
+					existing, importPath, seg,
+				)
+			}
+			return match
+		}
+		imports[seg] = importPath
+		return seg + "." + typeName
+	})
+	if conflict != nil {
+		return "", nil, conflict
+	}
+	return rewritten, imports, nil
+}
+
+// looksLikeTypeExpr reports whether raw parses (after preprocessing) into a Go
+// type expression shape the resolver understands. It performs no package
+// loading, so it is safe to call while scanning for hints. A preprocess
+// conflict counts as hint-shaped so the error surfaces later as a diagnostic.
+func looksLikeTypeExpr(raw string) bool {
+	rewritten, _, err := preprocessHint(raw)
+	if err != nil {
+		return true
+	}
+	expr, err := parser.ParseExpr(rewritten)
+	if err != nil {
+		return false
+	}
+	return isTypeExprShape(expr)
+}
+
+// isTypeExprShape reports whether expr is one of the type constructs the hint
+// resolver supports. Predeclared/name resolution is not attempted here.
+func isTypeExprShape(expr ast.Expr) bool {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return true
+	case *ast.SelectorExpr:
+		_, ok := e.X.(*ast.Ident)
+		return ok
+	case *ast.StarExpr:
+		return isTypeExprShape(e.X)
+	case *ast.ArrayType:
+		return isTypeExprShape(e.Elt)
+	case *ast.MapType:
+		return isTypeExprShape(e.Key) && isTypeExprShape(e.Value)
+	case *ast.ParenExpr:
+		return isTypeExprShape(e.X)
+	default:
+		return false
+	}
+}
+
+// hintResolver walks a parsed type-expression AST and builds the matching
+// go/types.Type, loading packages on demand. It records the first named
+// type's package/fset so callers can preserve go-to-definition positions.
+type hintResolver struct {
+	workspaceRoot string
+	imports       map[string]string
+	pkg           *types.Package
+	fset          *token.FileSet
+}
+
+// resolveTypeExpr preprocesses, parses and resolves a raw hint into a
+// go/types.Type. It also returns the package and fset of the first named type
+// encountered (nil for pure-builtin hints such as `int` or `[]string`).
+func resolveTypeExpr(
+	hint, workspaceRoot string,
+) (types.Type, *types.Package, *token.FileSet, error) {
+	rewritten, imports, err := preprocessHint(hint)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	expr, err := parser.ParseExpr(rewritten)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cannot parse type hint %q: %w", hint, err)
+	}
+	r := &hintResolver{workspaceRoot: workspaceRoot, imports: imports}
+	t, err := r.resolve(expr)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return t, r.pkg, r.fset, nil
+}
+
+// resolve recursively converts a type-expression AST node into a
+// go/types.Type.
+func (r *hintResolver) resolve(expr ast.Expr) (types.Type, error) {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return r.resolveIdent(e.Name)
+	case *ast.SelectorExpr:
+		pkgIdent, ok := e.X.(*ast.Ident)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unsupported qualifier in type hint: %s", types.ExprString(expr),
+			)
+		}
+		return r.resolveSelector(pkgIdent.Name, e.Sel.Name)
+	case *ast.StarExpr:
+		elem, err := r.resolve(e.X)
+		if err != nil {
+			return nil, err
+		}
+		return types.NewPointer(elem), nil
+	case *ast.ArrayType:
+		elem, err := r.resolve(e.Elt)
+		if err != nil {
+			return nil, err
+		}
+		if e.Len == nil {
+			return types.NewSlice(elem), nil
+		}
+		n, err := arrayLen(e.Len)
+		if err != nil {
+			return nil, err
+		}
+		return types.NewArray(elem, n), nil
+	case *ast.MapType:
+		key, err := r.resolve(e.Key)
+		if err != nil {
+			return nil, err
+		}
+		val, err := r.resolve(e.Value)
+		if err != nil {
+			return nil, err
+		}
+		return types.NewMap(key, val), nil
+	case *ast.ParenExpr:
+		return r.resolve(e.X)
+	default:
+		return nil, fmt.Errorf(
+			"unsupported type expression in hint: %s", types.ExprString(expr),
+		)
+	}
+}
+
+// resolveIdent resolves a bare identifier: a predeclared builtin from
+// types.Universe, otherwise a type in the local package (import path ".").
+func (r *hintResolver) resolveIdent(name string) (types.Type, error) {
+	if obj, ok := types.Universe.Lookup(name).(*types.TypeName); ok {
+		return obj.Type(), nil
+	}
+	return r.lookupType(".", name)
+}
+
+// resolveSelector resolves `pkg.Type`. When pkg was recorded by preprocessHint
+// it maps to a full slash import path; otherwise the qualifier is itself the
+// import path.
+func (r *hintResolver) resolveSelector(qualifier, typeName string) (types.Type, error) {
+	importPath := qualifier
+	if full, ok := r.imports[qualifier]; ok {
+		importPath = full
+	}
+	return r.lookupType(importPath, typeName)
+}
+
+// lookupType loads the package for importPath and returns the type named
+// typeName, recording the first package/fset for definition support.
+func (r *hintResolver) lookupType(importPath, typeName string) (types.Type, error) {
+	lp, err := loadPackageCached(importPath, r.workspaceRoot)
 	if err != nil {
 		return nil, err
 	}
-
+	if r.pkg == nil {
+		r.pkg = lp.pkg
+		r.fset = lp.fset
+	}
 	obj := lp.pkg.Scope().Lookup(typeName)
 	if obj == nil {
-		log.Error().
-			Str("typeName", typeName).
-			Str("importPath", importPath).
-			Msg("LoadTypeFromHint: type not found in package scope")
 		return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
 	}
-
-	// The hint must name a type (not a func/var/const). Accept any type,
-	// including non-named ones such as a defined alias to a builtin
-	// (`type Int = int`); field/method enumeration downstream simply yields
-	// nothing for types without a named base.
+	// Accept any *types.TypeName, including non-named types such as a defined
+	// alias to a builtin (`type Int = int`).
 	tn, ok := obj.(*types.TypeName)
 	if !ok {
-		log.Error().Str("typeName", typeName).Msg("LoadTypeFromHint: object is not a type")
 		return nil, fmt.Errorf("%q is not a type in package %q", typeName, importPath)
 	}
-
-	dot := tn.Type()
-	if isPointer {
-		dot = types.NewPointer(dot)
-	}
-
-	log.Debug().
-		Str("typeName", typeName).
-		Str("importPath", importPath).
-		Bool("pointer", isPointer).
-		Msg("LoadTypeFromHint: type loaded successfully")
-
-	tree := &Tree{DotType: dot, Pkg: lp.pkg, Fset: lp.fset}
-	return tree, nil
+	return tn.Type(), nil
 }
 
-// splitTypeHint splits a raw gotype hint into (importPath, typeName).
-func splitTypeHint(hint string) (importPath, typeName string) {
-	idx := strings.LastIndex(hint, ".")
-	if idx == -1 {
-		return ".", hint
+// arrayLen extracts the integer length of a fixed-size array type expression.
+func arrayLen(expr ast.Expr) (int64, error) {
+	lit, ok := expr.(*ast.BasicLit)
+	if !ok || lit.Kind != token.INT {
+		return 0, fmt.Errorf("unsupported array length: %s", types.ExprString(expr))
 	}
-	return hint[:idx], hint[idx+1:]
+	n, err := strconv.ParseInt(lit.Value, 0, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid array length %q: %w", lit.Value, err)
+	}
+	return n, nil
 }
 
 // namedTypeOf unwraps pointer indirection and aliases to reach the underlying
