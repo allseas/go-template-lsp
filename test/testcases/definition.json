@@ -132,5 +132,25 @@
       "targetFile": "othermodel.go",
       "targetLine": 7
     }
+  },
+  {
+    "name": "Field through dict-in-generic value resolves cross-package",
+    "content": "{{/*gotype: cg/model.View[map{\"g\": cg/othermodel.Gadget}]*/}}\n{{ .Model.g.S<cursor>erial }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "othermodel.go",
+      "targetLine": 8
+    }
+  },
+  {
+    "name": "Dict key in generic hint navigates to value type declaration",
+    "content": "{{/*gotype: cg/model.View[map{\"g\": cg/othermodel.Gadget}]*/}}\n{{ .Model.<cursor>g.Serial }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "othermodel.go",
+      "targetLine": 7
+    }
   }
 ]

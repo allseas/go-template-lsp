@@ -156,6 +156,33 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		}},
 	},
 	{
+		name:  "generic hint with a dict type argument is a struct hint",
+		input: `{{/*gotype: pkg/tmpl.View[map{"g": pkg/other.Gadget}]*/}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintStruct,
+			Text: `pkg/tmpl.View[map{"g": pkg/other.Gadget}]`,
+			Line: 1,
+		}},
+	},
+	{
+		name:  "dict nested inside a composite is a struct hint",
+		input: `{{/*gotype: *[]map{"g": pkg/other.Gadget}*/}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintStruct,
+			Text: `*[]map{"g": pkg/other.Gadget}`,
+			Line: 1,
+		}},
+	},
+	{
+		name:  "dict with a nested dict value",
+		input: `{{/*gotype: map{"outer": map{"inner": string}}*/}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintDict,
+			Text: `map{"outer": map{"inner": string}}`,
+			Line: 1,
+		}},
+	},
+	{
 		name:      "dict hint with an empty body",
 		input:     `{{/*gotype: map{}*/}}`,
 		wantHints: []TypeHint{{Type: typeHintMalformedDict, Line: 1}},

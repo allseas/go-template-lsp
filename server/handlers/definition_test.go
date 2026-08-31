@@ -986,3 +986,47 @@ func TestDefinition_GenericCrossPackageHint(t *testing.T) {
 		assert.Equal(t, uint32(0), loc.Range.Start.Line)
 	})
 }
+
+// TestDefinition_DictInGenericHint verifies definition routing for a generic
+// hint whose type argument is a dict (`View[map{...}]`): a field reached
+// through a dict value resolves cross-package to the value type's source, and
+// the dict key itself navigates to the value type declaration.
+func TestDefinition_DictInGenericHint(t *testing.T) {
+	const resourceDir = "../../test/resources/typehints-tests"
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = resourceDir
+
+	src := "{{- /*gotype: text-template-server/src/model.View[map{\"g\": text-template-server/src/othermodel.Gadget}]*/ -}}\n" +
+		"{{ .Model.g.Serial }}"
+	u := "file:///dict-in-generic.tmpl"
+	store.Set(u, src)
+	t.Cleanup(func() { store.Remove(u) })
+
+	def := func(t *testing.T, off int) (protocol.Location, bool) {
+		t.Helper()
+		params := &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: u},
+				Position:     offsetToPosition(src, off),
+			},
+		}
+		result, err := Definition(nil, params)
+		require.NoError(t, err)
+		loc, ok := result.(protocol.Location)
+		return loc, ok
+	}
+
+	t.Run("field through dict value resolves cross-package", func(t *testing.T) {
+		loc, ok := def(t, strings.Index(src, "Serial")+1)
+		require.True(t, ok, "expected a Location")
+		assert.True(t, strings.HasSuffix(loc.URI, "othermodel.go"),
+			"expected othermodel.go, got %s", loc.URI)
+	})
+
+	t.Run("dict key navigates to value type declaration", func(t *testing.T) {
+		loc, ok := def(t, strings.Index(src, ".g.Serial")+1)
+		require.True(t, ok, "expected a Location")
+		assert.True(t, strings.HasSuffix(loc.URI, "othermodel.go"),
+			"expected othermodel.go, got %s", loc.URI)
+	})
+}
