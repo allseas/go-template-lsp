@@ -120,9 +120,9 @@ func TestRenderResultsJSON(t *testing.T) {
 	}}
 
 	var buf bytes.Buffer
-	exceeded := renderResults(&buf, results, "json", protocol.DiagnosticSeverityError)
+	exceeded := renderResults(&buf, results, "json", protocol.DiagnosticSeverityWarning)
 
-	assert.False(t, exceeded, "warning is below the error threshold")
+	assert.True(t, exceeded, "warning is at the warning threshold")
 
 	var decoded []fileDiagnostics
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &decoded))
@@ -130,6 +130,34 @@ func TestRenderResultsJSON(t *testing.T) {
 	assert.Equal(t, "y.tmpl", decoded[0].Path)
 	require.Len(t, decoded[0].Diagnostics, 1)
 	assert.Equal(t, "careful", decoded[0].Diagnostics[0].Message)
+}
+
+// TestRenderResultsFiltersBelowThreshold verifies that diagnostics below the
+// threshold are omitted from the output in both text and JSON formats.
+func TestRenderResultsFiltersBelowThreshold(t *testing.T) {
+	warn := protocol.DiagnosticSeverityWarning
+	err := protocol.DiagnosticSeverityError
+	results := []fileDiagnostics{{
+		Path: "z.tmpl",
+		Diagnostics: []protocol.Diagnostic{
+			{Severity: &warn, Message: "just a warning"},
+			{Severity: &err, Message: "a real error"},
+		},
+	}}
+
+	var textBuf bytes.Buffer
+	exceeded := renderResults(&textBuf, results, "text", protocol.DiagnosticSeverityError)
+	assert.True(t, exceeded)
+	assert.Contains(t, textBuf.String(), "a real error")
+	assert.NotContains(t, textBuf.String(), "just a warning")
+
+	var jsonBuf bytes.Buffer
+	renderResults(&jsonBuf, results, "json", protocol.DiagnosticSeverityError)
+	var decoded []fileDiagnostics
+	require.NoError(t, json.Unmarshal(jsonBuf.Bytes(), &decoded))
+	require.Len(t, decoded, 1)
+	require.Len(t, decoded[0].Diagnostics, 1)
+	assert.Equal(t, "a real error", decoded[0].Diagnostics[0].Message)
 }
 
 func TestRenderResultsJSON_EmptyIsArray(t *testing.T) {

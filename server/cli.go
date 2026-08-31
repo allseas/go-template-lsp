@@ -57,7 +57,8 @@ func runCheck(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	)
 	minSeverity := fs.String(
 		"min-severity", "error",
-		"severity that triggers a non-zero exit: error, warning, information, hint",
+		"minimum severity to report and to trigger a non-zero exit: "+
+			"error, warning, information, hint",
 	)
 	verbose := fs.Bool("verbose", false, "enable server debug logging on stderr")
 	fs.Usage = func() {
@@ -205,7 +206,9 @@ func hasGlobMeta(s string) bool {
 }
 
 // renderResults writes results in the requested format and reports whether any
-// diagnostic is at or above threshold.
+// diagnostic is at or above threshold. Diagnostics below the threshold are
+// omitted from the output in both formats; only diagnostics at or above it are
+// shown.
 func renderResults(
 	w io.Writer,
 	results []fileDiagnostics,
@@ -213,27 +216,29 @@ func renderResults(
 	threshold protocol.DiagnosticSeverity,
 ) bool {
 	exceeded := false
+	filtered := make([]fileDiagnostics, 0, len(results))
 	for _, r := range results {
+		kept := make([]protocol.Diagnostic, 0, len(r.Diagnostics))
 		for _, d := range r.Diagnostics {
-			if atOrAboveThreshold(d.Severity, threshold) {
-				exceeded = true
+			if !atOrAboveThreshold(d.Severity, threshold) {
+				continue
 			}
+			exceeded = true
+			kept = append(kept, d)
 		}
+		filtered = append(filtered, fileDiagnostics{Path: r.Path, Diagnostics: kept})
 	}
 
 	if format == "json" {
-		if results == nil {
-			results = []fileDiagnostics{}
-		}
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		if err := enc.Encode(results); err != nil {
+		if err := enc.Encode(filtered); err != nil {
 			return exceeded
 		}
 		return exceeded
 	}
 
-	for _, r := range results {
+	for _, r := range filtered {
 		for _, d := range r.Diagnostics {
 			fprintf(
 				w, "%s:%d:%d: %s: %s\n",
