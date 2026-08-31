@@ -1,4 +1,5 @@
 import { execSync } from "child_process";
+import { mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -17,7 +18,11 @@ const __dirname = dirname(__filename);
 
 const serverDirectory = join(__dirname, '..', 'server');
 
-const binariesDir = join(__dirname, '..', 'clients', 'VSCode', 'dist', 'server', 'bin');
+const binariesDir = join(__dirname, '..', 'clients', 'VSCode', 'out', 'server', 'bin');
+
+// gowatch does not create the output directory; ensure it exists so the
+// extension (which loads from out/server/bin) finds the freshly built binary.
+mkdirSync(binariesDir, { recursive: true });
 
 const outputPath = join(binariesDir, binaryName);
 
