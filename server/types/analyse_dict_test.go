@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"go/types"
 	"strings"
 	"testing"
@@ -22,12 +23,22 @@ func analyseWithDict(t *testing.T, text string, dict *DictType) *Tree {
 	return &tree
 }
 
-// dictOfLoaded builds a *DictType from a small helper: load each ref via
-// LoadTypeFromHint and stitch them together. Only used in tests.
+// dictOfLoaded builds a *DictType by rendering refs as a `map{...}` hint and
+// resolving it through the unified loader. Only used in tests.
 func dictOfLoaded(t *testing.T, refs map[string]string) *DictType {
 	t.Helper()
-	hint := TypeHint{Type: typeHintDict, Dict: refs}
-	tr, err := LoadDictFromHint(hint, "../../test/resources/typehints-tests")
+	var b strings.Builder
+	b.WriteString("map{")
+	first := true
+	for k, v := range refs {
+		if !first {
+			b.WriteString(", ")
+		}
+		first = false
+		fmt.Fprintf(&b, "%q: %s", k, v)
+	}
+	b.WriteString("}")
+	tr, err := LoadTypeFromHint(b.String(), "../../test/resources/typehints-tests")
 	require.NoError(t, err)
 	require.NotNil(t, tr.DictType)
 	return tr.DictType

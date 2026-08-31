@@ -136,9 +136,11 @@ map{ "<key>": <typeref> ( , "<key>": <typeref> )* }
 ```
 
 - Keys are double-quoted strings.
-- Each `<typeref>` is a full Go type expression resolved through the same `resolveTypeExpr` used by struct hints: a package-qualified named type (`import/path.TypeName`), a bare `TypeName` for the local package, a builtin (`int`), or any composition of pointer / slice / array / `map[K]V` (e.g. `[]*import/path.TypeName`, `map[string]int`).
+- Each `<typeref>` is a full Go type expression resolved through the same `resolveTypeExpr` used by struct hints: a package-qualified named type (`import/path.TypeName`), a bare `TypeName` for the local package, a builtin (`int`), or any composition of pointer / slice / array / `map[K]V` (e.g. `[]*import/path.TypeName`, `map[string]int`), a generic instantiation (`pkg.View[Arg]`), or a nested `map{...}`.
 - Whitespace around tokens is ignored.
 - An empty body (`map{}`) is rejected — a hint with no keys carries no information.
+
+A `map{...}` **composes like any other type**: it may appear inside a pointer/slice/array/map (`*[]map{...}`, `map[string]map{...}`) and as a **generic type argument** (`pkg.View[map{...}]`). In the generic case `.` is the instantiated generic type and the dict surfaces through the substituted field (e.g. `.Model` on `View[T]`), where the normal `*DictType` behaviour resumes.
 
 The hint can appear anywhere a struct hint can: at the top of the file for the root template, or immediately inside a `{{define "name"}}` block for a named sub-template. Both hint kinds may coexist in one file; different `{{define}}` blocks may pick either.
 
@@ -159,20 +161,19 @@ Once loaded, `.` behaves like a struct whose fields are the declared keys:
 ```mermaid
 flowchart TD
     A["didOpen / didChange"] --> B["FindTreeHints - scan CommentNodes"]
-    B --> C{"gotype: map{ marker?"}
-    C -->|yes| D["parseDictHint - parse body"]
-    C -->|no| S["parseStructHint - existing path"]
-    D --> E{"body well-formed?"}
-    E -->|no| M["record typeHintMalformedDict → error diagnostic on the comment"]
-    E -->|yes| F["LoadDictFromHint - LoadTypeFromHint per value ref"]
-    F --> G["DictType{Fields: map[key]types.Type}"]
-    G --> H["stored as tree.DictType"]
+    B --> C["extractHintText + classifyHintText"]
+    C --> D{"well-formed type expression?"}
+    D -->|"malformed map{...}"| M["typeHintMalformedDict → error diagnostic on the comment"]
+    D -->|"not a type"| S["ignored (stray comment)"]
+    D -->|yes| L["LoadTypeFromHint - rewrite map{ → sentinel, ParseExpr, walk"]
+    L --> G["*DictType wherever a map{...} was resolved (root, nested, or a generic arg)"]
+    G --> H["root dict → tree.DictType; otherwise tree.DotType"]
     H --> I["analyseField / walkFieldChainWithMethodInfo detect *DictType and dispatch on LookupDictKey"]
 ```
 
 ### Caching
 
-Each value type is loaded through the same `CachedLoadTypeFromHint` used by struct hints, which in turn shares the per-package cache (`loadedPackages`). A map hint listing three types from the same package therefore triggers a single `packages.Load` call, and every value shares one `*types.Package`. The composed `DictType` itself is cached under a key derived from the sorted (key, typeref) pairs so identical map hints — including ones spelled with keys in a different order — share a single entry.
+Each value type is loaded through the per-package cache (`loadedPackages`). A map hint listing three types from the same package therefore triggers a single `packages.Load` call, and every value shares one `*types.Package`. The resolved `Tree` (carrying its `DictType`) is cached under the raw hint text, so identical hints share a single entry.
 
 Cache invalidation is identical to struct hints: any `.go` change in the workspace clears both `typeHintCache` and `loadedPackages`.
 
@@ -189,7 +190,7 @@ Failure to load one of the value types produces the existing `hintLoadFailure` (
 
 ### Implementation notes
 
-- Parsing lives in `server/types/type_hints.go`: `dictHintRe` matches the `map{` marker (the brace distinguishes the heterogeneous dict construct from a real Go `map[...]` type), `parseDictHint` extracts the body, `parseDictBody` splits it on commas and validates each `"key": typeref` entry via `dictEntryRe`. The value side of each entry is captured loosely and gated with `looksLikeTypeExpr`, so slice/map/pointer/nested values are accepted and later resolved by `resolveTypeExpr`.
+- Parsing lives in `server/types/type_hints.go`. `preprocessHint` rewrites slash import paths and the dict keyword `map{` to a composite-literal sentinel (`_gotmplDict{`), so the whole hint — including nested dicts and dicts inside generics or composites — parses as a single Go expression via `go/parser.ParseExpr`. `resolve` walks the AST; a composite literal denotes a dict, and `resolveDict` builds the `*DictType` and peels any array/map constructors that directly prefixed it. `classifyHintText` decides struct vs dict vs malformed, and because go/parser does the splitting, multi-parameter generic values inside a dict (`Pair[A, B]`) parse correctly.
 - The synthetic type is `types.DictType` — it implements `types.Type` (its own underlying) so the analyser can hand it to code that expects a `types.Type`, but `types.LookupFieldOrMethod` does **not** work on it. All callers that walk field chains (`walkFieldChainWithMethodInfo`, completions, definition, hover) type-assert on `*DictType` first and dispatch to `LookupDictKey` / `DictKeys` / `DictTypeFields` before falling back to the normal struct path.
 - `documents.go` propagates a malformed marker to `failedHints`, which `diagnostics.go` renders using the `malformedHint` severity instead of `hintLoadFailure`.
 
