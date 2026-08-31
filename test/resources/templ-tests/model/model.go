@@ -142,3 +142,10 @@ type Tree struct {
 	Left *Tree
 	Right *Tree
 }
+
+// View is a generic wrapper used to exercise generic gotype hints across
+// packages: its type argument may live in a different package than View.
+type View[T any] struct {
+	Model T
+	Title string
+}

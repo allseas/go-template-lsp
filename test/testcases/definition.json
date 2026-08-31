@@ -92,5 +92,45 @@
     "expected": {
       "noResult": true
     }
+  },
+  {
+    "name": "Generic hint base field jumps to struct field",
+    "content": "{{/*gotype: cg/model.View[cg/othermodel.Gadget]*/}}\n{{ .M<cursor>odel }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 148
+    }
+  },
+  {
+    "name": "Generic hint type-argument field resolves cross-package",
+    "content": "{{/*gotype: cg/model.View[cg/othermodel.Gadget]*/}}\n{{ .Model.S<cursor>erial }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "othermodel.go",
+      "targetLine": 8
+    }
+  },
+  {
+    "name": "Generic hint type-argument method resolves cross-package",
+    "content": "{{/*gotype: cg/model.View[cg/othermodel.Gadget]*/}}\n{{ .Model.D<cursor>escribe }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "othermodel.go",
+      "targetLine": 13
+    }
+  },
+  {
+    "name": "Type token inside gotype comment jumps to source",
+    "content": "{{/*gotype: cg/model.View[cg/othermodel.G<cursor>adget]*/}}\n{{ .Model }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "othermodel.go",
+      "targetLine": 7
+    }
   }
 ]
