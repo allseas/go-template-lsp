@@ -118,7 +118,17 @@ var (
 	qualifiedTypeRe = regexp.MustCompile(
 		`([A-Za-z_][A-Za-z0-9_.\-]*(?:/[A-Za-z0-9_.\-]+)+)\.([A-Za-z_][A-Za-z0-9_]*)`,
 	)
+	// dictKeywordRe matches the dict-hint keyword `map{` (distinct from the Go
+	// map type `map[...]`). preprocessHint rewrites it to the dict sentinel so
+	// the dict parses as a Go composite literal via go/parser, which lets a
+	// `map{...}` appear at any nesting depth.
+	dictKeywordRe = regexp.MustCompile(`\bmap\s*\{`)
 )
+
+// dictSentinel is the placeholder type name a `map{...}` dict hint is rewritten
+// to (`_gotmplDict{...}`) so it parses as a Go composite literal. Consequently,
+// any composite literal in a parsed hint denotes a dict.
+const dictSentinel = "_gotmplDict"
 
 // FindTreeHints scans each parse tree for a `gotype:` comment and returns a
 // map of template names to the first hint found in that tree. Any additional
@@ -700,6 +710,9 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		Str("type", types.TypeString(dot, nil)).
 		Msg("LoadTypeFromHint: type resolved successfully")
 
+	if dt, ok := dot.(*DictType); ok {
+		return &Tree{DictType: dt, Pkg: pkg, Fset: fset, Fsets: fsets}, nil
+	}
 	return &Tree{DotType: dot, Pkg: pkg, Fset: fset, Fsets: fsets}, nil
 }
 
@@ -755,6 +768,9 @@ func preprocessHint(hint string) (rewritten string, imports map[string]string, e
 		imports[seg] = importPath
 		return seg + "." + typeName
 	})
+	// Rewrite the dict keyword `map{` to the sentinel so the dict parses as a
+	// composite literal. `map[...]` (Go map types) is left untouched.
+	rewritten = dictKeywordRe.ReplaceAllString(rewritten, dictSentinel+"{")
 	if conflict != nil {
 		return "", nil, conflict
 	}
@@ -804,8 +820,49 @@ func isTypeExprShape(expr ast.Expr) bool {
 			}
 		}
 		return true
+	case *ast.CompositeLit:
+		return isDictShape(e)
 	case *ast.ParenExpr:
 		return isTypeExprShape(e.X)
+	default:
+		return false
+	}
+}
+
+// isDictShape reports whether c is a rewritten `map{...}` dict literal: its type
+// peels through array/map constructors to the dict sentinel and every element
+// is a `"string": type` pair.
+func isDictShape(c *ast.CompositeLit) bool {
+	if !dictSentinelType(c.Type) {
+		return false
+	}
+	for _, elt := range c.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			return false
+		}
+		lit, ok := kv.Key.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return false
+		}
+		if !isTypeExprShape(kv.Value) {
+			return false
+		}
+	}
+	return true
+}
+
+// dictSentinelType reports whether typeExpr is the dict sentinel, possibly
+// wrapped in array/map constructors (which go/parser folds into a dict
+// composite literal's Type when they directly prefix `map{...}`).
+func dictSentinelType(typeExpr ast.Expr) bool {
+	switch te := typeExpr.(type) {
+	case *ast.Ident:
+		return te.Name == dictSentinel
+	case *ast.ArrayType:
+		return dictSentinelType(te.Elt)
+	case *ast.MapType:
+		return dictSentinelType(te.Value)
 	default:
 		return false
 	}
@@ -899,12 +956,82 @@ func (r *hintResolver) resolve(expr ast.Expr) (types.Type, error) {
 		return r.resolveGeneric(e.X, []ast.Expr{e.Index})
 	case *ast.IndexListExpr:
 		return r.resolveGeneric(e.X, e.Indices)
+	case *ast.CompositeLit:
+		return r.resolveDict(e)
 	case *ast.ParenExpr:
 		return r.resolve(e.X)
 	default:
 		return nil, fmt.Errorf(
 			"unsupported type expression in hint: %s", types.ExprString(expr),
 		)
+	}
+}
+
+// resolveDict builds a *DictType from a composite literal produced by rewriting
+// a `map{...}` hint, then wraps it with any array/map constructors that
+// directly prefixed the dict (go/parser folds those into the literal's Type).
+func (r *hintResolver) resolveDict(c *ast.CompositeLit) (types.Type, error) {
+	fields := make(map[string]types.Type, len(c.Elts))
+	for _, elt := range c.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			return nil, fmt.Errorf("malformed dict entry: %s", types.ExprString(elt))
+		}
+		lit, ok := kv.Key.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return nil, fmt.Errorf("dict key must be a string literal: %s", types.ExprString(kv.Key))
+		}
+		key, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid dict key %s: %w", lit.Value, err)
+		}
+		val, err := r.resolve(kv.Value)
+		if err != nil {
+			return nil, err
+		}
+		fields[key] = val
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("empty dict hint")
+	}
+	return r.wrapDictType(c.Type, &DictType{Fields: fields})
+}
+
+// wrapDictType applies the array/map constructor chain in a rewritten dict
+// composite literal's Type around the resolved dict. The chain always ends at
+// the dict sentinel identifier.
+func (r *hintResolver) wrapDictType(typeExpr ast.Expr, inner types.Type) (types.Type, error) {
+	switch te := typeExpr.(type) {
+	case *ast.Ident:
+		if te.Name == dictSentinel {
+			return inner, nil
+		}
+		return nil, fmt.Errorf("unexpected dict composite type %q", te.Name)
+	case *ast.ArrayType:
+		elem, err := r.wrapDictType(te.Elt, inner)
+		if err != nil {
+			return nil, err
+		}
+		if te.Len == nil {
+			return types.NewSlice(elem), nil
+		}
+		n, err := arrayLen(te.Len)
+		if err != nil {
+			return nil, err
+		}
+		return types.NewArray(elem, n), nil
+	case *ast.MapType:
+		key, err := r.resolve(te.Key)
+		if err != nil {
+			return nil, err
+		}
+		val, err := r.wrapDictType(te.Value, inner)
+		if err != nil {
+			return nil, err
+		}
+		return types.NewMap(key, val), nil
+	default:
+		return nil, fmt.Errorf("unsupported dict wrapper: %s", types.ExprString(typeExpr))
 	}
 }
 
