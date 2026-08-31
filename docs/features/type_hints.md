@@ -23,8 +23,13 @@ Any of the following forms are recognised:
 | `{{/*gotype: [3]int*/}}`            | fixed-size **array** of a builtin                             |
 | `{{/*gotype: map[string]int*/}}`    | a real Go **map** type (note the square brackets — distinct from the `map{...}` construct below) |
 | `{{/*gotype: map[string][]*example.com/m.User*/}}` | any **nesting** of the constructs above                       |
+| `{{/*gotype: example.com/m.View[example.com/m.User]*/}}` | **generic instantiation**: `View[T]` with `T` bound to `User`, so `T`-typed fields/methods resolve to `User` |
+| `{{/*gotype: example.com/m.View[User]*/}}` | same, using a **bare** type argument — an unqualified argument is resolved in the generic type's own package |
+| `{{/*gotype: example.com/m.Pair[User, int]*/}}` | multiple type parameters |
 
-The hint is an arbitrary Go type expression built from named types (local, package-qualified, or builtin), pointers (`*T`), slices (`[]T`), arrays (`[N]T`) and maps (`map[K]V`), composed to any depth. Builtin (predeclared) names are resolved from `types.Universe` rather than by loading a package, so they need no workspace or module to be present. A hint may also name a defined alias to a builtin (e.g. `type Celsius = float64`); the loader accepts any type name, not only named struct types (field/method enumeration simply yields nothing for a non-struct base).
+The hint is an arbitrary Go type expression built from named types (local, package-qualified, or builtin), pointers (`*T`), slices (`[]T`), arrays (`[N]T`), maps (`map[K]V`) and generic instantiations (`T[Arg]`, `T[A, B]`), composed to any depth. Builtin (predeclared) names are resolved from `types.Universe` rather than by loading a package, so they need no workspace or module to be present. A hint may also name a defined alias to a builtin (e.g. `type Celsius = float64`); the loader accepts any type name, not only named struct types (field/method enumeration simply yields nothing for a non-struct base).
+
+For a generic instantiation the base must be a generic named type and the number of type arguments must match its type parameters; arguments are validated against their constraints. A bare (unqualified) type argument is looked up in the base type's own package, while package-qualified arguments (`pkg/path.Type`) resolve through their import path like any other named type.
 
 ## Resolution flow
 

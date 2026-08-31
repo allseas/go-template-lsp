@@ -757,6 +757,18 @@ func isTypeExprShape(expr ast.Expr) bool {
 		return isTypeExprShape(e.Elt)
 	case *ast.MapType:
 		return isTypeExprShape(e.Key) && isTypeExprShape(e.Value)
+	case *ast.IndexExpr:
+		return isTypeExprShape(e.X) && isTypeExprShape(e.Index)
+	case *ast.IndexListExpr:
+		if !isTypeExprShape(e.X) {
+			return false
+		}
+		for _, idx := range e.Indices {
+			if !isTypeExprShape(idx) {
+				return false
+			}
+		}
+		return true
 	case *ast.ParenExpr:
 		return isTypeExprShape(e.X)
 	default:
@@ -839,6 +851,10 @@ func (r *hintResolver) resolve(expr ast.Expr) (types.Type, error) {
 			return nil, err
 		}
 		return types.NewMap(key, val), nil
+	case *ast.IndexExpr:
+		return r.resolveGeneric(e.X, []ast.Expr{e.Index})
+	case *ast.IndexListExpr:
+		return r.resolveGeneric(e.X, e.Indices)
 	case *ast.ParenExpr:
 		return r.resolve(e.X)
 	default:
@@ -866,6 +882,66 @@ func (r *hintResolver) resolveSelector(qualifier, typeName string) (types.Type, 
 		importPath = full
 	}
 	return r.lookupType(importPath, typeName)
+}
+
+// resolveGeneric instantiates a generic named type. baseExpr must resolve to a
+// generic *types.Named and the number of type arguments must match its type
+// parameters. Each argument is resolved to a type and the result is produced
+// with types.Instantiate (which also validates the arguments against their
+// constraints).
+func (r *hintResolver) resolveGeneric(baseExpr ast.Expr, argExprs []ast.Expr) (types.Type, error) {
+	baseType, err := r.resolve(baseExpr)
+	if err != nil {
+		return nil, err
+	}
+	named := namedTypeOf(baseType)
+	if named == nil {
+		return nil, fmt.Errorf(
+			"%s is not a named type and cannot take type arguments",
+			types.ExprString(baseExpr),
+		)
+	}
+	if named.TypeParams().Len() != len(argExprs) {
+		return nil, fmt.Errorf(
+			"%s expects %d type argument(s), got %d",
+			types.ExprString(baseExpr), named.TypeParams().Len(), len(argExprs),
+		)
+	}
+	basePkg := named.Obj().Pkg()
+	targs := make([]types.Type, len(argExprs))
+	for i, ae := range argExprs {
+		at, argErr := r.resolveTypeArg(ae, basePkg)
+		if argErr != nil {
+			return nil, argErr
+		}
+		targs[i] = at
+	}
+	inst, err := types.Instantiate(nil, named, targs, true)
+	if err != nil {
+		return nil, fmt.Errorf("cannot instantiate %s: %w", types.ExprString(baseExpr), err)
+	}
+	return inst, nil
+}
+
+// resolveTypeArg resolves a single type-argument expression. A bare,
+// non-builtin identifier is first looked up in basePkg (the generic type's own
+// package) so an unqualified argument such as `Instance` in `pkg.View[Instance]`
+// resolves alongside `View`. Anything else (builtins, qualified names, nested
+// composites) falls back to the standard resolution path.
+func (r *hintResolver) resolveTypeArg(expr ast.Expr, basePkg *types.Package) (types.Type, error) {
+	if id, ok := expr.(*ast.Ident); ok && basePkg != nil {
+		if _, builtin := types.Universe.Lookup(id.Name).(*types.TypeName); !builtin {
+			if obj := basePkg.Scope().Lookup(id.Name); obj != nil {
+				if tn, ok := obj.(*types.TypeName); ok {
+					if r.pkg == nil {
+						r.pkg = basePkg
+					}
+					return tn.Type(), nil
+				}
+			}
+		}
+	}
+	return r.resolve(expr)
 }
 
 // lookupType loads the package for importPath and returns the type named
