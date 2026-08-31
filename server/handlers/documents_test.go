@@ -12,8 +12,36 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-func TestDocumentStore(t *testing.T) {
-	ds := &documentStore{docs: make(map[string]*document)}
+// TestStore_RootHintDoesNotLeakAcrossFiles verifies that a gotype hint on a
+// file's root template is not placed in the shared, name-keyed input-type
+// registry. Every file's root tree is named "t", so registering it would bleed
+// the type into other files' root templates. Named {{define}} hints, which have
+// unique names, must still register for cross-template argument checking.
+func TestStore_RootHintDoesNotLeakAcrossFiles(t *testing.T) {
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = "../../test/resources/typehints-tests"
+
+	rootURI := "file:///root-hint-leak.tmpl"
+	store.Set(rootURI, "{{/*gotype: text-template-server/src/model.Order*/}}\n{{ .CustomerName }}")
+	t.Cleanup(func() { store.Remove(rootURI) })
+
+	store.mu.RLock()
+	_, leaked := store.templateInputTypes["t"]
+	store.mu.RUnlock()
+	assert.False(t, leaked, "a root hint (template \"t\") must not enter the shared registry")
+
+	namedURI := "file:///named-define.tmpl"
+	store.Set(namedURI,
+		"{{define \"OrderTpl\"}}{{/*gotype: text-template-server/src/model.Order*/}}\n{{ .CustomerName }}{{end}}")
+	t.Cleanup(func() { store.Remove(namedURI) })
+
+	store.mu.RLock()
+	_, registered := store.templateInputTypes["OrderTpl"]
+	store.mu.RUnlock()
+	assert.True(t, registered, "a named define hint should register for cross-template checking")
+}
+
+func TestDocumentStore(t *testing.T) {	ds := &documentStore{docs: make(map[string]*document)}
 	uri := "file:///test-document.txt"
 	content := "Initial Content"
 

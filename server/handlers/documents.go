@@ -100,9 +100,19 @@ func (s *documentStore) Set(uri, text string) {
 	// Load gotype hints from {{define}} blocks before taking the lock (type loading can be slow).
 	newTemplateTypes := make(map[string]gotypes.Type)
 
+	// The root template of every file shares the same internal name (e.g. "t"),
+	// so registering its hint in the shared, name-keyed input-type registry
+	// would bleed that type into other files' root templates. The root's own
+	// dot type is applied directly via loadedTypes; only NAMED {{define}} blocks
+	// (which have unique names) participate in the cross-template registry.
+	rootName := ""
+	if tree != nil {
+		rootName = tree.Name
+	}
+
 	if WorkspaceRoot != "" {
 		for name, hint := range treeHints {
-			if name == "" {
+			if name == "" || name == rootName {
 				continue
 			}
 			if hint.IsMalformed() {
