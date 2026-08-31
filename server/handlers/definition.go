@@ -98,7 +98,14 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 				}
 			}
 		}
+		// No enclosing range/with scope: if this template carries a gotype
+		// hint, jump to the hint comment so the dot has a discoverable anchor.
+		if c, ok := types.FindHintCommentNode(tree.Root); ok {
+			return hintCommentLocation(c, uri, doc.text), nil
+		}
 		return nil, nil
+	case *types.CommentNode:
+		return commentTokenDefinition(target, uri, offset), nil
 	case *types.FieldNode:
 		return fieldNodeDefinition(loadedType, dotTypeAt(target), target, offset)
 	case *types.IdentifierNode:
@@ -191,28 +198,10 @@ func resolveFieldChainDefinition(
 			return nil, nil
 		}
 		if i == targetIdx {
-			pos := obj.Pos()
-			if !pos.IsValid() {
-				return nil, nil
+			if loc, ok := objectLocation(loadedType, obj); ok {
+				return loc, nil
 			}
-			fpos := loadedType.Fset.Position(pos)
-
-			var line uint32
-			var char uint32
-
-			if fpos.Line > 0 && fpos.Column > 0 {
-				line = uint32(fpos.Line - 1)   //nolint:gosec // disable G115
-				char = uint32(fpos.Column - 1) //nolint:gosec // disable G115
-			} else {
-				log.Debug().Any("fpos", fpos).Msg("Definition: fpos is not > 0")
-			}
-			return protocol.Location{
-				URI: utils.FilePathToURI(fpos.Filename),
-				Range: protocol.Range{
-					Start: protocol.Position{Line: line, Character: char},
-					End:   protocol.Position{Line: line, Character: char},
-				},
-			}, nil
+			return nil, nil
 		}
 		switch o := obj.(type) {
 		case *gotypes.Var:
@@ -230,13 +219,25 @@ func resolveFieldChainDefinition(
 	return nil, nil
 }
 
-// namedTypeLocation returns the LSP Location of a *types.Named type declaration.
-func namedTypeLocation(loadedType *types.Tree, named *gotypes.Named) (any, error) {
-	pos := named.Obj().Pos()
-	if !pos.IsValid() {
-		return nil, nil
+// objectLocation resolves a go/types object's declaration to an LSP Location,
+// selecting the FileSet by the object's own package so cross-package hints
+// (generic type arguments, dict values, composed elements) resolve to the
+// correct source file. It falls back to the tree's primary FileSet. ok is false
+// when the object has no usable source position.
+func objectLocation(loadedType *types.Tree, obj gotypes.Object) (protocol.Location, bool) {
+	if loadedType == nil || obj == nil || !obj.Pos().IsValid() {
+		return protocol.Location{}, false
 	}
-	fpos := loadedType.Fset.Position(pos)
+	fset := loadedType.Fset
+	if obj.Pkg() != nil && loadedType.Fsets != nil {
+		if fs, ok := loadedType.Fsets[obj.Pkg()]; ok && fs != nil {
+			fset = fs
+		}
+	}
+	if fset == nil {
+		return protocol.Location{}, false
+	}
+	fpos := fset.Position(obj.Pos())
 	var line, char uint32
 	if fpos.Line > 0 && fpos.Column > 0 {
 		line = uint32(fpos.Line - 1)   //nolint:gosec // disable G115
@@ -248,7 +249,64 @@ func namedTypeLocation(loadedType *types.Tree, named *gotypes.Named) (any, error
 			Start: protocol.Position{Line: line, Character: char},
 			End:   protocol.Position{Line: line, Character: char},
 		},
-	}, nil
+	}, true
+}
+
+// namedTypeLocation returns the LSP Location of a *types.Named type declaration.
+func namedTypeLocation(loadedType *types.Tree, named *gotypes.Named) (any, error) {
+	if loc, ok := objectLocation(loadedType, named.Obj()); ok {
+		return loc, nil
+	}
+	return nil, nil
+}
+
+// hintCommentLocation returns a Location spanning the whole gotype hint comment
+// c in the current document.
+func hintCommentLocation(c *types.CommentNode, uri protocol.DocumentUri, text string) protocol.Location {
+	start := int(c.Position())
+	end := start + len(c.Text)
+	if end > len(text) {
+		end = len(text)
+	}
+	return protocol.Location{
+		URI: uri,
+		Range: protocol.Range{
+			Start: offsetToPosition(text, start),
+			End:   offsetToPosition(text, end),
+		},
+	}
+}
+
+// commentTokenDefinition resolves the slash-qualified type token under the
+// cursor inside a gotype hint comment to its Go source declaration. Returns nil
+// when the cursor is not on a resolvable type token (e.g. a builtin).
+func commentTokenDefinition(c *types.CommentNode, uri protocol.DocumentUri, offset int) any {
+	ip, tn, ok := types.HintRefAt(c.Text, offset-int(c.Position()))
+	if !ok {
+		return nil
+	}
+	for _, root := range []string{WorkspaceRoot, uriDir(string(uri))} {
+		if root == "" {
+			continue
+		}
+		fpos, found := types.LocateTypeDecl(ip, tn, root)
+		if !found {
+			continue
+		}
+		var line, char uint32
+		if fpos.Line > 0 && fpos.Column > 0 {
+			line = uint32(fpos.Line - 1)   //nolint:gosec // disable G115
+			char = uint32(fpos.Column - 1) //nolint:gosec // disable G115
+		}
+		return protocol.Location{
+			URI: utils.FilePathToURI(fpos.Filename),
+			Range: protocol.Range{
+				Start: protocol.Position{Line: line, Character: char},
+				End:   protocol.Position{Line: line, Character: char},
+			},
+		}
+	}
+	return nil
 }
 
 func definitionIdentifier(target *types.IdentifierNode) (any, error) {
