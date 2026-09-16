@@ -1530,8 +1530,8 @@ var analyseTestCases = []analyseTestCase{
 	},
 	// ----- regression: with over pointer-to-struct (unalias) -----
 	{
-		// {{ with .Ptr }}{{ end }}  -- .Ptr is *MockDot; should not emit
-		// ErrorTypeInvalidWith. Body dot becomes *MockDot.
+		// {{ with .Ptr }}{{ end }}  -- .Ptr is *MockDot; body dot becomes
+		// *MockDot and no diagnostic is emitted.
 		name: "with over pointer-to-struct emits no diagnostic",
 		parseTree: tree("test", list(withN(
 			pipe(nil, coms(com(field("Ptr")))),
@@ -1556,8 +1556,7 @@ var analyseTestCases = []analyseTestCase{
 	// ----- regression: with over `any` does not emit InvalidWith -----
 	{
 		// {{ with .BadField }}{{ end }}  -- .BadField is unknown (any).
-		// Should emit only ErrorTypeInvalidField, NOT ErrorTypeInvalidWith.
-		// Body dot becomes anyType.
+		// Should emit only ErrorTypeInvalidField. Body dot becomes anyType.
 		name: "with over any does not emit InvalidWith",
 		parseTree: tree("test", list(withN(
 			pipe(nil, coms(com(field("BadField")))),

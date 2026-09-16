@@ -660,14 +660,6 @@ func TestCollectDiagnostics_DictHint(t *testing.T) {
 	})
 }
 
-func TestCollectDiagnostics_IncorrectWith(t *testing.T) {
-	text := `{{ with "string" }}Hello{{ end }}`
-	diags := collectDiagnostics(text, "file:///test.tmpl")
-	require.NotEmpty(t, diags)
-	_, ok := findDiagnosticContaining(diags, "cannot use type string in with")
-	require.True(t, ok, "expected type error diagnostic for with, got: %v", diagMessages(diags))
-}
-
 // TestCollectDiagnostics_NamedInterfaceSatisfaction is a regression test for a
 // bug where a funcmap function whose parameter was a named interface (e.g.
 // `iface.HasType` rather than a raw `interface{...}`) rejected any argument,
