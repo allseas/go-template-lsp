@@ -31,6 +31,8 @@ class AppSettings : PersistentStateComponent<AppSettings.State> {
                 "malformedHint" to "error",
                 "invalidDictKey" to "information",
                 "conflictingHint" to "warning",
+                "missingTemplateArgField" to "error",
+                "templateArgFieldMismatch" to "error",
             ),
         var enableAutocompletion: Boolean = true,
         var traceServer: TraceLevel = TraceLevel.MESSAGES,
