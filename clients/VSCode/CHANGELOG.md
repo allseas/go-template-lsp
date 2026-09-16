@@ -4,6 +4,14 @@ All notable changes to the `gotmpls` extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [Unreleased]
+
+### Changed
+
+- The extension is now distributed under the Allseas End User License Agreement
+  (EULA) instead of the MIT License. Bundled third-party components remain under
+  their own licenses; see `THIRD_PARTY_NOTICES.md` in the package.
+
 ## [1.2.0] - 2026-07-02
 
 ### Added
