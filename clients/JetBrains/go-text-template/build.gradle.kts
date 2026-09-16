@@ -138,6 +138,12 @@ tasks {
         from("src/main/server") {
             into(pluginName.map { "$it/server" })
         }
+        from("LICENSE.txt") {
+            into(pluginName.map { it })
+        }
+        from(rootProject.file("../../../THIRD_PARTY_NOTICES.md")) {
+            into(pluginName.map { it })
+        }
     }
     prepareTestSandbox {
         from("src/main/resources/textmate/go-text-template") {

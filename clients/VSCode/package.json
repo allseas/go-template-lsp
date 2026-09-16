@@ -3,7 +3,9 @@
     "displayName": "text/template Support",
     "description": "Language support for Go text/template files. See LICENSE and third-party notices in the repository.",
     "version": "1.2.0",
-    "license": "MIT",
+    "publisher": "allseas",
+    "license": "SEE LICENSE IN LICENSE.txt",
+    "icon": "icons/icon.png",
     "engines": {
         "vscode": "^1.116.0"
     },
@@ -12,9 +14,28 @@
         "directory": "clients/VSCode",
         "type": "git"
     },
+    "bugs": {
+        "url": "https://github.com/allseas/go-template-lsp/issues"
+    },
+    "homepage": "https://github.com/allseas/go-template-lsp#readme",
+    "qna": false,
     "categories": [
         "Programming Languages"
     ],
+    "keywords": [
+        "go",
+        "golang",
+        "template",
+        "text/template",
+        "html/template",
+        "gotmpl",
+        "language server",
+        "lsp"
+    ],
+    "galleryBanner": {
+        "color": "#1e1e1e",
+        "theme": "dark"
+    },
     "scripts": {
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
@@ -31,8 +52,8 @@
         "benchmark": "npm run compile && shx mkdir -p out/server/bin && shx cp ../../dist/server/* out/server/bin/ && vscode-test --label benchmark",
         "benchmark:allseas": "npm run compile && npx ts-node --esm ../../scripts/build-server-binaries-allseas.ts && shx mkdir -p out/server/bin && shx cp ../../dist/server/* out/server/bin/ && vscode-test --label benchmark",
         "verify": "npm run lint:check && npm run format:check && npm test",
-        "package": "npm run verify && node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../",
-        "package:no-verify": "node esbuild.js --production && vsce package --no-dependencies && shx mv *.vsix ../../"
+        "package": "npm run verify && node esbuild.js --production && shx cp ../../THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md && vsce package --no-dependencies && shx mv *.vsix ../../",
+        "package:no-verify": "node esbuild.js --production && shx cp ../../THIRD_PARTY_NOTICES.md ./THIRD_PARTY_NOTICES.md && vsce package --no-dependencies && shx mv *.vsix ../../"
     },
     "dependencies": {
         "vscode-languageclient": "^9.0.1",

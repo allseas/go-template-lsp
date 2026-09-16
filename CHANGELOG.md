@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The published VS Code extension and JetBrains plugin are now distributed to
+  end users under the Allseas End User License Agreement (EULA). The source code
+  in this repository remains MIT-licensed.
+
 ### Removed
 
 ### Fixed
