@@ -29,6 +29,7 @@ const (
 	typeHintStruct
 	typeHintDict
 	typeHintMalformedDict
+	typeHintMalformedStruct
 )
 
 // TypeHint represents a `gotype:` type hint found in a template file.
@@ -46,9 +47,21 @@ type TypeHint struct {
 	Line int
 }
 
-// IsMalformed reports whether the hint was recognised as a map hint but its
-// body could not be parsed.
-func (h TypeHint) IsMalformed() bool { return h.Type == typeHintMalformedDict }
+// IsMalformed reports whether the hint carried a gotype: marker but its body
+// could not be parsed (a malformed map{...} body or a struct hint whose text
+// is not a valid Go type expression).
+func (h TypeHint) IsMalformed() bool {
+	return h.Type == typeHintMalformedDict || h.Type == typeHintMalformedStruct
+}
+
+// MalformedMessage returns the diagnostic reason for a malformed hint. It is
+// only meaningful when IsMalformed reports true.
+func (h TypeHint) MalformedMessage() string {
+	if h.Type == typeHintMalformedStruct {
+		return "invalid type expression"
+	}
+	return "malformed map hint"
+}
 
 // describe returns a short human-readable rendering of the hint for use in
 // diagnostic messages.
@@ -60,6 +73,8 @@ func (h TypeHint) describe() string {
 		return "map{" + h.Text + "}"
 	case typeHintMalformedDict:
 		return "malformed map{...}"
+	case typeHintMalformedStruct:
+		return "malformed gotype hint"
 	default:
 		return "<none>"
 	}
@@ -75,7 +90,13 @@ func parseHintText(commentText string) (TypeHint, bool) {
 		}
 		return TypeHint{Type: typeHintMalformedDict}, true
 	}
-	return parseStructHint(commentText, 0)
+	if h, ok := parseStructHint(commentText, 0); ok {
+		return h, true
+	}
+	if strings.Contains(commentText, "gotype:") {
+		return TypeHint{Type: typeHintMalformedStruct}, true
+	}
+	return TypeHint{}, false
 }
 
 // hintsEqual reports whether two hints refer to the same type. Line numbers
@@ -97,7 +118,7 @@ func hintsEqual(a, b TypeHint) bool {
 			}
 		}
 		return true
-	case typeHintMalformedDict:
+	case typeHintMalformedDict, typeHintMalformedStruct:
 		return true
 	default:
 		return true
@@ -171,6 +192,11 @@ func ParseHintComment(text string, c *parse.CommentNode) (TypeHint, bool) {
 	if h, ok := parseStructHint(c.Text, line); ok {
 		return h, true
 	}
+	// A comment that carries the gotype: marker but whose body is not a valid
+	// type expression is a broken hint, not a stray comment.
+	if strings.Contains(c.Text, "gotype:") {
+		return TypeHint{Type: typeHintMalformedStruct, Line: line}, true
+	}
 	return TypeHint{}, false
 }
 
@@ -243,8 +269,8 @@ func parseStructHint(commentText string, line int) (TypeHint, bool) {
 // extractStructHintText pulls the raw type expression that follows `gotype:`
 // out of a comment. The comment's trailing `*/` marker and surrounding
 // whitespace are stripped. It returns ok=false when no `gotype:` marker is
-// present or the remainder does not look like a Go type expression, so a
-// stray comment is not misreported as a broken hint.
+// present or the remainder does not look like a Go type expression; callers
+// distinguish those two cases to decide whether to report a malformed hint.
 func extractStructHintText(commentText string) (string, bool) {
 	idx := strings.Index(commentText, "gotype:")
 	if idx < 0 {
@@ -512,8 +538,8 @@ func CachedLoadHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
 		return CachedLoadDictFromHint(hint, workspaceRoot)
 	case typeHintStruct:
 		return CachedLoadTypeFromHint(hint.Text, workspaceRoot)
-	case typeHintMalformedDict:
-		return nil, fmt.Errorf("malformed map hint")
+	case typeHintMalformedDict, typeHintMalformedStruct:
+		return nil, fmt.Errorf("malformed type hint")
 	default:
 		return nil, fmt.Errorf("unknown hint type")
 	}

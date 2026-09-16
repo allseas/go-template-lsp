@@ -54,9 +54,14 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		},
 	},
 	{
-		name:      "contains gotype marker but no valid type token",
+		name:      "gotype marker with no valid type token is malformed",
 		input:     "{{/*gotype: 123*/}}",
-		wantHints: nil,
+		wantHints: []TypeHint{{Type: typeHintMalformedStruct, Line: 1}},
+	},
+	{
+		name:      "gotype marker with an empty body is malformed",
+		input:     "{{/*gotype:*/}}",
+		wantHints: []TypeHint{{Type: typeHintMalformedStruct, Line: 1}},
 	},
 	{
 		name:  "slice hint",

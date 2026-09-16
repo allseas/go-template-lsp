@@ -85,7 +85,7 @@ Because multiple `{{define}}` blocks in the same file (or across different files
 
 ## Implementation details
 
-**Parsing**: Lines without `gotype:` are skipped. For a struct-shaped hint the text between `gotype:` and the closing `*/` is taken verbatim as the raw type expression; only the first hint per tree is used. A candidate is accepted only if it parses into a supported type-expression shape (`looksLikeTypeExpr`), so a stray comment such as `gotype: 123` is not misreported as a broken hint.
+**Parsing**: Lines without `gotype:` are skipped. For a struct-shaped hint the text between `gotype:` and the closing `*/` is taken verbatim as the raw type expression; only the first hint per tree is used. A candidate is accepted only if it parses into a supported type-expression shape (`looksLikeTypeExpr`); a comment that carries the `gotype:` marker but whose body is not a valid type expression (e.g. `gotype: 123`, or an empty body) is reported as a malformed hint rather than silently ignored.
 
 **Preprocess + ParseExpr**: The raw expression is resolved by `resolveTypeExpr`, which parses it with `go/parser.ParseExpr` and walks the resulting AST. A slash-bearing import path like `cg/model/controlmodel.Block` parses as a *division* expression, so `preprocessHint` first rewrites every `import/path/with/slashes.Type` occurrence to `lastSegment.Type` (here `controlmodel.Block`), recording `lastSegment → full import path` inline. If two different import paths would map to the same last segment, that conflict is reported as a resolution error. The full import path is kept only in the recorded map — it is never emitted as a separate `import` line. The rewritten string (now free of slashes) is a valid Go type expression that `ParseExpr` accepts.
 
@@ -173,11 +173,11 @@ Cache invalidation is identical to struct hints: any `.go` change in the workspa
 
 ### Diagnostics
 
-Two diagnostics are specific to map hints (both configurable via the [`diagnostics`](../configuration.md) config):
+Two diagnostics apply to hints here (both configurable via the [`diagnostics`](../configuration.md) config); `malformedHint` covers both struct and `map{...}` hints, `invalidDictKey` is map-specific:
 
 | Config key        | Default         | When it fires                                                       |
 | ----------------- | --------------- | ------------------------------------------------------------------- |
-| `malformedHint`   | `error`         | The `map{...}` marker is present but the body cannot be parsed (missing `}`, missing colon, unquoted key, empty body, missing type reference). The diagnostic sits on the hint comment. |
+| `malformedHint`   | `error`         | A `gotype:` marker is present but the body cannot be parsed. For a `map{...}` hint: missing `}`, missing colon, unquoted key, empty body, or missing type reference. For a struct hint: the body is not a valid Go type expression (e.g. `gotype: 123`) or is empty. The diagnostic sits on the hint comment. |
 | `invalidDictKey`  | `information`   | A field access uses a key that is not declared in the map hint. The diagnostic names the offending key and lists the known keys. Reported as **info** because the analyser cannot fully verify that the caller populated exactly the declared keys — the check is advisory. |
 
 Failure to load one of the value types produces the existing `hintLoadFailure` (default `warning`); the diagnostic message names the offending key so it's easy to spot which entry failed.
