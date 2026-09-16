@@ -59,6 +59,45 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		wantHints: nil,
 	},
 	{
+		name:  "slice hint",
+		input: "{{/*gotype: []*cg/model/controlmodel.AlarmInstance*/}}",
+		wantHints: []TypeHint{
+			{Type: typeHintStruct, Text: "[]*cg/model/controlmodel.AlarmInstance", Line: 1},
+		},
+	},
+	{
+		name:      "go map type hint uses brackets and is a struct hint",
+		input:     "{{/*gotype: map[string]int*/}}",
+		wantHints: []TypeHint{{Type: typeHintStruct, Text: "map[string]int", Line: 1}},
+	},
+	{
+		name:  "nested map of slice of pointer hint",
+		input: "{{- /*gotype: map[string][]*cg/model/controlmodel.AlarmInstance*/ -}}",
+		wantHints: []TypeHint{
+			{
+				Type: typeHintStruct,
+				Text: "map[string][]*cg/model/controlmodel.AlarmInstance",
+				Line: 1,
+			},
+		},
+	},
+	{
+		name:  "dict hint with slice and map values",
+		input: `{{/*gotype: map{"subsystem": string, "alarms": []*cg/model/controlmodel.AlarmInstance, "index": map[string]int}*/}}`,
+		wantHints: []TypeHint{
+			{
+				Type: typeHintDict,
+				Text: `"subsystem": string, "alarms": []*cg/model/controlmodel.AlarmInstance, "index": map[string]int`,
+				Dict: map[string]string{
+					"subsystem": "string",
+					"alarms":    "[]*cg/model/controlmodel.AlarmInstance",
+					"index":     "map[string]int",
+				},
+				Line: 1,
+			},
+		},
+	},
+	{
 		name: "multiple defines each with their own gotype hint",
 		input: "{{- define \"OrderTpl\" -}}\n" +
 			"{{- /*gotype: example.com/m.Order*/ -}}\n" +
@@ -158,48 +197,6 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 	},
 }
 
-// splitTypeHint test cases
-
-type splitTypeHintTestCase struct {
-	name       string
-	hint       string
-	wantImport string
-	wantType   string
-}
-
-var splitTypeHintTestCases = []splitTypeHintTestCase{
-	{
-		name:       "no package prefix",
-		hint:       "MyType",
-		wantImport: ".",
-		wantType:   "MyType",
-	},
-	{
-		name:       "simple package.Type",
-		hint:       "pkg.MyType",
-		wantImport: "pkg",
-		wantType:   "MyType",
-	},
-	{
-		name:       "full import path",
-		hint:       "example.com/pkg/sub.MyType",
-		wantImport: "example.com/pkg/sub",
-		wantType:   "MyType",
-	},
-	{
-		name:       "dot in package segment with slash after",
-		hint:       "a.b/c.Type",
-		wantImport: "a.b/c",
-		wantType:   "Type",
-	},
-	{
-		name:       "multiple dots, last wins",
-		hint:       "a.b.Type",
-		wantImport: "a.b",
-		wantType:   "Type",
-	},
-}
-
 // LoadTypeFromHint test cases
 
 type loadTypeHintTestCase struct {
@@ -271,6 +268,103 @@ var loadTypeHintTestCases = []loadTypeHintTestCase{
 	{
 		name:    "returns error when symbol is not a named type",
 		hint:    "fmt.Println",
+		root:    "../../test/resources/typehints-tests",
+		wantErr: true,
+	},
+	// Composite type expressions: slices, arrays, maps, pointers and nesting.
+	{
+		name:           "loads slice of named type",
+		hint:           "[]text-template-server/src/model.Item",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "[]text-template-server/src/model.Item",
+	},
+	{
+		name:           "loads slice of pointer to named type",
+		hint:           "[]*text-template-server/src/model.Item",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "[]*text-template-server/src/model.Item",
+	},
+	{
+		name:           "loads slice of builtin",
+		hint:           "[]string",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "[]string",
+	},
+	{
+		name:           "loads fixed-size array of builtin",
+		hint:           "[3]int",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "[3]int",
+	},
+	{
+		name:           "loads map of builtins",
+		hint:           "map[string]int",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "map[string]int",
+	},
+	{
+		name:           "loads map with named value type",
+		hint:           "map[string]text-template-server/src/model.Order",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "map[string]text-template-server/src/model.Order",
+	},
+	{
+		name:           "loads nested map of slice of pointer to named type",
+		hint:           "map[string][]*text-template-server/src/model.Item",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "map[string][]*text-template-server/src/model.Item",
+	},
+	{
+		name:           "loads pointer to map",
+		hint:           "*map[int]text-template-server/src/model.Address",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "*map[int]text-template-server/src/model.Address",
+	},
+	{
+		name:           "loads map keyed by named type",
+		hint:           "map[text-template-server/src/model.Address]string",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "map[text-template-server/src/model.Address]string",
+	},
+	{
+		name:           "loads parenthesized builtin",
+		hint:           "(int)",
+		root:           "../../test/resources/typehints-tests",
+		wantTypeString: "int",
+	},
+	{
+		name:    "returns error for bare local type when root has no package",
+		hint:    "LocalOnly",
+		root:    "../../test/resources/typehints-tests",
+		wantErr: true,
+	},
+	{
+		name:    "returns error for slice of unresolvable package",
+		hint:    "[]nonexistent/package.Foo",
+		root:    "../../test/resources/typehints-tests",
+		wantErr: true,
+	},
+	{
+		name:    "returns error for map value that is not a type",
+		hint:    "map[string]fmt.Println",
+		root:    "../../test/resources/typehints-tests",
+		wantErr: true,
+	},
+	{
+		name:    "returns error for a non-type literal",
+		hint:    "123",
+		root:    "../../test/resources/typehints-tests",
+		wantErr: true,
+	},
+	{
+		name:    "returns error for a malformed type expression",
+		hint:    "map[int]",
+		root:    "../../test/resources/typehints-tests",
+		wantErr: true,
+	},
+	{
+		name:    "returns error for conflicting import path segments",
+		hint:    "map[a/model.Address]b/model.Order",
 		root:    "../../test/resources/typehints-tests",
 		wantErr: true,
 	},

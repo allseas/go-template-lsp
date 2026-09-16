@@ -18,8 +18,13 @@ Any of the following forms are recognised:
 | `{{/*gotype: *example.com/m.User*/}}`| **pointer** to `User`; `.` binds to `*User` (fields/methods are resolved through the pointer, and method sets that require a pointer receiver are available) |
 | `{{/*gotype: int*/}}`               | the predeclared builtin `int` (any predeclared type: `string`, `bool`, `float64`, …) |
 | `{{/*gotype: *string*/}}`           | pointer to a builtin                                          |
+| `{{/*gotype: []example.com/m.User*/}}` | **slice** of `User` (rangeable; the element type drives `range` completions) |
+| `{{/*gotype: []*example.com/m.User*/}}` | slice of pointer to `User`                                   |
+| `{{/*gotype: [3]int*/}}`            | fixed-size **array** of a builtin                             |
+| `{{/*gotype: map[string]int*/}}`    | a real Go **map** type (note the square brackets — distinct from the `map{...}` construct below) |
+| `{{/*gotype: map[string][]*example.com/m.User*/}}` | any **nesting** of the constructs above                       |
 
-Builtin (predeclared) names are resolved from `types.Universe` rather than by loading a package, so they need no workspace or module to be present. A hint may also name a defined alias to a builtin (e.g. `type Celsius = float64`); the loader accepts any type name, not only named struct types (field/method enumeration simply yields nothing for a non-struct base).
+The hint is an arbitrary Go type expression built from named types (local, package-qualified, or builtin), pointers (`*T`), slices (`[]T`), arrays (`[N]T`) and maps (`map[K]V`), composed to any depth. Builtin (predeclared) names are resolved from `types.Universe` rather than by loading a package, so they need no workspace or module to be present. A hint may also name a defined alias to a builtin (e.g. `type Celsius = float64`); the loader accepts any type name, not only named struct types (field/method enumeration simply yields nothing for a non-struct base).
 
 ## Resolution flow
 
@@ -80,11 +85,25 @@ Because multiple `{{define}}` blocks in the same file (or across different files
 
 ## Implementation details
 
-**Parsing**: Lines without `gotype:` are skipped. The regex `gotype:\s*(\*?[A-Za-z_][A-Za-z0-9_/.-]*)` extracts the hint token (an optional leading `*` marks a pointer); only the first match per file is used.
+**Parsing**: Lines without `gotype:` are skipped. For a struct-shaped hint the text between `gotype:` and the closing `*/` is taken verbatim as the raw type expression; only the first hint per tree is used. A candidate is accepted only if it parses into a supported type-expression shape (`looksLikeTypeExpr`), so a stray comment such as `gotype: 123` is not misreported as a broken hint.
 
-**Splitting**: `splitTypeHint` finds the last `.` with no `/` to its right to separate import path from type name. A bare `User` (no dot) uses `.` as the import path. When the import path is `.`, `LoadTypeFromHint` first tries `types.Universe` so predeclared names (`int`, `string`, …) resolve without a package load.
+**Preprocess + ParseExpr**: The raw expression is resolved by `resolveTypeExpr`, which parses it with `go/parser.ParseExpr` and walks the resulting AST. A slash-bearing import path like `cg/model/controlmodel.Block` parses as a *division* expression, so `preprocessHint` first rewrites every `import/path/with/slashes.Type` occurrence to `lastSegment.Type` (here `controlmodel.Block`), recording `lastSegment → full import path` inline. If two different import paths would map to the same last segment, that conflict is reported as a resolution error. The full import path is kept only in the recorded map — it is never emitted as a separate `import` line. The rewritten string (now free of slashes) is a valid Go type expression that `ParseExpr` accepts.
 
-**Loading**: `CachedLoadTypeFromHint` checks an in-memory `*Tree` cache first. On a miss it resolves the underlying package via `loadPackageCached`, which itself keeps a per-`(importPath, workspaceRoot)` cache of `*types.Package` results from `packages.Load`. The load mode requests syntax (`NeedName | NeedFiles | NeedCompiledGoFiles | NeedImports | NeedTypes | NeedTypesInfo | NeedSyntax`) so that resolved objects carry valid source positions — this is what lets **go-to-definition** jump into the model even when the package is otherwise available as compiled export data. Every hint that resolves to the same import path shares a single `*types.Package` — and consequently a single `*types.Named` per declared type — so `types.Identical` comparisons across hints work as expected. A leading `*` wraps the resolved type in a `types.Pointer`. Any load error is logged as a warning; the document is stored without a type. Both caches are cleared by `InvalidateTypeHintCache` when any `.go` file in the workspace changes.
+**AST walk**: `resolveTypeExpr` converts the parsed `ast.Expr` into a `go/types.Type`:
+
+| AST node               | Built type                                                        |
+| ---------------------- | ---------------------------------------------------------------- |
+| `*ast.Ident`           | predeclared builtin via `types.Universe`, else a type in the local package (`.`) |
+| `*ast.SelectorExpr`    | the recorded (or bare) import path's `X` is loaded and `Sel` looked up in its scope |
+| `*ast.StarExpr`        | `types.NewPointer(elem)`                                         |
+| `*ast.ArrayType` (Len == nil) | `types.NewSlice(elem)`                                     |
+| `*ast.ArrayType` (Len != nil) | `types.NewArray(elem, n)`                                  |
+| `*ast.MapType`         | `types.NewMap(key, val)` (both resolved recursively)             |
+| anything else          | a resolution error (collected as a diagnostic, never a panic)    |
+
+The first named type encountered during the walk supplies the returned `Pkg`/`Fset`, so go-to-definition keeps working.
+
+**Loading**: `CachedLoadTypeFromHint` checks an in-memory `*Tree` cache first. On a miss `resolveTypeExpr` resolves each package-qualified leaf via `loadPackageCached`, which itself keeps a per-`(importPath, workspaceRoot)` cache of `*types.Package` results from `packages.Load`. The load mode requests syntax (`NeedName | NeedFiles | NeedCompiledGoFiles | NeedImports | NeedTypes | NeedTypesInfo | NeedSyntax`) so that resolved objects carry valid source positions — this is what lets **go-to-definition** jump into the model even when the package is otherwise available as compiled export data. Every hint that resolves to the same import path shares a single `*types.Package` — and consequently a single `*types.Named` per declared type — so `types.Identical` comparisons across hints work as expected. Any load error is logged and surfaced as a diagnostic; the document is stored without a type. Both caches are cleared by `InvalidateTypeHintCache` when any `.go` file in the workspace changes.
 
 **Fields**: `structFields` collects exported fields as `[]TypeField` (name, type string, raw `types.Type`, `Embedded` flag). `TypeField.Kind()` classifies each as `String`, `Bool`, `Int`, `Float`, `Slice`, `Map`, `Struct`, or `Other`.
 
@@ -112,7 +131,7 @@ map{ "<key>": <typeref> ( , "<key>": <typeref> )* }
 ```
 
 - Keys are double-quoted strings.
-- Each `<typeref>` uses the same shape as a struct hint (`import/path.TypeName`, bare `TypeName` for the local package, a builtin such as `int`, or a pointer form like `*import/path.TypeName`).
+- Each `<typeref>` is a full Go type expression resolved through the same `resolveTypeExpr` used by struct hints: a package-qualified named type (`import/path.TypeName`), a bare `TypeName` for the local package, a builtin (`int`), or any composition of pointer / slice / array / `map[K]V` (e.g. `[]*import/path.TypeName`, `map[string]int`).
 - Whitespace around tokens is ignored.
 - An empty body (`map{}`) is rejected — a hint with no keys carries no information.
 
@@ -165,7 +184,7 @@ Failure to load one of the value types produces the existing `hintLoadFailure` (
 
 ### Implementation notes
 
-- Parsing lives in `server/types/type_hints.go`: `dictHintRe` matches the marker, `parseDictHint` extracts the body, `parseDictBody` splits and validates each `"key": typeref` entry via `dictEntryRe`.
+- Parsing lives in `server/types/type_hints.go`: `dictHintRe` matches the `map{` marker (the brace distinguishes the heterogeneous dict construct from a real Go `map[...]` type), `parseDictHint` extracts the body, `parseDictBody` splits it on commas and validates each `"key": typeref` entry via `dictEntryRe`. The value side of each entry is captured loosely and gated with `looksLikeTypeExpr`, so slice/map/pointer/nested values are accepted and later resolved by `resolveTypeExpr`.
 - The synthetic type is `types.DictType` — it implements `types.Type` (its own underlying) so the analyser can hand it to code that expects a `types.Type`, but `types.LookupFieldOrMethod` does **not** work on it. All callers that walk field chains (`walkFieldChainWithMethodInfo`, completions, definition, hover) type-assert on `*DictType` first and dispatch to `LookupDictKey` / `DictKeys` / `DictTypeFields` before falling back to the normal struct path.
 - `documents.go` propagates a malformed marker to `failedHints`, which `diagnostics.go` renders using the `malformedHint` severity instead of `hintLoadFailure`.
 
