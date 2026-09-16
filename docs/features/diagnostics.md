@@ -22,7 +22,7 @@ Diagnostics report errors in template files as squiggly underlines. They are pub
 **`invalidRange` diagnostic; raised when the ranged-over value is not a slice, array, map, channel, or string.
 ***`hintLoadFailure` diagnostic; the exact message includes the loader error. See [type_hints.md](type_hints.md).
 ****Template `T` has type hint `/*gotype: models.User*/`. See [template_checking.md](template_checking.md).
-*****`malformedHint` diagnostic (default `error`); fires when a `gotype: map{...}` marker is present but the body is invalid. See [type_hints.md#diagnostics](type_hints.md#diagnostics).
+*****`malformedHint` diagnostic (default `error`); fires when a `gotype:` marker is present but the body is invalid — a malformed `map{...}` body, or a struct hint whose text is not a valid Go type expression. See [type_hints.md#diagnostics](type_hints.md#diagnostics).
 †`invalidDictKey` diagnostic (default `information`); fires when field access uses a key not declared in a map hint.
 
 ## Request flow
