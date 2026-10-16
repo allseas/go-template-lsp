@@ -42,7 +42,7 @@ Each key in the `diagnostics` object controls a specific check. The value must b
 | `unknownRangeType`     | `"warning"`   | Range over a value whose type could not be determined     |
 | `emptyDefineName`      | `"warning"`   | Define block has an empty name                            |
 | `variableReassigned`   | `"warning"`   | Variable reassigned to a value of a different concrete type |
-| `malformedHint`        | `"error"`     | `gotype` hint syntax could not be parsed (e.g. malformed `map{...}`) |
+| `malformedHint`        | `"error"`     | `gotype` hint syntax could not be parsed (invalid struct type expression such as `gotype: 123`, or a malformed `map{...}` body) |
 | `invalidDictKey`       | `"information"` | Key lookup on a map-shaped `gotype` hint failed         |
 | `conflictingHint`      | `"warning"`   | Additional `gotype` hint in the same template disagrees with the first one |
 | `missingTemplateArgField` | `"error"`  | A dict argument to a template is missing a key the template's expected dict type requires |

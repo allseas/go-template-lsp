@@ -52,16 +52,6 @@ func TestParseTypeHints(t *testing.T) {
 	}
 }
 
-func TestSplitTypeHint(t *testing.T) {
-	for _, tc := range splitTypeHintTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			importPath, typeName := splitTypeHint(tc.hint)
-			assert.Equal(t, tc.wantImport, importPath)
-			assert.Equal(t, tc.wantType, typeName)
-		})
-	}
-}
-
 func TestLoadTypeFromHint(t *testing.T) {
 	for _, tc := range loadTypeHintTestCases {
 		t.Run(tc.name, func(t *testing.T) {

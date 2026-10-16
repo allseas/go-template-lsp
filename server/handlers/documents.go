@@ -72,7 +72,7 @@ func (s *documentStore) Set(uri, text string) {
 		hint := treeHints[name]
 		log.Debug().Str("name", name).Str("hint", hint.Text).Msg("found gotype hint")
 		if hint.IsMalformed() {
-			failedHints[name] = failedHint{Hint: hint, Err: "malformed map hint"}
+			failedHints[name] = failedHint{Hint: hint, Err: hint.MalformedMessage()}
 			continue
 		}
 		if hint.Text == "" {
