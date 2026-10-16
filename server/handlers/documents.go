@@ -97,33 +97,20 @@ func (s *documentStore) Set(uri, text string) {
 		}
 	}
 
-	// Load gotype hints from {{define}} blocks before taking the lock (type loading can be slow).
+	// Register each {{define}} block's declared input type from the hints
+	// resolved above, so {{template}} call sites are checked against the same
+	// type the block itself is analysed with (including the file-directory
+	// fallback). Load failures are already reported through failedHints.
 	newTemplateTypes := make(map[string]gotypes.Type)
-
-	if WorkspaceRoot != "" {
-		for name, hint := range treeHints {
-			if name == "" {
-				continue
-			}
-			if hint.IsMalformed() {
-				continue
-			}
-
-			loaded, err := types.CachedLoadHint(hint, WorkspaceRoot)
-			if err != nil {
-				log.Warn().
-					Str("template", name).
-					Str("hint", hint.Text).
-					Err(err).
-					Msg("type hint load failed")
-				continue
-			}
-			switch {
-			case loaded.DictType != nil:
-				newTemplateTypes[name] = loaded.DictType
-			case loaded.DotType != nil:
-				newTemplateTypes[name] = loaded.DotType
-			}
+	for name, loaded := range loadedTypes {
+		if name == "" || loaded == nil {
+			continue
+		}
+		switch {
+		case loaded.DictType != nil:
+			newTemplateTypes[name] = loaded.DictType
+		case loaded.DotType != nil:
+			newTemplateTypes[name] = loaded.DotType
 		}
 	}
 
