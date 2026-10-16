@@ -262,6 +262,7 @@ func buildTypedTree(
 		t.DictType = lt.DictType
 		t.Pkg = lt.Pkg
 		t.Fset = lt.Fset
+		t.Fsets = lt.Fsets
 	} else {
 		switch dt := dotType.(type) {
 		case nil:

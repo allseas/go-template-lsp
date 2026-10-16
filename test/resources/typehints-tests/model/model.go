@@ -132,3 +132,34 @@ func (o Order) badReturn() (string, int, error) {
 func (o Order) wrongSecond() (string, int) {
 	return "", 0
 }
+
+// Instance is a concrete type used as a generic type argument in tests.
+type Instance struct {
+	Name string
+	Tags []string
+}
+
+// Kind returns the instance kind.
+func (i Instance) Kind() string {
+	return "instance"
+}
+
+// View is a generic wrapper used to exercise generic gotype hints such as
+// {{/*gotype: text-template-server/src/model.View[Instance]*/}}. Instantiating
+// it substitutes T, so .Model resolves to the concrete type argument.
+type View[T any] struct {
+	Model T
+	Title string
+}
+
+// Label returns the view title.
+func (v View[T]) Label() string {
+	return v.Title
+}
+
+// Pair is a generic type with two type parameters, used to exercise
+// multi-parameter instantiation (`View[A, B]` -> *ast.IndexListExpr).
+type Pair[A any, B any] struct {
+	First  A
+	Second B
+}
