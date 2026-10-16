@@ -24,7 +24,7 @@ argument to read a single template from stdin.
 Exit codes:
   0  no diagnostic at or above the failure threshold
   1  at least one diagnostic at or above the threshold (see --min-severity)
-  2  usage error, or a file could not be read
+  2  usage error, a file could not be read, or a glob matched no files
 
 Flags:
 `
@@ -90,6 +90,13 @@ func runCheck(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 
 	handlers.SetWorkspaceRoot(resolveRoot(*root))
 
+	// Expand paths before the (slow) workspace scan so a bad glob fails fast.
+	paths, err := expandPaths(fs.Args())
+	if err != nil {
+		fprintln(stderr, err)
+		return 2
+	}
+
 	// Seed the global funcs cache (builtins plus workspace-defined
 	// //tmpl:func "global" hints) exactly as the LSP initialize handler does,
 	// so batch analysis does not report every function reference as undefined.
@@ -98,12 +105,6 @@ func runCheck(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 		fprintf(stderr, "warning: failed to load global tmpl:func hints: %v\n", err)
 	}
 	types.SetGlobalFuncs(funcs)
-
-	paths, err := expandPaths(fs.Args())
-	if err != nil {
-		fprintln(stderr, err)
-		return 2
-	}
 
 	var results []fileDiagnostics
 	readErr := false
@@ -183,19 +184,35 @@ func pathToURI(path string) string {
 }
 
 // expandPaths expands any glob patterns in args, preserving literal paths and
-// the "-" stdin marker.
+// the "-" stdin marker. A pattern that matches no files is an error, so a
+// mistyped glob cannot turn into a silently passing check. Duplicate paths
+// are analysed once.
 func expandPaths(args []string) ([]string, error) {
 	var out []string
+	seen := make(map[string]bool)
+	add := func(p string) {
+		key := filepath.Clean(p)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, p)
+	}
 	for _, a := range args {
 		if a == "-" || !hasGlobMeta(a) {
-			out = append(out, a)
+			add(a)
 			continue
 		}
 		matches, err := filepath.Glob(a)
 		if err != nil {
 			return nil, fmt.Errorf("bad pattern %q: %w", a, err)
 		}
-		out = append(out, matches...)
+		if len(matches) == 0 {
+			return nil, fmt.Errorf("no files match %q", a)
+		}
+		for _, m := range matches {
+			add(m)
+		}
 	}
 	return out, nil
 }
