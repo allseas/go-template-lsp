@@ -238,6 +238,23 @@ func TestRunCheck_SeedsGlobalFuncs(t *testing.T) {
 	assert.Empty(t, strings.TrimSpace(out.String()))
 }
 
+// TestRunCheck_DefineHintsResolveFromFileDir verifies that {{template}} call
+// sites are type-checked even when --root (default: cwd) is not the template's
+// Go module: {{define}} gotype hints must fall back to the file's directory.
+func TestRunCheck_DefineHintsResolveFromFileDir(t *testing.T) {
+	f, err := filepath.Abs("../test/resources/template-arg-typechecking/wrong-type-call.tmpl")
+	require.NoError(t, err)
+
+	var out, errb bytes.Buffer
+	code := runCheck(
+		[]string{"--root", t.TempDir(), f},
+		&out, &errb, strings.NewReader(""),
+	)
+
+	assert.Equal(t, 1, code, "stdout: %s\nstderr: %s", out.String(), errb.String())
+	assert.Contains(t, out.String(), `template "person-card" expects argument of type`)
+}
+
 func TestRunCheck_ReadError(t *testing.T) {
 	var out, errb bytes.Buffer
 	code := runCheck(
