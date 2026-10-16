@@ -255,6 +255,35 @@ func TestRunCheck_DefineHintsResolveFromFileDir(t *testing.T) {
 	assert.Contains(t, out.String(), `template "person-card" expects argument of type`)
 }
 
+func TestExpandPaths_NoMatchIsError(t *testing.T) {
+	_, err := expandPaths([]string{filepath.Join(t.TempDir(), "*.tmpl")})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no files match")
+}
+
+func TestExpandPaths_Deduplicates(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "a.tmpl")
+	require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
+
+	got, err := expandPaths([]string{
+		f, filepath.Join(dir, "*.tmpl"), filepath.Join(dir, ".", "a.tmpl"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{f}, got)
+}
+
+func TestRunCheck_GlobWithoutMatchesExits2(t *testing.T) {
+	var out, errb bytes.Buffer
+	code := runCheck(
+		[]string{filepath.Join(t.TempDir(), "nomatch", "*.tmpl")},
+		&out, &errb, strings.NewReader(""),
+	)
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errb.String(), "no files match")
+	assert.Empty(t, out.String())
+}
+
 func TestRunCheck_ReadError(t *testing.T) {
 	var out, errb bytes.Buffer
 	code := runCheck(
