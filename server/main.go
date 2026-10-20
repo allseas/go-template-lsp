@@ -1,4 +1,7 @@
-// Package main initializes and starts the Go text/template Language Server Protocol (LSP) server, setting up logging and handling any initialization errors.
+// Package main provides the Go text/template tooling entry points. The default
+// build is the full LSP server (which also exposes the `check` subcommand). A
+// lighter, check-only CLI without any LSP capabilities is produced with the
+// `cli` build tag (see main_cli.go).
 package main
 
 import (
@@ -13,14 +16,9 @@ const (
 	version = "1.2.0"
 )
 
-func main() {
+// setupLogging configures the global zerolog logger to write human-readable
+// output to stderr. Both build variants call it before doing any work.
+func setupLogging() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, NoColor: true})
-
-	log.Print("starting server")
-
-	err := Init()
-	if err != nil {
-		log.Fatal().Err(err).Msg("error initializing handlers")
-	}
 }

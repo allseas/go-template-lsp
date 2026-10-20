@@ -3,6 +3,7 @@ package handlers
 import (
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
+	lspuri "go.lsp.dev/uri"
 )
 
 // helpers
@@ -439,6 +441,44 @@ func TestCollectDiagnostics_TemplateArgTypeCheck(t *testing.T) {
 			diagMessages(diags),
 		)
 	})
+}
+
+// TestCollectDiagnostics_TemplateArgTypeCheck_FileDirFallback verifies that
+// {{define}} input types are registered via the same WorkspaceRoot -> file
+// directory fallback used for the tree's own dot type. When the workspace root
+// cannot resolve the hint (or is unset), the call-site type check must still
+// fire instead of silently inferring the target's input type from the caller.
+func TestCollectDiagnostics_TemplateArgTypeCheck_FileDirFallback(t *testing.T) {
+	resourceDir, err := filepath.Abs("../../test/resources/template-arg-typechecking")
+	require.NoError(t, err)
+	fileURI := string(lspuri.File(filepath.Join(resourceDir, "wrong-type-call.tmpl")))
+	src := readTestFile(t, filepath.Join(resourceDir, "wrong-type-call.tmpl"))
+
+	for name, root := range map[string]string{
+		"unresolvable workspace root": t.TempDir(),
+		"empty workspace root":        "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			prevRoot := WorkspaceRoot
+			t.Cleanup(func() { WorkspaceRoot = prevRoot })
+			WorkspaceRoot = root
+
+			store.Set(fileURI, src)
+			t.Cleanup(func() { store.Remove(fileURI) })
+
+			diags := collectDiagnostics(src, fileURI)
+			_, ok := findDiagnosticContaining(
+				diags,
+				`template "person-card" expects argument of type text-template-server/src/model.Person`,
+			)
+			require.True(
+				t,
+				ok,
+				"expected type-mismatch diagnostic for person-card call, got: %v",
+				diagMessages(diags),
+			)
+		})
+	}
 }
 
 func TestCollectDiagnostics_HintLoadFailure(t *testing.T) {
