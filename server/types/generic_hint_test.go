@@ -114,6 +114,32 @@ func TestLoadGeneric_CrossPackageFsets(t *testing.T) {
 	assert.Contains(t, pos.Filename, "othermodel")
 }
 
+// TestLoadGeneric_TransitiveImportFsets verifies that a package reached only
+// through an import of a hinted package (inner, imported by the type argument's
+// package outer) is also recorded in Fsets, so its objects resolve against the
+// FileSet they were loaded with rather than the base package's.
+func TestLoadGeneric_TransitiveImportFsets(t *testing.T) {
+	lt, err := LoadTypeFromHint(
+		"cg/model.View[cg/repro/outer.Thing]",
+		"../../test/resources/templ-tests",
+	)
+	require.NoError(t, err)
+
+	thing := fieldType(lt.DotType, "Model")
+	require.NotNil(t, thing)
+	inner := fieldType(thing, "C")
+	require.NotNil(t, inner)
+	deep, _, _ := types.LookupFieldOrMethod(inner, true, nil, "Deep")
+	require.NotNil(t, deep)
+	require.Equal(t, "cg/repro/inner", deep.Pkg().Path())
+
+	fs := lt.Fsets[deep.Pkg()]
+	require.NotNil(t, fs, "transitively imported package must have a recorded FileSet")
+	pos := fs.Position(deep.Pos())
+	assert.True(t, strings.HasSuffix(pos.Filename, "repro/inner/inner.go"), pos.String())
+	assert.Equal(t, 8, pos.Line)
+}
+
 func TestHintRefAt(t *testing.T) {
 	comment := "/*gotype: cg/template.View[cg/model/controlmodel.Instance] */"
 	// Cursor over the base type token.

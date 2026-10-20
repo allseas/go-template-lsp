@@ -63,7 +63,7 @@ For chained access like `.Address.City`, the handler determines which identifier
 
 Methods are also supported: the handler follows the method's return type when resolving chained access through a method call.
 
-Field and method jumps resolve to the correct source file even when the chain crosses package boundaries — for example a generic type argument or a dict value declared in a different package than the hint's base type. Each package a hint touches is loaded with its own `token.FileSet`, and the handler selects the FileSet by the resolved object's package.
+Field and method jumps resolve to the correct source file even when the chain crosses package boundaries — for example a generic type argument or a dict value declared in a different package than the hint's base type, or a field whose type comes from a package that is only imported by one of those (never named in the hint). Each package a hint touches is loaded with its own `token.FileSet`; the FileSet is recorded for that package and everything it transitively imports, and the handler selects the FileSet by the resolved object's package.
 
 If no `gotype` hint is present, or the type cannot be loaded, the handler returns `nil`.
 

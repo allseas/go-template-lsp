@@ -238,6 +238,9 @@ func objectLocation(loadedType *types.Tree, obj gotypes.Object) (protocol.Locati
 		return protocol.Location{}, false
 	}
 	fpos := fset.Position(obj.Pos())
+	if fpos.Filename == "" {
+		return protocol.Location{}, false
+	}
 	var line, char uint32
 	if fpos.Line > 0 && fpos.Column > 0 {
 		line = uint32(fpos.Line - 1)   //nolint:gosec // disable G115

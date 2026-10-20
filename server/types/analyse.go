@@ -28,10 +28,11 @@ type Tree struct {
 	Pkg        *types.Package         // optional: package containing DotType
 	TypeErrors []TError               // scary
 	Fset       *token.FileSet         // FileSet for the primary (first) named type; used to resolve its token positions
-	// Fsets maps each package touched while resolving the hint to the FileSet
-	// its positions belong to. A hint may span several packages (a generic
-	// type argument, dict values, composed elements), and each package is
-	// loaded with its own FileSet, so a single Fset cannot resolve them all.
+	// Fsets maps each package touched while resolving the hint, and every
+	// package those transitively import, to the FileSet its positions belong
+	// to. A hint may span several packages (a generic type argument, dict
+	// values, composed elements), and each package is loaded with its own
+	// FileSet, so a single Fset cannot resolve them all.
 	// Definition lookups pick the FileSet by the object's package.
 	Fsets map[*types.Package]*token.FileSet
 }

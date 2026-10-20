@@ -1025,11 +1025,7 @@ func (r *hintResolver) lookupType(importPath, typeName string) (types.Type, erro
 		r.pkg = lp.pkg
 		r.fset = lp.fset
 	}
-	if r.fsets != nil && lp.pkg != nil && lp.fset != nil {
-		if _, ok := r.fsets[lp.pkg]; !ok {
-			r.fsets[lp.pkg] = lp.fset
-		}
-	}
+	r.recordFsets(lp.pkg, lp.fset)
 	obj := lp.pkg.Scope().Lookup(typeName)
 	if obj == nil {
 		return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
@@ -1041,6 +1037,28 @@ func (r *hintResolver) lookupType(importPath, typeName string) (types.Type, erro
 		return nil, fmt.Errorf("%q is not a type in package %q", typeName, importPath)
 	}
 	return tn.Type(), nil
+}
+
+// recordFsets maps pkg and every package it transitively imports to fset.
+// Imported packages are loaded as part of pkg's load and share its FileSet, so
+// an object declared in one of them (e.g. the type of a field reached through
+// a type argument) must resolve against that FileSet, not the primary one.
+// A package already recorded keeps its FileSet; its imports belong to the same
+// load and are therefore already recorded too.
+func (r *hintResolver) recordFsets(pkg *types.Package, fset *token.FileSet) {
+	if r.fsets == nil || pkg == nil || fset == nil {
+		return
+	}
+	stack := []*types.Package{pkg}
+	for len(stack) > 0 {
+		p := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if _, seen := r.fsets[p]; seen {
+			continue
+		}
+		r.fsets[p] = fset
+		stack = append(stack, p.Imports()...)
+	}
 }
 
 // arrayLen extracts the integer length of a fixed-size array type expression.

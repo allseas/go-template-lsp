@@ -986,3 +986,42 @@ func TestDefinition_GenericCrossPackageHint(t *testing.T) {
 		assert.Equal(t, uint32(0), loc.Range.Start.Line)
 	})
 }
+
+// TestDefinition_GenericTransitivePackage covers a field whose package is not
+// named in the hint but reached through an import of the type argument's
+// package (cg/repro/outer imports cg/repro/inner).
+func TestDefinition_GenericTransitivePackage(t *testing.T) {
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = "../../test/resources/templ-tests"
+
+	src := "{{/*gotype: cg/model.View[cg/repro/outer.Thing]*/}}\n{{ .Model.C.Deep }}"
+	u := "file:///generic-transitive.tmpl"
+	store.Set(u, src)
+	t.Cleanup(func() { store.Remove(u) })
+
+	def := func(t *testing.T, off int) protocol.Location {
+		t.Helper()
+		result, err := Definition(nil, &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: u},
+				Position:     offsetToPosition(src, off),
+			},
+		})
+		require.NoError(t, err)
+		loc, ok := result.(protocol.Location)
+		require.True(t, ok, "expected a Location, got %#v", result)
+		return loc
+	}
+
+	t.Run("field in type-argument package", func(t *testing.T) {
+		loc := def(t, strings.Index(src, ".C.")+1)
+		assert.True(t, strings.HasSuffix(loc.URI, "repro/outer/outer.go"), loc.URI)
+		assert.Equal(t, uint32(8), loc.Range.Start.Line)
+	})
+
+	t.Run("field in transitively imported package", func(t *testing.T) {
+		loc := def(t, strings.Index(src, "Deep")+1)
+		assert.True(t, strings.HasSuffix(loc.URI, "repro/inner/inner.go"), loc.URI)
+		assert.Equal(t, uint32(7), loc.Range.Start.Line)
+	})
+}
