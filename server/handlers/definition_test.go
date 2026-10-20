@@ -926,3 +926,102 @@ func TestDefinition_DictHint(t *testing.T) {
 		assert.Equal(t, uint32(4), loc.Range.Start.Line)
 	})
 }
+
+// TestDefinition_GenericCrossPackageHint verifies definition routing for a
+// generic hint whose type argument lives in a different package than the base:
+// a field on the base resolves to the base package, a field reached through the
+// type argument resolves to the argument's package (cross-package FileSet), a
+// type token inside the hint comment jumps to its Go source, and the bare dot
+// jumps to the hint comment.
+func TestDefinition_GenericCrossPackageHint(t *testing.T) {
+	const resourceDir = "../../test/resources/typehints-tests"
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = resourceDir
+
+	src := "{{- /*gotype: text-template-server/src/model.View[text-template-server/src/othermodel.Gadget]*/ -}}\n" +
+		"{{ .Model.Serial }}\n{{ . }}"
+	u := "file:///generic-crosspkg.tmpl"
+	store.Set(u, src)
+	t.Cleanup(func() { store.Remove(u) })
+
+	def := func(t *testing.T, off int) (protocol.Location, bool) {
+		t.Helper()
+		params := &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: u},
+				Position:     offsetToPosition(src, off),
+			},
+		}
+		result, err := Definition(nil, params)
+		require.NoError(t, err)
+		loc, ok := result.(protocol.Location)
+		return loc, ok
+	}
+
+	t.Run("field on type argument resolves cross-package", func(t *testing.T) {
+		loc, ok := def(t, strings.Index(src, "Serial")+1)
+		require.True(t, ok, "expected a Location")
+		assert.True(t, strings.HasSuffix(loc.URI, "othermodel.go"),
+			"expected othermodel.go, got %s", loc.URI)
+	})
+
+	t.Run("field on base resolves to base package", func(t *testing.T) {
+		loc, ok := def(t, strings.Index(src, ".Model.Serial")+2)
+		require.True(t, ok, "expected a Location")
+		assert.True(t, strings.HasSuffix(loc.URI, "model.go"),
+			"expected model.go, got %s", loc.URI)
+	})
+
+	t.Run("type token in hint jumps to source", func(t *testing.T) {
+		loc, ok := def(t, strings.Index(src, "othermodel.Gadget")+len("othermodel.")+1)
+		require.True(t, ok, "expected a Location")
+		assert.True(t, strings.HasSuffix(loc.URI, "othermodel.go"),
+			"expected othermodel.go, got %s", loc.URI)
+	})
+
+	t.Run("bare dot jumps to hint comment", func(t *testing.T) {
+		loc, ok := def(t, strings.Index(src, "{{ . }}")+3)
+		require.True(t, ok, "expected a Location")
+		assert.Equal(t, u, loc.URI)
+		assert.Equal(t, uint32(0), loc.Range.Start.Line)
+	})
+}
+
+// TestDefinition_GenericTransitivePackage covers a field whose package is not
+// named in the hint but reached through an import of the type argument's
+// package (cg/repro/outer imports cg/repro/inner).
+func TestDefinition_GenericTransitivePackage(t *testing.T) {
+	t.Cleanup(func() { WorkspaceRoot = "" })
+	WorkspaceRoot = "../../test/resources/templ-tests"
+
+	src := "{{/*gotype: cg/model.View[cg/repro/outer.Thing]*/}}\n{{ .Model.C.Deep }}"
+	u := "file:///generic-transitive.tmpl"
+	store.Set(u, src)
+	t.Cleanup(func() { store.Remove(u) })
+
+	def := func(t *testing.T, off int) protocol.Location {
+		t.Helper()
+		result, err := Definition(nil, &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: u},
+				Position:     offsetToPosition(src, off),
+			},
+		})
+		require.NoError(t, err)
+		loc, ok := result.(protocol.Location)
+		require.True(t, ok, "expected a Location, got %#v", result)
+		return loc
+	}
+
+	t.Run("field in type-argument package", func(t *testing.T) {
+		loc := def(t, strings.Index(src, ".C.")+1)
+		assert.True(t, strings.HasSuffix(loc.URI, "repro/outer/outer.go"), loc.URI)
+		assert.Equal(t, uint32(8), loc.Range.Start.Line)
+	})
+
+	t.Run("field in transitively imported package", func(t *testing.T) {
+		loc := def(t, strings.Index(src, "Deep")+1)
+		assert.True(t, strings.HasSuffix(loc.URI, "repro/inner/inner.go"), loc.URI)
+		assert.Equal(t, uint32(7), loc.Range.Start.Line)
+	})
+}

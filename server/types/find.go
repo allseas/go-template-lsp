@@ -115,6 +115,33 @@ func NodeFind(root Node, offset Pos) Node {
 	return best
 }
 
+// FindHintCommentNode returns the first gotype hint CommentNode reachable from
+// root (depth-first, pre-order) and true, or nil and false when the tree
+// carries no recognisable hint comment.
+func FindHintCommentNode(root Node) (*CommentNode, bool) {
+	var found *CommentNode
+	var walk func(n Node) bool
+	walk = func(n Node) bool {
+		if n == nil {
+			return true
+		}
+		if c, ok := n.(*CommentNode); ok {
+			if _, hintOK := parseHintText(c.Text); hintOK {
+				found = c
+				return false
+			}
+		}
+		for _, child := range nodeChildren(n) {
+			if !walk(child) {
+				return false
+			}
+		}
+		return true
+	}
+	walk(root)
+	return found, found != nil
+}
+
 // EnclosingList returns the nearest enclosing *ListNode by walking up parents.
 // Returns nil if none is found.
 func EnclosingList(n Node) *ListNode {
