@@ -31,8 +31,10 @@ func TestStore_RootHintDoesNotLeakAcrossFiles(t *testing.T) {
 	assert.False(t, leaked, "a root hint (template \"t\") must not enter the shared registry")
 
 	namedURI := "file:///named-define.tmpl"
-	store.Set(namedURI,
-		"{{define \"OrderTpl\"}}{{/*gotype: text-template-server/src/model.Order*/}}\n{{ .CustomerName }}{{end}}")
+	store.Set(
+		namedURI,
+		"{{define \"OrderTpl\"}}{{/*gotype: text-template-server/src/model.Order*/}}\n{{ .CustomerName }}{{end}}",
+	)
 	t.Cleanup(func() { store.Remove(namedURI) })
 
 	store.mu.RLock()
