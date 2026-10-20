@@ -140,7 +140,9 @@ map{ "<key>": <typeref> ( , "<key>": <typeref> )* }
 - Whitespace around tokens is ignored.
 - An empty body (`map{}`) is rejected — a hint with no keys carries no information.
 
-A `map{...}` **composes like any other type**: it may appear inside a pointer/slice/array/map (`*[]map{...}`, `map[string]map{...}`) and as a **generic type argument** (`pkg.View[map{...}]`). In the generic case `.` is the instantiated generic type and the dict surfaces through the substituted field (e.g. `.Model` on `View[T]`), where the normal `*DictType` behaviour resumes.
+A `map{...}` **composes like any other type**: it may appear inside a pointer/slice/array/map (`*[]map{...}`, `[]*map{...}`, `map[string]map{...}`) and as a **generic type argument** (`pkg.View[map{...}]`). In the generic case `.` is the instantiated generic type and the dict surfaces through the substituted field (e.g. `.Model` on `View[T]`), where the normal `*DictType` behaviour resumes. A pointer directly to a dict (`*map{...}`) is treated as the dict itself, matching text/template's transparent pointer dereferencing.
+
+Two hints in the same template are compared after normalisation, so `map{"a": int, "b": string}` and `map{"b": string, "a": int}` (or the same hint with different spacing) do not trigger a `conflictingHint` warning.
 
 The hint can appear anywhere a struct hint can: at the top of the file for the root template, or immediately inside a `{{define "name"}}` block for a named sub-template. Both hint kinds may coexist in one file; different `{{define}}` blocks may pick either.
 
