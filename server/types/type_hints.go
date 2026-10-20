@@ -2,9 +2,11 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"iter"
@@ -108,12 +110,59 @@ func hintsEqual(a, b TypeHint) bool {
 	}
 	switch a.Type {
 	case typeHintStruct, typeHintDict:
-		return a.Text == b.Text
+		return a.Text == b.Text || canonicalHintText(a.Text) == canonicalHintText(b.Text)
 	case typeHintMalformedDict, typeHintMalformedStruct:
 		return true
 	default:
 		return true
 	}
+}
+
+// canonicalHintText renders a hint expression in a normalised form so that
+// equivalent hints compare equal: whitespace is normalised, dict entries are
+// sorted by key, and package qualifiers are expanded back to full import paths
+// (so `a/pkg.T` and `b/pkg.T` stay distinct). Unparseable text is returned
+// unchanged.
+func canonicalHintText(raw string) string {
+	rewritten, imports, err := preprocessHint(raw)
+	if err != nil {
+		return raw
+	}
+	expr, err := parser.ParseExpr(rewritten)
+	if err != nil {
+		return raw
+	}
+	ast.Inspect(expr, func(n ast.Node) bool {
+		switch e := n.(type) {
+		case *ast.SelectorExpr:
+			if id, ok := e.X.(*ast.Ident); ok {
+				if path, ok := imports[id.Name]; ok {
+					id.Name = path
+				}
+			}
+		case *ast.CompositeLit:
+			sort.SliceStable(e.Elts, func(i, j int) bool {
+				return dictEntryKey(e.Elts[i]) < dictEntryKey(e.Elts[j])
+			})
+		}
+		return true
+	})
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, token.NewFileSet(), expr); err != nil {
+		return raw
+	}
+	return buf.String()
+}
+
+// dictEntryKey returns the literal key of a dict entry, or "" if elt is not a
+// `"key": value` pair.
+func dictEntryKey(elt ast.Expr) string {
+	if kv, ok := elt.(*ast.KeyValueExpr); ok {
+		if lit, ok := kv.Key.(*ast.BasicLit); ok {
+			return lit.Value
+		}
+	}
+	return ""
 }
 
 var (
@@ -723,12 +772,15 @@ func isDictShape(c *ast.CompositeLit) bool {
 }
 
 // dictSentinelType reports whether typeExpr is the dict sentinel, possibly
-// wrapped in array/map constructors (which go/parser folds into a dict
-// composite literal's Type when they directly prefix `map{...}`).
+// wrapped in pointer/array/map constructors (which go/parser folds into a dict
+// composite literal's Type when they directly prefix `map{...}`, e.g.
+// `[]*map{...}`).
 func dictSentinelType(typeExpr ast.Expr) bool {
 	switch te := typeExpr.(type) {
 	case *ast.Ident:
 		return te.Name == dictSentinel
+	case *ast.StarExpr:
+		return dictSentinelType(te.X)
 	case *ast.ArrayType:
 		return dictSentinelType(te.Elt)
 	case *ast.MapType:
@@ -798,7 +850,7 @@ func (r *hintResolver) resolve(expr ast.Expr) (types.Type, error) {
 		if err != nil {
 			return nil, err
 		}
-		return types.NewPointer(elem), nil
+		return pointerTo(elem), nil
 	case *ast.ArrayType:
 		elem, err := r.resolve(e.Elt)
 		if err != nil {
@@ -849,7 +901,10 @@ func (r *hintResolver) resolveDict(c *ast.CompositeLit) (types.Type, error) {
 		}
 		lit, ok := kv.Key.(*ast.BasicLit)
 		if !ok || lit.Kind != token.STRING {
-			return nil, fmt.Errorf("dict key must be a string literal: %s", types.ExprString(kv.Key))
+			return nil, fmt.Errorf(
+				"dict key must be a string literal: %s",
+				types.ExprString(kv.Key),
+			)
 		}
 		key, err := strconv.Unquote(lit.Value)
 		if err != nil {
@@ -877,6 +932,12 @@ func (r *hintResolver) wrapDictType(typeExpr ast.Expr, inner types.Type) (types.
 			return inner, nil
 		}
 		return nil, fmt.Errorf("unexpected dict composite type %q", te.Name)
+	case *ast.StarExpr:
+		elem, err := r.wrapDictType(te.X, inner)
+		if err != nil {
+			return nil, err
+		}
+		return pointerTo(elem), nil
 	case *ast.ArrayType:
 		elem, err := r.wrapDictType(te.Elt, inner)
 		if err != nil {
@@ -903,6 +964,16 @@ func (r *hintResolver) wrapDictType(typeExpr ast.Expr, inner types.Type) (types.
 	default:
 		return nil, fmt.Errorf("unsupported dict wrapper: %s", types.ExprString(typeExpr))
 	}
+}
+
+// pointerTo returns *elem, except that a pointer to a dict collapses to the
+// dict itself: text/template dereferences pointers transparently, and the
+// analyser, completion and definition code dispatch on a bare *DictType.
+func pointerTo(elem types.Type) types.Type {
+	if d, ok := elem.(*DictType); ok {
+		return d
+	}
+	return types.NewPointer(elem)
 }
 
 // resolveIdent resolves a bare identifier: a predeclared builtin from
