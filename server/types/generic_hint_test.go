@@ -141,6 +141,10 @@ func TestLocateTypeDecl(t *testing.T) {
 	assert.Contains(t, pos.Filename, "othermodel")
 	assert.Positive(t, pos.Line)
 
-	_, ok = LocateTypeDecl("text-template-server/src/othermodel", "DoesNotExist", genericFixtureRoot)
+	_, ok = LocateTypeDecl(
+		"text-template-server/src/othermodel",
+		"DoesNotExist",
+		genericFixtureRoot,
+	)
 	assert.False(t, ok)
 }

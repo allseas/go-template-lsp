@@ -262,7 +262,11 @@ func namedTypeLocation(loadedType *types.Tree, named *gotypes.Named) (any, error
 
 // hintCommentLocation returns a Location spanning the whole gotype hint comment
 // c in the current document.
-func hintCommentLocation(c *types.CommentNode, uri protocol.DocumentUri, text string) protocol.Location {
+func hintCommentLocation(
+	c *types.CommentNode,
+	uri protocol.DocumentUri,
+	text string,
+) protocol.Location {
 	start := int(c.Position())
 	end := start + len(c.Text)
 	if end > len(text) {
@@ -285,7 +289,7 @@ func commentTokenDefinition(c *types.CommentNode, uri protocol.DocumentUri, offs
 	if !ok {
 		return nil
 	}
-	for _, root := range []string{WorkspaceRoot, uriDir(string(uri))} {
+	for _, root := range []string{WorkspaceRoot, uriDir(uri)} {
 		if root == "" {
 			continue
 		}
