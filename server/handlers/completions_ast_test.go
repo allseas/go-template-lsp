@@ -45,6 +45,9 @@ func suggestAtWithType(
 	var pkg *types.Package
 	if lt != nil {
 		dotType = lt.DotType
+		if lt.DictType != nil {
+			dotType = lt.DictType
+		}
 		pkg = lt.Pkg
 	}
 	// Pass GlobalFuncs() so IdentifierNodes carry their function signatures.
@@ -110,13 +113,25 @@ func orderLoadedType(t *testing.T) *serverTypes.Tree {
 	return &tree
 }
 
+// hintLoadedType resolves a gotype hint against the typehints-tests fixtures.
+func hintLoadedType(t *testing.T, hint string) *serverTypes.Tree {
+	t.Helper()
+	lt, err := serverTypes.LoadTypeFromHint(hint, typehintsRoot)
+	require.NoError(t, err)
+	return lt
+}
+
 func TestCompletionSuggestions(t *testing.T) {
-	lt := orderLoadedType(t)
+	orderLT := orderLoadedType(t)
 	for _, tc := range completionTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			offset := offsetOf(t, tc.src, tc.subStr, tc.occurrence) + tc.offsetAdj
 			var labels []string
 			if tc.withType {
+				lt := orderLT
+				if tc.dotHint != "" {
+					lt = hintLoadedType(t, tc.dotHint)
+				}
 				labels = suggestAtWithType(t, tc.src, offset, tc.isInvoked, lt)
 			} else {
 				labels = suggestAt(t, tc.src, offset)
@@ -341,8 +356,15 @@ func TestPipeFilteredItemsT(t *testing.T) {
 			offset := offsetOf(t, tc.src, tc.subStr, 0)
 			cur := typedNodeAt(t, tc.src, offset, nil)
 			var inputType types.Type
-			if tc.inputIsString {
+			switch {
+			case tc.inputIsString:
 				inputType = types.Typ[types.String]
+			case tc.inputHint != "":
+				lt := hintLoadedType(t, tc.inputHint)
+				inputType = lt.DotType
+				if lt.DictType != nil {
+					inputType = lt.DictType
+				}
 			}
 			labels := labelsOf(pipeFilteredItemsT(cur, inputType, nil, wr))
 			for _, want := range tc.contains {

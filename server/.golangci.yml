@@ -16,9 +16,25 @@ linters:
     - misspell
     - unconvert
     - unparam
+    - forbidigo
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # These panic on *DictType; use the DictSafe* wrappers (types/dict_compare.go).
+        - pattern: ^types\.(Identical|IdenticalIgnoreTags|AssignableTo|ConvertibleTo|Implements|AssertableTo|Satisfies)$
+          pkg: ^go/types$
+          msg: go/types predicates panic on *DictType; use the DictSafe* functions from types/dict_compare.go
   exclusions:
     paths:
       - types/node.go
+    rules:
+      - path: types/dict_compare\.go
+        linters:
+          - forbidigo
+      - path: _test\.go
+        linters:
+          - forbidigo
 
 linters-settings:
   errcheck:
