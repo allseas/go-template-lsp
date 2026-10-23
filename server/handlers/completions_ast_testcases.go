@@ -8,6 +8,7 @@ type completionTestCase struct {
 	offsetAdj   int
 	isInvoked   bool
 	withType    bool
+	dotHint     string // with withType: dot is this gotype hint instead of model.Order
 	contains    []string
 	notContains []string
 }
@@ -780,6 +781,15 @@ var completionTestCases = []completionTestCase{
 		subStr:   "l",
 		contains: []string{"len", "eq"},
 	},
+	// dict dot piped into a function (used to panic in go/types.AssignableTo)
+	{
+		name:     "dict dot piped - any-accepting builtins shown",
+		src:      `{{ . | p }}`,
+		subStr:   "p",
+		withType: true,
+		dotHint:  `map{"a": int}`,
+		contains: []string{"print", "printf", "println"},
+	},
 }
 
 // completionAst handler test cases
@@ -1015,7 +1025,8 @@ type pipeFilteredItemsTTestCase struct {
 	name          string
 	src           string
 	subStr        string
-	inputIsString bool // set inputType = types.Typ[types.String]
+	inputIsString bool   // set inputType = types.Typ[types.String]
+	inputHint     string // set inputType to this gotype hint's type
 	contains      []string
 	notContains   []string
 }
@@ -1033,6 +1044,14 @@ var pipeFilteredItemsTTestCases = []pipeFilteredItemsTTestCase{
 		subStr:        ".",
 		inputIsString: true,
 		contains:      []string{"html", "len", "not", "and", "eq"},
+	},
+	{
+		// Matching a dict against each func's parameter used to panic in go/types.
+		name:      "dict pipe input shows any-accepting builtins",
+		src:       `{{.}}`,
+		subStr:    ".",
+		inputHint: `map{"a": int}`,
+		contains:  []string{"print", "printf", "println", "html", "len"},
 	},
 }
 
