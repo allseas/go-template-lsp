@@ -339,7 +339,7 @@ func funcAcceptsPipeInput(fn *types.Func, pipeInputType types.Type) (accepts boo
 			last = slice.Elem()
 		}
 	}
-	if !types.AssignableTo(pipeInputType, last) {
+	if !serverTypes.DictSafeAssignableTo(pipeInputType, last) {
 		return false, false
 	}
 	return true, !serverTypes.IsEmptyInterface(last)
@@ -503,7 +503,7 @@ func methodIsUsable(m serverTypes.MethodType) bool {
 	case 2:
 		second := results.At(1).Type()
 		errType := types.Universe.Lookup("error").Type()
-		return types.Implements(second, errType.Underlying().(*types.Interface))
+		return serverTypes.DictSafeImplements(second, errType.Underlying().(*types.Interface))
 	default:
 		return false
 	}
@@ -560,7 +560,8 @@ func methodAcceptsInput(m serverTypes.MethodType, inputType types.Type) bool {
 		return true
 	}
 	for _, p := range m.Params {
-		if types.Identical(p.Type, inputType) || serverTypes.IsEmptyInterface(p.Type) {
+		if serverTypes.DictSafeIdentical(p.Type, inputType) ||
+			serverTypes.IsEmptyInterface(p.Type) {
 			return true
 		}
 	}
