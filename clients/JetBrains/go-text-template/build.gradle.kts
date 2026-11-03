@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.allseas"
-version = "1.2.0"
+version = "1.3.0"
 
 repositories {
     mavenCentral()
@@ -105,6 +105,20 @@ intellijPlatform {
 
         changeNotes =
             """
+            <h3>1.3.0</h3>
+            <ul>
+              <li><code>gotype</code> hints accept any Go type expression (slices, maps, pointers, nesting) and generic instantiations such as <code>pkg.View[Instance]</code>.</li>
+              <li><code>map{...}</code> hints can be nested inside other types and used as generic type arguments.</li>
+              <li>Go to definition resolves across packages and from types inside a <code>gotype</code> comment.</li>
+              <li>Dict arguments to <code>{{ template }}</code> are checked key by key.</li>
+              <li>Templates without a hint infer their input type from the first call site.</li>
+              <li>The results of <code>index</code> and <code>dict</code> are typed, and <code>.Key</code> access on Go maps resolves.</li>
+              <li>Invalid <code>gotype:</code> comments are reported as malformed hints.</li>
+              <li>Removed the <code>invalidWith</code> diagnostic.</li>
+              <li>Fixes: hints leaking across files, definitions in transitively imported packages, false errors on <code>any</code>/<code>nil</code> field chains.</li>
+              <li>Semantic tokens for fields cover only the identifier, so go to definition on a highlighted field works, and fields chained after a parenthesised term such as <code>(dict "a" .Address).a.City</code> are highlighted correctly and support hover and go to definition.</li>
+              <li>Now distributed under the Allseas End User License Agreement (EULA).</li>
+            </ul>
             <h3>1.2.0</h3>
             <ul>
               <li>Go to definition on <code>{{ template "name" }}</code> calls.</li>
