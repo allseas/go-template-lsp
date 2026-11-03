@@ -662,7 +662,11 @@ func analyseChain(n *parse.ChainNode, parent Node, ctx *analysisCtx) Node {
 		NodeType: NodeChain,
 		Pos:      Pos(n.Position()),
 		Field:    n.Field,
+		FieldPos: make([]Pos, len(n.FieldPos)),
 		parent:   parent,
+	}
+	for i, p := range n.FieldPos {
+		cn.FieldPos[i] = Pos(p)
 	}
 	keepVars := len(ctx.vars)
 	cn.Node = analyseNode(n.Node, cn, ctx)

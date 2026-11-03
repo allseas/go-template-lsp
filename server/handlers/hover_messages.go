@@ -124,6 +124,28 @@ func MessageField(n *serverTypes.FieldNode, typ types.Type) string {
 	return ""
 }
 
+// MessageChainField generates a hover message for Field[i] of a ChainNode such
+// as City in "(dict "a" .Address).a.City", naming the type it is accessed on.
+func MessageChainField(n *serverTypes.ChainNode, i int) string {
+	const chainFieldMessage = "```go\nfield .%s\n```\nAccesses a field of `%s`."
+	const chainFieldMessageTyped = "```go\nfield .%s %s\n```\nAccesses a field of `%s`."
+
+	ownerTypeName := formatType(n.OwnerType(i))
+	if ownerTypeName == "" {
+		return ""
+	}
+	fieldType := n.ValueType()
+	if i < len(n.Field)-1 {
+		fieldType = n.OwnerType(i + 1)
+	}
+	if fieldTypeName := formatType(fieldType); fieldTypeName != "" {
+		return withLink(
+			fmt.Sprintf(chainFieldMessageTyped, n.Field[i], fieldTypeName, ownerTypeName),
+		)
+	}
+	return withLink(fmt.Sprintf(chainFieldMessage, n.Field[i], ownerTypeName))
+}
+
 // MessageIdentifier generates a hover message for an IdentifierNode, including the identifier name and (when known) the resolved Go type.
 func MessageIdentifier(n *serverTypes.IdentifierNode, typ types.Type) string {
 	const identifierMessage = "```go\n%s\n```\nRepresents an identifier in a command or action."

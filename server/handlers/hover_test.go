@@ -269,3 +269,50 @@ func TestHover_DictHint(t *testing.T) {
 			"raw dict string should not leak into hover message")
 	})
 }
+
+// Hover on a field chained after a parenthesised term describes that field and
+// covers only its identifier.
+func TestHoverChainFields(t *testing.T) {
+	enableHover(t)
+	src := `{{ (dict "a" .Address).a.City }} {{ (index .Items 0).Label }}`
+	uri := "file:///hover-chain-fields.tmpl"
+	setDocWithType(t, uri, src, definitionOrderType(t))
+	defer store.Delete(uri)
+
+	cases := []struct {
+		name      string
+		ident     string
+		wantValue string
+	}{
+		{
+			"field after dict",
+			"City",
+			"```go\nfield .City string\n```\nAccesses a field of `model.Address`.",
+		},
+		{"dict key", "a.", "```go\nfield .a model.Address\n```\nAccesses a field of `map{a}`."},
+		{
+			"method after index",
+			"Label",
+			"```go\nfield .Label string\n```\nAccesses a field of `model.Item`.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			start := strings.Index(src, "."+tc.ident) + 1
+			res, err := Hover(nil, &protocol.HoverParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+					Position:     position(0, uint32(start)), //nolint:gosec // short input
+				},
+			})
+			require.NoError(t, err)
+			require.NotNil(t, res)
+			assert.Equal(t, withLink(tc.wantValue), res.Contents.(protocol.MarkupContent).Value)
+			name := strings.TrimSuffix(tc.ident, ".")
+			assert.Equal(t, &protocol.Range{
+				Start: position(0, uint32(start)),           //nolint:gosec // short input
+				End:   position(0, uint32(start+len(name))), //nolint:gosec // short input
+			}, res.Range)
+		})
+	}
+}

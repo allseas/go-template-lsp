@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"go/types"
+	"strings"
 	"testing"
 
 	serverTypes "text-template-server/types"
@@ -977,4 +978,153 @@ func TestPlainTextKeywordsNotHighlighted(t *testing.T) {
 			}
 		})
 	}
+}
+
+// semanticTokenTexts decodes LSP-encoded semantic tokens back into the source
+// text each token covers (single-byte characters only).
+func semanticTokenTexts(t *testing.T, src string, data []uint32) []string {
+	t.Helper()
+	lines := strings.Split(src, "\n")
+	var out []string
+	var line, char uint32
+	for i := 0; i+4 < len(data); i += 5 {
+		if data[i] > 0 {
+			line += data[i]
+			char = data[i+1]
+		} else {
+			char += data[i+1]
+		}
+		require.Less(t, int(line), len(lines))
+		l := lines[line]
+		require.LessOrEqual(t, int(char+data[i+2]), len(l), "token %d runs past end of line", i/5)
+		out = append(out, l[char:char+data[i+2]])
+	}
+	return out
+}
+
+// TestSemanticTokenRanges checks the exact source text covered by field,
+// variable and chain tokens: identifiers only (no '.'), and chained fields
+// after a parenthesised pipeline located in the source rather than computed.
+func TestSemanticTokenRanges(t *testing.T) {
+	lt := semanticOrderType(t)
+
+	tests := []struct {
+		name   string
+		src    string
+		noType bool
+		want   []string
+	}{
+		{
+			name: "field chain tokens exclude dots",
+			src:  `{{.Address.City}}`,
+			want: []string{"Address", "City"},
+		},
+		{
+			name: "variable chain tokens exclude dots",
+			src:  `{{ range $it := .Items }}{{ $it.Desc.Long }}{{ end }}`,
+			// {{ end }} is not emitted by this helper (see TestVariableNodeTokenTypes)
+			want: []string{"range", "$it", "Items", "$it", "Desc", "Long"},
+		},
+		{
+			name: "chain after parenthesised pipeline",
+			src:  `{{(dict "a" .Address).a.City}}`,
+			want: []string{"dict", `"a"`, "Address", "a", "City"},
+		},
+		{
+			name: "chain after parenthesised pipeline with extra spaces",
+			src:  `{{ (  dict   "a"   .Address ).a.City }}`,
+			want: []string{"dict", `"a"`, "Address", "a", "City"},
+		},
+		{
+			name: "chain after index",
+			src:  `{{(index .Items 0).Name}}`,
+			want: []string{"index", "Items", "0", "Name"},
+		},
+		{
+			name:   "parenthesis inside a string literal",
+			src:    `{{(printf ")(" .ID).Len}}`,
+			noType: true,
+			want:   []string{"printf", `")("`, "ID", "Len"},
+		},
+		{
+			name:   "parenthesis inside a raw string literal",
+			src:    "{{(printf `)` .ID).Len}}",
+			noType: true,
+			want:   []string{"printf", "`)`", "ID", "Len"},
+		},
+		{
+			name: "nested parenthesised chains",
+			src:  `{{((dict "a" .Address).a).City}}`,
+			want: []string{"dict", `"a"`, "Address", "a", "City"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uri := "file:///token-range-" + tt.name + ".tmpl"
+			useLt := lt
+			if tt.noType {
+				useLt = nil
+			}
+			setDocWithTypedTree(t, uri, tt.src, useLt)
+			defer store.Delete(uri)
+
+			result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, tt.want, semanticTokenTexts(t, tt.src, result.Data))
+		})
+	}
+}
+
+// TestDefinitionAtSemanticTokenStart guards the contract LSP4IJ (JetBrains)
+// relies on: go-to-definition requested at the start offset of a field or
+// variable-segment semantic token resolves to the same target as a request in
+// the middle of that token.
+func TestDefinitionAtSemanticTokenStart(t *testing.T) {
+	src := "{{ .Address.City }} {{ .Address.Line }}\n" +
+		"{{ range $i, $it := .Items }}{{ $it.Name }} {{ $it.Label }}{{ end }}"
+	uri := "file:///def-at-token-start.tmpl"
+	setDocWithType(t, uri, src, definitionOrderType(t))
+	defer store.Delete(uri)
+
+	result, err := SemanticTokensFull(nil, makeSemanticParams(uri))
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	definitionAt := func(line, char uint32) protocol.Location {
+		t.Helper()
+		res, err := Definition(nil, &protocol.DefinitionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+				Position:     position(line, char),
+			},
+		})
+		require.NoError(t, err)
+		loc, ok := res.(protocol.Location)
+		require.True(t, ok, "expected a Location at %d:%d, got %#v", line, char, res)
+		return loc
+	}
+
+	texts := semanticTokenTexts(t, src, result.Data)
+	checked := 0
+	var line, char uint32
+	for i := 0; i+4 < len(result.Data); i += 5 {
+		d := result.Data[i : i+5]
+		if d[0] > 0 {
+			line += d[0]
+			char = d[1]
+		} else {
+			char += d[1]
+		}
+		if d[3] != ttProperty && d[3] != ttFunction {
+			continue
+		}
+		name := texts[i/5]
+		start := definitionAt(line, char)
+		middle := definitionAt(line, char+d[2]/2)
+		assert.Equal(t, middle, start, "token %q at %d:%d", name, line, char)
+		checked++
+	}
+	assert.Equal(t, 7, checked, "Address, City, Address, Line, Items, Name, Label")
 }

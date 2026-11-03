@@ -878,6 +878,7 @@ type ChainNode struct {
 	parent    Node
 	Node      Node
 	Field     []string     // The identifiers in lexical order.
+	FieldPos  []Pos        // Position of the '.' before each identifier in Field.
 	typ       types.Type   // Resolved type of the final field in chain (set during analysis)
 	stepTypes []types.Type // Per-identifier: resolved type after each chain step. (set during analysis)
 	isElse    bool         // Whether this is in an else list.
@@ -934,6 +935,7 @@ func (c *ChainNode) Copy() Node {
 		endPos:    c.endPos,
 		Node:      c.Node,
 		Field:     append([]string{}, c.Field...),
+		FieldPos:  append([]Pos{}, c.FieldPos...),
 		stepTypes: append([]types.Type{}, c.stepTypes...),
 		parent:    c.parent,
 		isElse:    c.isElse,

@@ -55,6 +55,15 @@ func Hover(_ *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, erro
 		}, nil
 	}
 
+	if chain, idx, ok := chainFieldAt(target, offset); ok {
+		start := int(chain.FieldPos[idx]) + 1 // skip the '.'
+		r := bytesToRange(doc.text, start, start+len(chain.Field[idx]))
+		return &protocol.Hover{
+			Range:    &r,
+			Contents: mdContent(MessageChainField(chain, idx)),
+		}, nil
+	}
+
 	r := nodeRange(target, doc.text)
 	return &protocol.Hover{
 		Range:    &r,
