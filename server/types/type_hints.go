@@ -2,9 +2,11 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"go/types"
 	"iter"
@@ -35,13 +37,10 @@ const (
 // TypeHint represents a `gotype:` type hint found in a template file.
 type TypeHint struct {
 	Type typeHintType
-	// Text is the raw type reference that follows `gotype:` in the comment.
-	// For struct hints this is the type path (e.g. "example.com/m.Order").
-	// For dict hints this is the raw body between the braces of `map{...}`.
+	// Text is the raw type expression that follows `gotype:` in the comment,
+	// e.g. "example.com/m.Order", "[]*pkg.T", or a dict `map{"k": pkg.T}`. The
+	// unified resolver parses and resolves it.
 	Text string
-	// Dict is populated for dict hints; it maps each declared key to its type
-	// reference (e.g. "Order" -> "example.com/m.Order"). Nil for struct hints.
-	Dict map[string]string
 	// Line is the 1-based line number in the source text at which the hint
 	// appears; 0 when the hint is unset.
 	Line int
@@ -67,10 +66,8 @@ func (h TypeHint) MalformedMessage() string {
 // diagnostic messages.
 func (h TypeHint) describe() string {
 	switch h.Type {
-	case typeHintStruct:
+	case typeHintStruct, typeHintDict:
 		return h.Text
-	case typeHintDict:
-		return "map{" + h.Text + "}"
 	case typeHintMalformedDict:
 		return "malformed map{...}"
 	case typeHintMalformedStruct:
@@ -84,19 +81,25 @@ func (h TypeHint) describe() string {
 // whitespace) into a TypeHint. Line is left at 0; callers that need position
 // information should use ParseHintComment instead.
 func parseHintText(commentText string) (TypeHint, bool) {
-	if dictHintRe.MatchString(commentText) {
-		if h, ok := parseDictHint(commentText, 0); ok {
-			return h, true
-		}
-		return TypeHint{Type: typeHintMalformedDict}, true
+	if !strings.Contains(commentText, "gotype:") {
+		return TypeHint{}, false
 	}
-	if h, ok := parseStructHint(commentText, 0); ok {
-		return h, true
-	}
-	if strings.Contains(commentText, "gotype:") {
+	// A comment that carries the gotype: marker but whose body is empty or not
+	// a valid type expression is a broken hint, not a stray comment.
+	raw, ok := extractHintText(commentText)
+	if !ok {
 		return TypeHint{Type: typeHintMalformedStruct}, true
 	}
-	return TypeHint{}, false
+	switch classifyHintText(raw) {
+	case typeHintMalformedDict:
+		return TypeHint{Type: typeHintMalformedDict}, true
+	case typeHintMalformedStruct:
+		return TypeHint{Type: typeHintMalformedStruct}, true
+	case typeHintDict:
+		return TypeHint{Type: typeHintDict, Text: raw}, true
+	default:
+		return TypeHint{Type: typeHintStruct, Text: raw}, true
+	}
 }
 
 // hintsEqual reports whether two hints refer to the same type. Line numbers
@@ -106,18 +109,8 @@ func hintsEqual(a, b TypeHint) bool {
 		return false
 	}
 	switch a.Type {
-	case typeHintStruct:
-		return a.Text == b.Text
-	case typeHintDict:
-		if len(a.Dict) != len(b.Dict) {
-			return false
-		}
-		for k, v := range a.Dict {
-			if b.Dict[k] != v {
-				return false
-			}
-		}
-		return true
+	case typeHintStruct, typeHintDict:
+		return a.Text == b.Text || canonicalHintText(a.Text) == canonicalHintText(b.Text)
 	case typeHintMalformedDict, typeHintMalformedStruct:
 		return true
 	default:
@@ -125,12 +118,54 @@ func hintsEqual(a, b TypeHint) bool {
 	}
 }
 
+// canonicalHintText renders a hint expression in a normalised form so that
+// equivalent hints compare equal: whitespace is normalised, dict entries are
+// sorted by key, and package qualifiers are expanded back to full import paths
+// (so `a/pkg.T` and `b/pkg.T` stay distinct). Unparseable text is returned
+// unchanged.
+func canonicalHintText(raw string) string {
+	rewritten, imports, err := preprocessHint(raw)
+	if err != nil {
+		return raw
+	}
+	expr, err := parser.ParseExpr(rewritten)
+	if err != nil {
+		return raw
+	}
+	ast.Inspect(expr, func(n ast.Node) bool {
+		switch e := n.(type) {
+		case *ast.SelectorExpr:
+			if id, ok := e.X.(*ast.Ident); ok {
+				if path, ok := imports[id.Name]; ok {
+					id.Name = path
+				}
+			}
+		case *ast.CompositeLit:
+			sort.SliceStable(e.Elts, func(i, j int) bool {
+				return dictEntryKey(e.Elts[i]) < dictEntryKey(e.Elts[j])
+			})
+		}
+		return true
+	})
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, token.NewFileSet(), expr); err != nil {
+		return raw
+	}
+	return buf.String()
+}
+
+// dictEntryKey returns the literal key of a dict entry, or "" if elt is not a
+// `"key": value` pair.
+func dictEntryKey(elt ast.Expr) string {
+	if kv, ok := elt.(*ast.KeyValueExpr); ok {
+		if lit, ok := kv.Key.(*ast.BasicLit); ok {
+			return lit.Value
+		}
+	}
+	return ""
+}
+
 var (
-	dictHintRe = regexp.MustCompile(`gotype:\s*map\s*\{`)
-	// dictEntryRe splits a single `"key": typeref` dict entry. The value is
-	// captured loosely so that full type expressions (slices, maps, pointers,
-	// nesting) reach resolveTypeExpr; it is validated with looksLikeTypeExpr.
-	dictEntryRe = regexp.MustCompile(`^\s*"([^"]+)"\s*:\s*(.+?)\s*$`)
 	// qualifiedTypeRe matches a slash-bearing import path followed by `.Type`
 	// (e.g. `cg/model/controlmodel.Block`). Such references parse as a
 	// division expression in go/parser, so preprocessHint rewrites them to
@@ -139,7 +174,17 @@ var (
 	qualifiedTypeRe = regexp.MustCompile(
 		`([A-Za-z_][A-Za-z0-9_.\-]*(?:/[A-Za-z0-9_.\-]+)+)\.([A-Za-z_][A-Za-z0-9_]*)`,
 	)
+	// dictKeywordRe matches the dict-hint keyword `map{` (distinct from the Go
+	// map type `map[...]`). preprocessHint rewrites it to the dict sentinel so
+	// the dict parses as a Go composite literal via go/parser, which lets a
+	// `map{...}` appear at any nesting depth.
+	dictKeywordRe = regexp.MustCompile(`\bmap\s*\{`)
 )
+
+// dictSentinel is the placeholder type name a `map{...}` dict hint is rewritten
+// to (`_gotmplDict{...}`) so it parses as a Go composite literal. Consequently,
+// any composite literal in a parsed hint denotes a dict.
+const dictSentinel = "_gotmplDict"
 
 // FindTreeHints scans each parse tree for a `gotype:` comment and returns a
 // map of template names to the first hint found in that tree. Any additional
@@ -176,102 +221,23 @@ func findFirstTreeHint(text string, root parse.Node) (TypeHint, bool) {
 }
 
 // ParseHintComment inspects a CommentNode and returns the gotype hint it
-// carries, if any. A dict marker takes priority over struct parsing so a
-// malformed `map{...}` body is not silently reinterpreted as a struct hint.
+// carries, if any.
 func ParseHintComment(text string, c *parse.CommentNode) (TypeHint, bool) {
 	if c == nil {
 		return TypeHint{}, false
 	}
-	line := strings.Count(text[:int(c.Pos)], "\n") + 1
-	if dictHintRe.MatchString(c.Text) {
-		if h, ok := parseDictHint(c.Text, line); ok {
-			return h, true
-		}
-		return TypeHint{Type: typeHintMalformedDict, Line: line}, true
-	}
-	if h, ok := parseStructHint(c.Text, line); ok {
-		return h, true
-	}
-	// A comment that carries the gotype: marker but whose body is not a valid
-	// type expression is a broken hint, not a stray comment.
-	if strings.Contains(c.Text, "gotype:") {
-		return TypeHint{Type: typeHintMalformedStruct, Line: line}, true
-	}
-	return TypeHint{}, false
-}
-
-// parseDictHint tries to interpret commentText as `gotype: map{...}`. It
-// returns ok=false when the comment does not contain a dict marker at all;
-// when the marker is present but the body is malformed the returned ok is
-// still false so the caller does not fall back to struct parsing.
-func parseDictHint(commentText string, line int) (TypeHint, bool) {
-	loc := dictHintRe.FindStringIndex(commentText)
-	if loc == nil {
-		return TypeHint{}, false
-	}
-	rest := commentText[loc[1]:]
-	end := strings.Index(rest, "}")
-	if end < 0 {
-		return TypeHint{}, false
-	}
-	body := rest[:end]
-	dict, ok := parseDictBody(body)
+	h, ok := parseHintText(c.Text)
 	if !ok {
 		return TypeHint{}, false
 	}
-	return TypeHint{
-		Type: typeHintDict,
-		Text: strings.TrimSpace(body),
-		Dict: dict,
-		Line: line,
-	}, true
+	h.Line = strings.Count(text[:int(c.Pos)], "\n") + 1
+	return h, true
 }
 
-// parseDictBody parses the comma-separated `"key": typeref` entries between
-// the braces of a dict hint. An empty body or any malformed entry rejects
-// the whole hint. Values are stored verbatim (with any slash import paths);
-// they are resolved later through resolveTypeExpr.
-func parseDictBody(body string) (map[string]string, bool) {
-	entries := strings.Split(body, ",")
-	dict := make(map[string]string, len(entries))
-	for _, e := range entries {
-		if strings.TrimSpace(e) == "" {
-			return nil, false
-		}
-		m := dictEntryRe.FindStringSubmatch(e)
-		if m == nil {
-			return nil, false
-		}
-		key, value := m[1], m[2]
-		if !looksLikeTypeExpr(value) {
-			return nil, false
-		}
-		dict[key] = value
-	}
-	if len(dict) == 0 {
-		return nil, false
-	}
-	return dict, true
-}
-
-func parseStructHint(commentText string, line int) (TypeHint, bool) {
-	raw, ok := extractStructHintText(commentText)
-	if !ok {
-		return TypeHint{}, false
-	}
-	return TypeHint{
-		Type: typeHintStruct,
-		Text: raw,
-		Line: line,
-	}, true
-}
-
-// extractStructHintText pulls the raw type expression that follows `gotype:`
-// out of a comment. The comment's trailing `*/` marker and surrounding
-// whitespace are stripped. It returns ok=false when no `gotype:` marker is
-// present or the remainder does not look like a Go type expression; callers
-// distinguish those two cases to decide whether to report a malformed hint.
-func extractStructHintText(commentText string) (string, bool) {
+// extractHintText pulls the raw type expression following `gotype:` out of a
+// comment, stripping the trailing `*/` and surrounding whitespace. ok is false
+// when there is no `gotype:` marker or nothing follows it.
+func extractHintText(commentText string) (string, bool) {
 	idx := strings.Index(commentText, "gotype:")
 	if idx < 0 {
 		return "", false
@@ -283,10 +249,42 @@ func extractStructHintText(commentText string) (string, bool) {
 	if rest == "" {
 		return "", false
 	}
-	if !looksLikeTypeExpr(rest) {
-		return "", false
-	}
 	return rest, true
+}
+
+// classifyHintText determines a raw hint expression's kind by rewriting and
+// parsing it. A well-formed expression whose root is a bare dict is a dict
+// hint; any other well-formed type expression is a struct hint. A malformed
+// `map{...}` yields typeHintMalformedDict and any other non-type text yields
+// typeHintMalformedStruct, so both surface as diagnostics.
+func classifyHintText(raw string) typeHintType {
+	rewritten, _, err := preprocessHint(raw)
+	if err != nil {
+		// An import-path conflict is still hint-shaped; let the load report it.
+		return typeHintStruct
+	}
+	expr, perr := parser.ParseExpr(rewritten)
+	if perr != nil || !isTypeExprShape(expr) {
+		if dictKeywordRe.MatchString(raw) {
+			return typeHintMalformedDict
+		}
+		return typeHintMalformedStruct
+	}
+	if isRootDict(expr) {
+		return typeHintDict
+	}
+	return typeHintStruct
+}
+
+// isRootDict reports whether expr is a bare dict: a composite literal whose type
+// is exactly the dict sentinel (not wrapped in a pointer/slice/map/generic).
+func isRootDict(expr ast.Expr) bool {
+	c, ok := expr.(*ast.CompositeLit)
+	if !ok {
+		return false
+	}
+	id, ok := c.Type.(*ast.Ident)
+	return ok && id.Name == dictSentinel
 }
 
 // walkParsed returns an iterator over node and its descendants in pre-order.
@@ -529,114 +527,16 @@ func CachedLoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 	return t, nil
 }
 
-// CachedLoadHint dispatches on the hint kind and delegates to the appropriate
-// cached loader. Struct hints go through CachedLoadTypeFromHint; dict hints go
-// through CachedLoadDictFromHint.
+// CachedLoadHint resolves a hint to a Tree (with DotType or DictType) using the
+// cache. A malformed hint is rejected.
 func CachedLoadHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
-	switch hint.Type {
-	case typeHintDict:
-		return CachedLoadDictFromHint(hint, workspaceRoot)
-	case typeHintStruct:
-		return CachedLoadTypeFromHint(hint.Text, workspaceRoot)
-	case typeHintMalformedDict, typeHintMalformedStruct:
+	if hint.IsMalformed() {
 		return nil, fmt.Errorf("malformed type hint")
-	default:
-		return nil, fmt.Errorf("unknown hint type")
 	}
-}
-
-// dictCacheKey returns a deterministic key for a dict hint independent of map
-// iteration order.
-func dictCacheKey(hint TypeHint, workspaceRoot string) string {
-	keys := make([]string, 0, len(hint.Dict))
-	for k := range hint.Dict {
-		keys = append(keys, k)
+	if hint.Text == "" {
+		return nil, fmt.Errorf("empty hint")
 	}
-	sort.Strings(keys)
-	var b strings.Builder
-	b.WriteString("dict\x00")
-	for _, k := range keys {
-		b.WriteString(k)
-		b.WriteByte('=')
-		b.WriteString(hint.Dict[k])
-		b.WriteByte('\x01')
-	}
-	b.WriteString("\x00")
-	b.WriteString(workspaceRoot)
-	return b.String()
-}
-
-// CachedLoadDictFromHint is the cached counterpart of LoadDictFromHint.
-func CachedLoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
-	key := dictCacheKey(hint, workspaceRoot)
-
-	typeHintCacheMu.RLock()
-	if t, ok := typeHintCache[key]; ok {
-		typeHintCacheMu.RUnlock()
-		return t, nil
-	}
-	typeHintCacheMu.RUnlock()
-
-	t, err := LoadDictFromHint(hint, workspaceRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	typeHintCacheMu.Lock()
-	typeHintCache[key] = t
-	typeHintCacheMu.Unlock()
-
-	return t, nil
-}
-
-// LoadDictFromHint loads every value type of a dict hint and returns a Tree
-// whose DictType is populated. DotType is left nil.
-func LoadDictFromHint(hint TypeHint, workspaceRoot string) (*Tree, error) {
-	if hint.Type != typeHintDict {
-		return nil, fmt.Errorf("LoadDictFromHint: hint is not a dict")
-	}
-	if len(hint.Dict) == 0 {
-		return nil, fmt.Errorf("LoadDictFromHint: dict is empty")
-	}
-	fields := make(map[string]types.Type, len(hint.Dict))
-	var pkg *types.Package
-	var fset *token.FileSet
-	fsets := make(map[*types.Package]*token.FileSet)
-	for _, k := range sortedKeys(hint.Dict) {
-		ref := hint.Dict[k]
-		lt, err := LoadTypeFromHint(ref, workspaceRoot)
-		if err != nil {
-			return nil, fmt.Errorf("map key %q (%s): %w", k, ref, err)
-		}
-		fields[k] = lt.DotType
-		if pkg == nil {
-			pkg = lt.Pkg
-		}
-		if fset == nil {
-			fset = lt.Fset
-		}
-		for p, fs := range lt.Fsets {
-			if _, ok := fsets[p]; !ok {
-				fsets[p] = fs
-			}
-		}
-	}
-	return &Tree{
-		DictType: &DictType{Fields: fields},
-		Pkg:      pkg,
-		Fset:     fset,
-		Fsets:    fsets,
-	}, nil
-}
-
-// sortedKeys returns the keys of m in sorted order.
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
+	return CachedLoadTypeFromHint(hint.Text, workspaceRoot)
 }
 
 // loadPackageCached loads (or returns a cached) *types.Package for the given
@@ -726,6 +626,9 @@ func LoadTypeFromHint(hint, workspaceRoot string) (*Tree, error) {
 		Str("type", types.TypeString(dot, nil)).
 		Msg("LoadTypeFromHint: type resolved successfully")
 
+	if dt, ok := dot.(*DictType); ok {
+		return &Tree{DictType: dt, Pkg: pkg, Fset: fset, Fsets: fsets}, nil
+	}
 	return &Tree{DotType: dot, Pkg: pkg, Fset: fset, Fsets: fsets}, nil
 }
 
@@ -781,6 +684,9 @@ func preprocessHint(hint string) (rewritten string, imports map[string]string, e
 		imports[seg] = importPath
 		return seg + "." + typeName
 	})
+	// Rewrite the dict keyword `map{` to the sentinel so the dict parses as a
+	// composite literal. `map[...]` (Go map types) is left untouched.
+	rewritten = dictKeywordRe.ReplaceAllString(rewritten, dictSentinel+"{")
 	if conflict != nil {
 		return "", nil, conflict
 	}
@@ -830,8 +736,55 @@ func isTypeExprShape(expr ast.Expr) bool {
 			}
 		}
 		return true
+	case *ast.CompositeLit:
+		return isDictShape(e)
 	case *ast.ParenExpr:
 		return isTypeExprShape(e.X)
+	default:
+		return false
+	}
+}
+
+// isDictShape reports whether c is a rewritten `map{...}` dict literal: its type
+// peels through array/map constructors to the dict sentinel and every element
+// is a `"string": type` pair.
+func isDictShape(c *ast.CompositeLit) bool {
+	if !dictSentinelType(c.Type) {
+		return false
+	}
+	if len(c.Elts) == 0 {
+		return false
+	}
+	for _, elt := range c.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			return false
+		}
+		lit, ok := kv.Key.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return false
+		}
+		if !isTypeExprShape(kv.Value) {
+			return false
+		}
+	}
+	return true
+}
+
+// dictSentinelType reports whether typeExpr is the dict sentinel, possibly
+// wrapped in pointer/array/map constructors (which go/parser folds into a dict
+// composite literal's Type when they directly prefix `map{...}`, e.g.
+// `[]*map{...}`).
+func dictSentinelType(typeExpr ast.Expr) bool {
+	switch te := typeExpr.(type) {
+	case *ast.Ident:
+		return te.Name == dictSentinel
+	case *ast.StarExpr:
+		return dictSentinelType(te.X)
+	case *ast.ArrayType:
+		return dictSentinelType(te.Elt)
+	case *ast.MapType:
+		return dictSentinelType(te.Value)
 	default:
 		return false
 	}
@@ -897,7 +850,7 @@ func (r *hintResolver) resolve(expr ast.Expr) (types.Type, error) {
 		if err != nil {
 			return nil, err
 		}
-		return types.NewPointer(elem), nil
+		return pointerTo(elem), nil
 	case *ast.ArrayType:
 		elem, err := r.resolve(e.Elt)
 		if err != nil {
@@ -925,6 +878,8 @@ func (r *hintResolver) resolve(expr ast.Expr) (types.Type, error) {
 		return r.resolveGeneric(e.X, []ast.Expr{e.Index})
 	case *ast.IndexListExpr:
 		return r.resolveGeneric(e.X, e.Indices)
+	case *ast.CompositeLit:
+		return r.resolveDict(e)
 	case *ast.ParenExpr:
 		return r.resolve(e.X)
 	default:
@@ -932,6 +887,93 @@ func (r *hintResolver) resolve(expr ast.Expr) (types.Type, error) {
 			"unsupported type expression in hint: %s", types.ExprString(expr),
 		)
 	}
+}
+
+// resolveDict builds a *DictType from a composite literal produced by rewriting
+// a `map{...}` hint, then wraps it with any array/map constructors that
+// directly prefixed the dict (go/parser folds those into the literal's Type).
+func (r *hintResolver) resolveDict(c *ast.CompositeLit) (types.Type, error) {
+	fields := make(map[string]types.Type, len(c.Elts))
+	for _, elt := range c.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			return nil, fmt.Errorf("malformed dict entry: %s", types.ExprString(elt))
+		}
+		lit, ok := kv.Key.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return nil, fmt.Errorf(
+				"dict key must be a string literal: %s",
+				types.ExprString(kv.Key),
+			)
+		}
+		key, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid dict key %s: %w", lit.Value, err)
+		}
+		val, err := r.resolve(kv.Value)
+		if err != nil {
+			return nil, fmt.Errorf("dict key %q: %w", key, err)
+		}
+		fields[key] = val
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("empty dict hint")
+	}
+	return r.wrapDictType(c.Type, &DictType{Fields: fields})
+}
+
+// wrapDictType applies the array/map constructor chain in a rewritten dict
+// composite literal's Type around the resolved dict. The chain always ends at
+// the dict sentinel identifier.
+func (r *hintResolver) wrapDictType(typeExpr ast.Expr, inner types.Type) (types.Type, error) {
+	switch te := typeExpr.(type) {
+	case *ast.Ident:
+		if te.Name == dictSentinel {
+			return inner, nil
+		}
+		return nil, fmt.Errorf("unexpected dict composite type %q", te.Name)
+	case *ast.StarExpr:
+		elem, err := r.wrapDictType(te.X, inner)
+		if err != nil {
+			return nil, err
+		}
+		return pointerTo(elem), nil
+	case *ast.ArrayType:
+		elem, err := r.wrapDictType(te.Elt, inner)
+		if err != nil {
+			return nil, err
+		}
+		if te.Len == nil {
+			return types.NewSlice(elem), nil
+		}
+		n, err := arrayLen(te.Len)
+		if err != nil {
+			return nil, err
+		}
+		return types.NewArray(elem, n), nil
+	case *ast.MapType:
+		key, err := r.resolve(te.Key)
+		if err != nil {
+			return nil, err
+		}
+		val, err := r.wrapDictType(te.Value, inner)
+		if err != nil {
+			return nil, err
+		}
+		return types.NewMap(key, val), nil
+	default:
+		return nil, fmt.Errorf("unsupported dict wrapper: %s", types.ExprString(typeExpr))
+	}
+}
+
+// pointerTo returns *elem, except that a pointer to a dict collapses to the
+// dict itself: text/template dereferences pointers transparently, and the
+// analyser, completion and definition code dispatch on a bare *DictType.
+func pointerTo(elem types.Type) types.Type {
+	if d, ok := elem.(*DictType); ok {
+		return d
+	}
+	return types.NewPointer(elem)
 }
 
 // resolveIdent resolves a bare identifier: a predeclared builtin from

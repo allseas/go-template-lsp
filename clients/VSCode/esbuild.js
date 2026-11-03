@@ -14,6 +14,12 @@ const copyBinariesPlugin = {
         build.onEnd(async (result) => {
             if (result.errors.length > 0) return;
 
+            // In watch mode the server binary is (re)built straight into
+            // out/server/bin by the watch-server-binaries script (respecting
+            // the allseas tag). Skip the dist->out copy so we don't clobber
+            // that freshly built binary with a stale one.
+            if (watch) return;
+
             // Copy binaries from ../../out/server directory to out/server/bin
             const srcBinDir = path.join(__dirname, "../../dist/server");
             const outBinDir = path.join(__dirname, "out/server/bin");

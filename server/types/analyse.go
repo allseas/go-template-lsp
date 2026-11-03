@@ -340,11 +340,7 @@ func analyseTemplate(n *parse.TemplateNode, parent Node, ctx *analysisCtx) Node 
 						expectedType.String(),
 					)
 				} else if effArg != nil && !IsEmptyInterface(effArg) && !IsEmptyInterface(effExpected) &&
-					effArg != effExpected &&
-					!types.Identical(effArg, effExpected) &&
-					!types.AssignableTo(effArg, effExpected) &&
-					!types.ConvertibleTo(effArg, effExpected) &&
-					!pointerElemMatches(effArg, effExpected) {
+					!templateArgAssignable(effArg, effExpected) {
 					ctx.errorf(
 						t,
 						ErrorTypeInvalidTemplateArg,
@@ -397,8 +393,8 @@ func pointerElemMatches(arg, expected types.Type) bool {
 		return false
 	}
 	elem := p.Elem()
-	return types.Identical(elem, expected) ||
-		types.AssignableTo(elem, expected) ||
+	return DictSafeIdentical(elem, expected) ||
+		DictSafeAssignableTo(elem, expected) ||
 		elem.String() == expected.String()
 }
 
@@ -408,9 +404,9 @@ func pointerElemMatches(arg, expected types.Type) bool {
 // pointer whose element matches (text/template auto-dereferences pointers).
 func templateArgAssignable(arg, want types.Type) bool {
 	return arg == want ||
-		types.Identical(arg, want) ||
-		types.AssignableTo(arg, want) ||
-		types.ConvertibleTo(arg, want) ||
+		DictSafeIdentical(arg, want) ||
+		DictSafeAssignableTo(arg, want) ||
+		DictSafeConvertibleTo(arg, want) ||
 		pointerElemMatches(arg, want)
 }
 
@@ -861,7 +857,7 @@ func walkFieldChainWithMethodInfo(
 			// access. Resolve to the map's element type when the key type
 			// admits a string; otherwise the access can never succeed.
 			if m, ok := currentType.Underlying().(*types.Map); ok {
-				if types.AssignableTo(types.Typ[types.String], m.Key()) {
+				if DictSafeAssignableTo(types.Typ[types.String], m.Key()) {
 					currentType = m.Elem()
 					isMethod[i] = false
 					stepTypes[i] = currentType
@@ -1133,7 +1129,7 @@ func analysePipe(pipeNode *parse.PipeNode, parent Node, ctx *analysisCtx) *PipeN
 				if ctx.vars[i].Ident[0] == typePipe.Decl[0].Ident[0] {
 					if ctx.vars[i].typ != nil && typePipe.typ != nil &&
 						!IsEmptyInterface(ctx.vars[i].typ) && !IsEmptyInterface(typePipe.typ) &&
-						!types.Identical(ctx.vars[i].typ, typePipe.typ) {
+						!DictSafeIdentical(ctx.vars[i].typ, typePipe.typ) {
 						ctx.errorf(
 							typePipe.Decl[0],
 							ErrorTypeVariableReassigned,
@@ -1504,8 +1500,9 @@ func IsEmptyInterface(t types.Type) bool {
 
 // TypeConvertibleTo reports whether a value of type src can be used where dst
 // is expected, dereferencing pointers on both sides. A nil dst means no
-// constraint. The empty interface on either side always matches. *DictType is
-// projected to map[string]any so hint-defined dicts compose with real Go maps.
+// constraint. The empty interface on either side always matches. *DictType
+// (also behind the dereferenced pointer) is projected to map[string]any so
+// hint-defined dicts compose with real Go maps.
 func TypeConvertibleTo(src, dst types.Type) bool {
 	if dst == nil {
 		return true
@@ -1516,9 +1513,9 @@ func TypeConvertibleTo(src, dst types.Type) bool {
 	if IsEmptyInterface(src) || IsEmptyInterface(dst) {
 		return true
 	}
-	src = derefPointer(dictAsMapStringAny(src))
-	dst = derefPointer(dictAsMapStringAny(dst))
-	return types.AssignableTo(src, dst)
+	src = dictAsMapStringAny(derefPointer(src))
+	dst = dictAsMapStringAny(derefPointer(dst))
+	return DictSafeAssignableTo(src, dst)
 }
 
 func derefPointer(t types.Type) types.Type {
@@ -1540,12 +1537,12 @@ func typesCompatible(want, got types.Type) bool {
 	}
 	want = dictAsMapStringAny(want)
 	got = dictAsMapStringAny(got)
-	return types.Identical(want, got) || types.AssignableTo(got, want) || implements(got, want)
+	return DictSafeIdentical(want, got) || DictSafeAssignableTo(got, want) || implements(got, want)
 }
 
 func implements(got, want types.Type) bool {
 	if iface, ok := want.Underlying().(*types.Interface); ok {
-		return types.Implements(got, iface)
+		return DictSafeImplements(got, iface)
 	}
 	return false
 }

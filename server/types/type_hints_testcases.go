@@ -92,12 +92,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		wantHints: []TypeHint{
 			{
 				Type: typeHintDict,
-				Text: `"subsystem": string, "alarms": []*cg/model/controlmodel.AlarmInstance, "index": map[string]int`,
-				Dict: map[string]string{
-					"subsystem": "string",
-					"alarms":    "[]*cg/model/controlmodel.AlarmInstance",
-					"index":     "map[string]int",
-				},
+				Text: `map{"subsystem": string, "alarms": []*cg/model/controlmodel.AlarmInstance, "index": map[string]int}`,
 				Line: 1,
 			},
 		},
@@ -134,8 +129,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		input: `{{/*gotype: map{"Order": example.com/m.Order}*/}}`,
 		wantHints: []TypeHint{{
 			Type: typeHintDict,
-			Text: `"Order": example.com/m.Order`,
-			Dict: map[string]string{"Order": "example.com/m.Order"},
+			Text: `map{"Order": example.com/m.Order}`,
 			Line: 1,
 		}},
 	},
@@ -144,11 +138,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		input: `{{/*gotype: map{"Order": example.com/m.Order, "Address": example.com/m.Address}*/}}`,
 		wantHints: []TypeHint{{
 			Type: typeHintDict,
-			Text: `"Order": example.com/m.Order, "Address": example.com/m.Address`,
-			Dict: map[string]string{
-				"Order":   "example.com/m.Order",
-				"Address": "example.com/m.Address",
-			},
+			Text: `map{"Order": example.com/m.Order, "Address": example.com/m.Address}`,
 			Line: 1,
 		}},
 	},
@@ -157,11 +147,7 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		input: `{{- /* gotype: map{  "A" : pkg.T ,  "B" : other/pkg.U } */ -}}`,
 		wantHints: []TypeHint{{
 			Type: typeHintDict,
-			Text: `"A" : pkg.T ,  "B" : other/pkg.U`,
-			Dict: map[string]string{
-				"A": "pkg.T",
-				"B": "other/pkg.U",
-			},
+			Text: `map{  "A" : pkg.T ,  "B" : other/pkg.U }`,
 			Line: 1,
 		}},
 	},
@@ -170,9 +156,35 @@ var parseTypeHintTestCases = []parseTypeHintTestCase{
 		input: "{{- define \"Tpl\" -}}\n" + `{{- /*gotype: map{"K": ex.com/m.K}*/ -}}` + "\n{{- end -}}\n",
 		wantHints: []TypeHint{{
 			Type: typeHintDict,
-			Text: `"K": ex.com/m.K`,
-			Dict: map[string]string{"K": "ex.com/m.K"},
+			Text: `map{"K": ex.com/m.K}`,
 			Line: 2,
+		}},
+	},
+	{
+		name:  "generic hint with a dict type argument is a struct hint",
+		input: `{{/*gotype: pkg/tmpl.View[map{"g": pkg/other.Gadget}]*/}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintStruct,
+			Text: `pkg/tmpl.View[map{"g": pkg/other.Gadget}]`,
+			Line: 1,
+		}},
+	},
+	{
+		name:  "dict nested inside a composite is a struct hint",
+		input: `{{/*gotype: *[]map{"g": pkg/other.Gadget}*/}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintStruct,
+			Text: `*[]map{"g": pkg/other.Gadget}`,
+			Line: 1,
+		}},
+	},
+	{
+		name:  "dict with a nested dict value",
+		input: `{{/*gotype: map{"outer": map{"inner": string}}*/}}`,
+		wantHints: []TypeHint{{
+			Type: typeHintDict,
+			Text: `map{"outer": map{"inner": string}}`,
+			Line: 1,
 		}},
 	},
 	{

@@ -174,6 +174,8 @@ Comparison depends on the shape of the expected and argument types.
 - When the key is present, its value type must be compatible using the same pointer-tolerant rules (`templateArgAssignable`: identical, assignable, convertible, or pointer-to-element), otherwise a `templateArgFieldMismatch` diagnostic is raised.
 - Extra keys in the argument that the expected dict does not declare are **not** flagged — a dict only pins down its known keys (see [type_hints.md](type_hints.md)).
 
+**Dicts nested inside other types** (`[]map{...}`, `map[string]map{...}`, `*map{...}`, `pkg.View[map{...}]`) are compared component by component with the same dict rules: a nested dict matches another dict that it covers key by key, or `map[string]any`; everything else must match exactly as Go requires inside composite types. For example `[]map{"a": int, "b": int}` may be passed where `[]map{"a": int}` is expected, but not where `[]map{"a": string}` is. A mismatch is reported as `invalidTemplateArg`.
+
 ## Missing Type Hints
 
 If a called template has **no type hint**, its expected input type is instead **inferred from the first call site** whose argument type is known (and not the empty interface). The inferred type is recorded in `templateInputTypes` so that the define block is analysed against a concrete dot type and later calls are checked against it:
