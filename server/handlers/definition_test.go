@@ -1069,3 +1069,52 @@ func TestDefinition_DictInGenericHint(t *testing.T) {
 			"expected othermodel.go, got %s", loc.URI)
 	})
 }
+
+// Fields chained after a parenthesised term resolve through the chain's own
+// step types, not the field inside its base (NodeFind returns ".Address" there).
+func TestDefinitionChainFields(t *testing.T) {
+	src := `{{ (dict "a" .Address).a.City }} {{ (index .Items 0).Label }} {{ ((dict "a" .Address).a).City }}`
+	uri := "file:///def-chain-fields.tmpl"
+	setDocWithType(t, uri, src, definitionOrderType(t))
+	defer store.Delete(uri)
+
+	// nth returns the offset of the n-th (1-based) occurrence of sub in src.
+	nth := func(sub string, n int) uint32 {
+		off := -1
+		for range n {
+			next := strings.Index(src[off+1:], sub)
+			require.GreaterOrEqual(t, next, 0, "%q #%d not found", sub, n)
+			off += 1 + next
+		}
+		return uint32(off) //nolint:gosec // test input is short
+	}
+
+	cases := []struct {
+		name     string
+		char     uint32
+		wantLine uint32
+	}{
+		{"field after dict", nth("City", 1), 7},
+		{"inside field after dict", nth("City", 1) + 2, 7},
+		{"dict key goes to its value type", nth(".a.", 1) + 1, 5},
+		{"field inside the base is unchanged", nth("Address", 1), 72},
+		{"method after index", nth("Label", 1), 46},
+		{"nested chain outer field", nth("City", 2), 7},
+		{"nested chain inner dict key", nth(".a)", 1) + 1, 5},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := Definition(nil, &protocol.DefinitionParams{
+				TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+					TextDocument: protocol.TextDocumentIdentifier{URI: uri},
+					Position:     position(0, tc.char),
+				},
+			})
+			require.NoError(t, err)
+			loc, ok := res.(protocol.Location)
+			require.True(t, ok, "expected a Location, got %#v", res)
+			assert.True(t, strings.HasSuffix(loc.URI, "model.go"), "got %s", loc.URI)
+			assert.Equal(t, tc.wantLine, loc.Range.Start.Line)
+		})
+	}
+}

@@ -948,7 +948,8 @@ func (t *Tree) operand() Node {
 	if t.peek().typ == itemField {
 		chain := t.newChain(node.Position(), node)
 		for t.peek().typ == itemField {
-			chain.Add(t.next().val)
+			field := t.next()
+			chain.addAt(field.pos, field.val)
 		}
 		// Compatibility with original API: If the term is of type NodeField
 		// or NodeVariable, just put more fields on the original.

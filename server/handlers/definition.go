@@ -42,6 +42,11 @@ func Definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error)
 
 	loadedType := doc.loadedTypeAtTyped(types.Pos(offset))
 
+	// Fields chained after a term, e.g. City in "(dict "a" .Address).a.City".
+	if chain, idx, ok := chainFieldAt(node, offset); ok {
+		return resolveFieldChainDefinition(loadedType, chain.OwnerType(0), chain.Field, idx)
+	}
+
 	switch target := node.(type) {
 	case *types.VariableNode:
 		varName := target.Ident[0]
@@ -384,4 +389,27 @@ func getVariableIdentIdx(target *types.VariableNode, offset int) int {
 		pos = end + 1 // +1 for the '.' separator
 	}
 	return 0
+}
+
+// chainFieldAt walks up from n (the node NodeFind returned for offset) to the
+// innermost ChainNode whose chained fields contain offset, and returns it with
+// the index of the field under the cursor. NodeFind returns a node inside the
+// chain's base for such offsets, because the base starts later than the chain.
+// A '.' between fields belongs to the field before it, like getFieldIdentIdx.
+func chainFieldAt(n types.Node, offset int) (*types.ChainNode, int, bool) {
+	for cur := n; cur != nil; cur = cur.Parent() {
+		chain, ok := cur.(*types.ChainNode)
+		if !ok || len(chain.Field) == 0 || len(chain.FieldPos) != len(chain.Field) {
+			continue
+		}
+		if offset < int(chain.FieldPos[0]) {
+			continue
+		}
+		for i, field := range chain.Field {
+			if offset <= int(chain.FieldPos[i])+1+len(field) {
+				return chain, i, true
+			}
+		}
+	}
+	return nil, 0, false
 }

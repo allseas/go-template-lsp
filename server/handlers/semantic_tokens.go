@@ -270,9 +270,11 @@ func walkTemplateNode(n *serverTypes.TemplateNode, text string, tokens *[]rawTok
 
 // walkVariableNode emits semantic tokens for a VariableNode.
 // The base variable (Ident[0], e.g. "$item") is emitted as ttVariable.
-// Each chained segment (Ident[1:], e.g. ".IsExpensive") is emitted as
-// ttFunction when it resolves to a method, or ttProperty for struct fields.
+// Each chained segment (Ident[1:], e.g. "IsExpensive" in "$item.IsExpensive") is
+// emitted as ttFunction when it resolves to a method, or ttProperty for struct fields.
 // When type information is not available the chained segments fall back to ttProperty.
+// Segment tokens cover only the identifier, not the '.' before it: clients such as
+// LSP4IJ resolve go-to-definition from a token's start offset.
 func walkVariableNode(n *serverTypes.VariableNode, tokens *[]rawToken) {
 	if len(n.Ident) == 0 {
 		return
@@ -283,13 +285,13 @@ func walkVariableNode(n *serverTypes.VariableNode, tokens *[]rawToken) {
 	pos += len(n.Ident[0])
 	// Chained fields/methods: ".IsExpensive", ".Addr", etc.
 	for i := 1; i < len(n.Ident); i++ {
-		segLen := 1 + len(n.Ident[i]) // "." + ident
+		pos++ // the '.' separator
 		tt := ttProperty
 		if n.IdentIsMethod(i) {
 			tt = ttFunction
 		}
-		emitToken(tokens, pos, segLen, tt, 0)
-		pos += segLen
+		emitToken(tokens, pos, len(n.Ident[i]), tt, 0)
+		pos += len(n.Ident[i])
 	}
 }
 
@@ -297,16 +299,17 @@ func walkVariableNode(n *serverTypes.VariableNode, tokens *[]rawToken) {
 // Segments that resolve to methods (e.g. ".DisplayName") are emitted as ttFunction;
 // plain struct-field segments (e.g. ".Address") are emitted as ttProperty.
 // When type information is not available every segment falls back to ttProperty.
+// Tokens cover only the identifier, not its leading '.' (see walkVariableNode).
 func walkFieldNode(n *serverTypes.FieldNode, tokens *[]rawToken) {
 	pos := int(n.Position())
 	for i, id := range n.Ident {
-		segLen := 1 + len(id) // "." + ident
+		pos++ // the leading '.'
 		tt := ttProperty
 		if n.IdentIsMethod(i) {
 			tt = ttFunction
 		}
-		emitToken(tokens, pos, segLen, tt, 0)
-		pos += segLen
+		emitToken(tokens, pos, len(id), tt, 0)
+		pos += len(id)
 	}
 }
 
@@ -370,18 +373,16 @@ func isElseIfChain(elseList *serverTypes.ListNode) bool {
 	return ok
 }
 
+// walkChainNode emits tokens for the base of a chain such as "(dict "a" .X).a.City"
+// and one ttProperty token per chained field identifier, placed at the field
+// positions recorded by the parser.
 func walkChainNode(n *serverTypes.ChainNode, text string, tokens *[]rawToken) {
 	walkSemanticNode(n.Node, text, tokens)
-	if n.Node != nil && len(n.Field) > 0 {
-		baseLen := len(n.Node.String())
-		if _, ok := n.Node.(*serverTypes.PipeNode); ok {
-			baseLen += 2 // account for wrapping parens
+	for i, f := range n.Field {
+		if i >= len(n.FieldPos) {
+			return
 		}
-		fieldsLen := 0
-		for _, f := range n.Field {
-			fieldsLen += 1 + len(f)
-		}
-		emitToken(tokens, int(n.Position())+baseLen, fieldsLen, ttProperty, 0)
+		emitToken(tokens, int(n.FieldPos[i])+1, len(f), ttProperty, 0) // +1 skips the '.'
 	}
 }
 

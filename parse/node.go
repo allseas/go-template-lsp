@@ -583,9 +583,10 @@ func (f *FieldNode) Copy() Node {
 type ChainNode struct {
 	NodeType
 	Pos
-	tr    *Tree
-	Node  Node
-	Field []string // The identifiers in lexical order.
+	tr       *Tree
+	Node     Node
+	Field    []string // The identifiers in lexical order.
+	FieldPos []Pos    // Position of the '.' before each identifier in Field.
 }
 
 func (t *Tree) newChain(pos Pos, node Node) *ChainNode {
@@ -602,6 +603,12 @@ func (c *ChainNode) Add(field string) {
 		panic("empty field")
 	}
 	c.Field = append(c.Field, field)
+}
+
+// addAt adds the named field like Add and records the position of its leading period.
+func (c *ChainNode) addAt(pos Pos, field string) {
+	c.Add(field)
+	c.FieldPos = append(c.FieldPos, pos)
 }
 
 func (c *ChainNode) String() string {
@@ -629,7 +636,14 @@ func (c *ChainNode) tree() *Tree {
 }
 
 func (c *ChainNode) Copy() Node {
-	return &ChainNode{tr: c.tr, NodeType: NodeChain, Pos: c.Pos, Node: c.Node, Field: append([]string{}, c.Field...)}
+	return &ChainNode{
+		tr:       c.tr,
+		NodeType: NodeChain,
+		Pos:      c.Pos,
+		Node:     c.Node,
+		Field:    append([]string{}, c.Field...),
+		FieldPos: append([]Pos{}, c.FieldPos...),
+	}
 }
 
 // BoolNode holds a boolean constant.

@@ -71,6 +71,26 @@
     }
   },
   {
+    "name": "Field chained after dict jumps to struct field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ (dict \"a\" .Address).a.C<cursor>ity }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 7
+    }
+  },
+  {
+    "name": "Field chained after index jumps to element field",
+    "content": "{{/*gotype: cg/model.Order*/}}\n{{ (index .Items 0).Na<cursor>me }}",
+    "poll": true,
+    "expected": {
+      "minCount": 1,
+      "targetFile": "model.go",
+      "targetLine": 58
+    }
+  },
+  {
     "name": "Unknown field returns no results",
     "content": "{{/*gotype: cg/model.Order*/}}\n{{ .N<cursor>onExistent }}",
     "vscodeOnly": true,
