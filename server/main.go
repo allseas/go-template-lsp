@@ -13,7 +13,7 @@ import (
 
 const (
 	lsName  = "goTmpl"
-	version = "1.2.0"
+	version = "1.3.0"
 )
 
 // setupLogging configures the global zerolog logger to write human-readable
