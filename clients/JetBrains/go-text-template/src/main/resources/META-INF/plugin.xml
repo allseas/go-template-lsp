@@ -71,6 +71,11 @@ https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
                the editor") is suppressed. It adds no items itself, so LSP items are not duplicated. -->
           <completion.contributor
                   language="textmate"
+                  id="goTemplateCompletionSorter"
+                  implementationClass="com.allseas.gotexttemplate.GoTemplateCompletionSorter"
+                  order="first, before LSPCompletionContributor" />
+          <completion.contributor
+                  language="textmate"
                   id="goTemplateWordCompletionSuppressor"
                   implementationClass="com.allseas.gotexttemplate.GoTemplateWordCompletionSuppressor"
                   order="after LSPCompletionContributor, before wordCompletion" />

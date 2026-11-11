@@ -1,5 +1,9 @@
 import com.intellij.codeInsight.completion.CompletionType
+import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.codeInsight.lookup.LookupManager
+import com.intellij.codeInsight.lookup.impl.LookupImpl
+import com.intellij.psi.statistics.StatisticsManager
+import com.intellij.psi.statistics.impl.StatisticsManagerImpl
 import com.intellij.testFramework.PlatformTestUtil
 
 // This class tests dot-field/method suggestions that depend on a resolved Go type.
@@ -56,6 +60,68 @@ class DotFieldsSuggestionsTest : CustomFixtureHeavyTestCase() {
                 )
             }
         }
+    }
+
+    // Server sortText puts fields ("0_") before methods/functions ("1_"); the lookup must keep that order.
+    fun testInvokedCompletionKeepsServerOrder() {
+        val tc =
+            CompletionTestCase(
+                name = "order",
+                content = "{{/*gotype: cg/model.Order*/}}\n{{<cursor>}}",
+                expectedIncludes = listOf(".CustomerName", ".DisplayName", "and"),
+                expectedExcludes = emptyList(),
+                poll = true,
+            )
+        val completions = completeWithPolling("completion-order.txt.tmpl", toCaret(tc.content), tc).orEmpty()
+
+        val field = completions.indexOf(".CustomerName")
+        val method = completions.indexOf(".DisplayName")
+        val function = completions.indexOf("and")
+        assertTrue("Field should precede method, got: $completions", field in 0 until method)
+        assertTrue("Field should precede function, got: $completions", field in 0 until function)
+    }
+
+    // IntelliJ's default sorter lifts start-matches ("call") above the server order (".CustomerName").
+    fun testTypedPrefixKeepsServerOrder() {
+        val tc =
+            CompletionTestCase(
+                name = "order-prefix",
+                content = "{{/*gotype: cg/model.Order*/}}\n{{ C<cursor> }}",
+                expectedIncludes = listOf(".CustomerName", "call"),
+                expectedExcludes = emptyList(),
+                poll = true,
+            )
+        val completions = completeWithPolling("completion-order-prefix.txt.tmpl", toCaret(tc.content), tc).orEmpty()
+
+        assertTrue(
+            "Field should precede function for a typed prefix, got: $completions",
+            completions.indexOf(".CustomerName") in 0 until completions.indexOf("call"),
+        )
+    }
+
+    // IntelliJ usage statistics must not lift a previously chosen item above the server order.
+    fun testUsageStatisticsDoNotOverrideServerOrder() {
+        (StatisticsManager.getInstance() as StatisticsManagerImpl).enableStatistics(testRootDisposable)
+        val tc =
+            CompletionTestCase(
+                name = "order-stats",
+                content = "{{/*gotype: cg/model.Order*/}}\n{{<cursor>}}",
+                expectedIncludes = listOf(".CustomerName", "urlquery"),
+                expectedExcludes = emptyList(),
+                poll = true,
+            )
+        repeat(3) {
+            completeWithPolling("completion-order-stats.txt.tmpl", toCaret(tc.content), tc)
+            val lookup = myFixture.lookup as LookupImpl
+            lookup.currentItem = lookup.items.first { it.lookupString == "urlquery" }
+            myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        }
+
+        val completions = completeWithPolling("completion-order-stats.txt.tmpl", toCaret(tc.content), tc).orEmpty()
+        assertTrue(
+            "Field should precede a frequently used function, got: $completions",
+            completions.indexOf(".CustomerName") in 0 until completions.indexOf("urlquery"),
+        )
     }
 
     private fun complete(

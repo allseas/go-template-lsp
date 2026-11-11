@@ -1,0 +1,25 @@
+{{- /*gotype: cg/model.Order*/ -}}
+{{ $total := .TotalAmount }}
+
+1. Empty action - press Ctrl+Space between the braces:
+{{  }}
+
+2. After a dot - fields/methods of Order:
+{{ . }}
+
+3. Nested type - fields/methods of Address:
+{{ .Address. }}
+
+4. With a prefix - cursor after "C":
+{{ C }}
+
+5. In a pipe - functions accepting a string should rank first:
+{{ .CustomerName |  }}
+
+6. Inside range - dot is Item:
+{{ range .Items }}
+  {{  }}
+{{ end }}
+
+7. Variables:
+{{ $ }}
