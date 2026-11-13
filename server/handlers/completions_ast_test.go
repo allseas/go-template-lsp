@@ -377,6 +377,20 @@ func TestPipeFilteredItemsT(t *testing.T) {
 	}
 }
 
+// TestPipeFilteredItemsT_NilGlobalFunc verifies that a global func whose
+// signature could not be resolved (stored as nil) does not crash pipe completion.
+func TestPipeFilteredItemsT_NilGlobalFunc(t *testing.T) {
+	serverTypes.SetGlobalFuncs(map[string]*types.Func{"up": nil})
+	t.Cleanup(func() { serverTypes.SetGlobalFuncs(serverTypes.BuiltinFuncs()) })
+
+	src := `{{ "x" | }}`
+	offset := offsetOf(t, src, "| ", 0) + 2
+	cur := typedNodeAt(t, src, offset, nil)
+	assert.NotPanics(t, func() {
+		pipeFilteredItemsT(cur, types.Typ[types.String], nil, protocol.Range{})
+	})
+}
+
 // findOrderMethod returns the MethodType for the named Order method.
 func findOrderMethod(t *testing.T, lt *serverTypes.Tree, name string) serverTypes.MethodType {
 	t.Helper()

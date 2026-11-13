@@ -295,6 +295,10 @@ func pipeFilteredItemsT(
 	items := dotItemsT(cur, false, inputType, argType, wordRange)
 	items = append(items, varsItemsT(serverTypes.VisibleVarsAt(cur), false, wordRange)...)
 	for name, fn := range serverTypes.GlobalFuncs() {
+		// nil marks a func whose signature could not be resolved.
+		if fn == nil {
+			continue
+		}
 		accepts, concrete := funcAcceptsPipeInput(fn, inputType)
 		if !accepts || !funcReturnsType(fn, argType) {
 			continue
